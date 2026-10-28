@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using LearningAssistant.Abstractions.Media;
 using LearningAssistant.Common.UI;
 using LearningAssistant.Models.Pdf;
 using LearningAssistant.Models.Shadowing;
@@ -58,6 +59,16 @@ namespace LearningAssistant.Forms.Pdf
         private ITTSService? _tts;
         private ISubtitleParser? _subtitleParser;
         private NAudioMediaPlayer? _recordingPlayer;
+        private readonly ShadowingAlignmentContext? _alignmentContext;
+        private readonly IReadOnlyList<ShadowingCue> _alignmentCues;
+        private readonly AudioSliceService _audioSliceService = new();
+        private readonly Button _btnAlign = new();
+        private NAudioMediaPlayer? _alignmentPlayer;
+        private ShadowingAlignmentSession? _alignmentSession;
+        private bool _aligning;
+        private bool _finishingAlignment;
+        private bool _suppressListSelection;
+        private long _lastAlignmentPositionTick;
         private readonly System.Windows.Forms.Timer _countdownTimer = new() { Interval = 700 };
         private readonly System.Windows.Forms.Timer _recordLimitTimer = new();
         private int _totalSentences;
@@ -80,8 +91,14 @@ namespace LearningAssistant.Forms.Pdf
         /// <summary>是否为整本高亮跟读模式。</summary>
         public bool IsWholeBook => _wholeBook;
 
-        public SentenceShadowingForm(string pdfPath, int pageIndex, string pageText, string documentTitle, bool isDark = false)
-            : this(pdfPath, pageIndex, SentenceSegmenter.Segment(pageText), null, false, documentTitle, isDark)
+        public SentenceShadowingForm(
+            string pdfPath,
+            int pageIndex,
+            string pageText,
+            string documentTitle,
+            bool isDark = false,
+            ShadowingAlignmentContext? alignment = null)
+            : this(pdfPath, pageIndex, SentenceSegmenter.Segment(pageText), null, false, documentTitle, isDark, alignment)
         {
         }
 
@@ -96,7 +113,8 @@ namespace LearningAssistant.Forms.Pdf
                 highlights.Select(h => h.PageIndex).ToList(),
                 true,
                 documentTitle,
-                isDark)
+                isDark,
+                null)
         {
         }
 
@@ -107,13 +125,15 @@ namespace LearningAssistant.Forms.Pdf
             IReadOnlyList<int>? sentencePageIndexes,
             bool wholeBook,
             string documentTitle,
-            bool isDark)
+            bool isDark,
+            ShadowingAlignmentContext? alignment)
         {
             _pdfPath = pdfPath;
             _pageIndex = pageIndex;
             _documentTitle = documentTitle;
             _textSentences = textSentences;
             _wholeBook = wholeBook;
+            _alignmentContext = wholeBook ? null : alignment;
 
             for (int i = 0; i < _textSentences.Count; i++)
             {
@@ -123,6 +143,15 @@ namespace LearningAssistant.Forms.Pdf
                 _sentencePageIndexes.Add(sentencePage);
                 _sentencePageById[_textSentences[i].Id] = sentencePage;
             }
+
+            // 本页原声对齐句与页面分句一一对应；没有音频上下文时只保留文字跟读
+            var cues = _alignmentContext == null
+                ? Array.Empty<ShadowingCue>()
+                : ShadowingHighlightSource.BuildPageCues(
+                    _textSentences, _alignmentContext.Highlights, _pageIndex);
+            _alignmentCues = cues.Count == _textSentences.Count
+                ? cues
+                : Array.Empty<ShadowingCue>();
 
             InitializeComponent();
 
@@ -561,6 +590,20 @@ namespace LearningAssistant.Forms.Pdf
             _btnClearSegments.ForeColor = palette.Text;
             _buttonTip.SetToolTip(_btnClearSegments, "删除本页原声切片与该页跟读录音；文字跟读记录保留");
 
+            _btnAlign.Text = "原声对齐";
+            _btnAlign.FlatStyle = FlatStyle.Flat;
+            _btnAlign.FlatAppearance.BorderSize = 0;
+            _btnAlign.Font = new Font("Microsoft YaHei UI", 8.5F);
+            _btnAlign.Size = new Size(78, 26);
+            _btnAlign.Margin = new Padding(6, 2, 0, 0);
+            _btnAlign.Cursor = Cursors.Hand;
+            _btnAlign.BackColor = palette.SurfaceAlt;
+            _btnAlign.ForeColor = palette.Text;
+            _btnAlign.Visible = false;
+            _btnAlign.Click += OnAlignClicked;
+            _buttonTip.SetToolTip(_btnAlign,
+                "播放本页原声，按空格结束当前句并生成原生切片；→ 跳过，Backspace 撤销，R 重播");
+
             _sourceBar.FlowDirection = FlowDirection.LeftToRight;
             _sourceBar.WrapContents = false;
             _sourceBar.AutoSize = true;
@@ -571,6 +614,7 @@ namespace LearningAssistant.Forms.Pdf
             _sourceBar.Controls.Add(_radioSourceSegments);
             _sourceBar.Controls.Add(_radioSourceText);
             _sourceBar.Controls.Add(_btnClearSegments);
+            _sourceBar.Controls.Add(_btnAlign);
 
             header.Controls.Add(_sourceBar);
             header.Resize += (_, _) => LayoutSourceBar();
@@ -599,17 +643,36 @@ namespace LearningAssistant.Forms.Pdf
                 Math.Max(0, (header.ClientSize.Height - size.Height) / 2));
         }
 
-        /// <summary>仅在有原声切片时显示来源栏；两种来源都存在时才显示单选按钮。</summary>
+        /// <summary>本页有音频且分句可用时才允许进入原声对齐；整本模式暂不启用。</summary>
+        private bool CanAlignAudio()
+            => !_wholeBook
+               && _alignmentContext != null
+               && _subtitleParser != null
+               && _alignmentCues.Count == _textSentences.Count
+               && _textSentences.Count > 0
+               && !string.IsNullOrWhiteSpace(_alignmentContext.SourcePath);
+
+        /// <summary>有切片或可做原声对齐时显示来源栏；两种来源都存在时才显示单选按钮。</summary>
         private void UpdateSourceBar()
         {
             bool hasSegments = _segments.Count > 0;
             bool canSwitch = hasSegments && _textSentences.Count > 0;
+            bool canAlign = CanAlignAudio();
 
             _sourceLabel.Visible = canSwitch;
             _radioSourceSegments.Visible = canSwitch;
             _radioSourceText.Visible = canSwitch;
             _btnClearSegments.Visible = hasSegments;
-            _sourceBar.Visible = hasSegments;
+            _btnAlign.Visible = canAlign;
+
+            // 对齐中禁止切换来源或清理切片，避免列表与打点句错位
+            bool interactive = !_aligning;
+            _radioSourceSegments.Enabled = interactive;
+            _radioSourceText.Enabled = interactive;
+            _btnClearSegments.Enabled = interactive && hasSegments;
+
+            _btnAlign.Text = _aligning ? "完成对齐" : "原声对齐";
+            _sourceBar.Visible = hasSegments || canAlign;
 
             if (canSwitch)
             {
@@ -620,6 +683,429 @@ namespace LearningAssistant.Forms.Pdf
             LayoutSourceBar();
         }
 
+        /// <summary>
+        /// 原声对齐：播放本页音频，空格结束当前句并生成原生切片。
+        /// 与普通播放分离，空格只在“对齐模式”内表示打点，避免误切片。
+        /// </summary>
+        private async void OnAlignClicked(object? sender, EventArgs e)
+        {
+            try
+            {
+                if (_aligning)
+                    await FinishAlignmentAsync();
+                else
+                    StartAlignment();
+            }
+            catch (Exception ex)
+            {
+                Trace.TraceWarning($"[SentenceShadowing] 原声对齐失败: {ex.Message}");
+                _labelStatus.Text = $"原声对齐失败：{ex.Message}";
+                _finishingAlignment = false;
+                _btnAlign.Enabled = true;
+            }
+        }
+
+        private void StartAlignment()
+        {
+            if (!CanAlignAudio() || _alignmentContext == null)
+            {
+                _labelStatus.Text = "本页没有可用原声或分句，无法对齐。";
+                return;
+            }
+
+            // 对齐句与文字跟读句一致，先切回文字来源避免列表索引错位
+            if (_segmentMode)
+                SwitchSource(false);
+
+            StopCountdown();
+            StopRecordingIfAny(suppressAdvance: true);
+            _recordingPlayer?.Stop();
+            _practice?.StopPlayback();
+
+            IReadOnlyList<ShadowingSegment> existing = Array.Empty<ShadowingSegment>();
+            try
+            {
+                var manifest = _segmentStore.LoadSegments(_pdfPath, _pageIndex);
+                if (manifest?.Segments.Count > 0)
+                {
+                    _segmentManifest = manifest;
+                    existing = manifest.Segments;
+                }
+                else
+                {
+                    existing = _segments;
+                }
+            }
+            catch (Exception ex)
+            {
+                Trace.TraceWarning($"[SentenceShadowing] 读取已有切片失败: {ex.Message}");
+                existing = _segments;
+            }
+
+            _alignmentSession = new ShadowingAlignmentSession(_pageIndex, _alignmentCues, existing);
+
+            // 从第一句尚未对齐的位置继续；分页音频从头播放，整篇音频沿用阅读器当前位置
+            int startIndex = 0;
+            int startMs = Math.Max(0, _alignmentContext.StartMs);
+            for (int i = 0; i < _alignmentCues.Count; i++)
+            {
+                var previous = _alignmentSession.FindExisting(_alignmentCues[i]);
+                if (previous == null)
+                    break;
+                startIndex = i + 1;
+                startMs = Math.Max(startMs, previous.EndMs);
+            }
+
+            if (startIndex >= _alignmentCues.Count)
+            {
+                startIndex = 0;
+                startMs = Math.Max(0, _alignmentContext.StartMs);
+            }
+
+            _alignmentSession.Start(startMs, startIndex);
+            _aligning = true;
+            _btnAlign.Enabled = true;
+            _btnRecord.Enabled = false;
+            _btnReplayRecording.Enabled = false;
+            _btnPlay.Text = "⏸ 原声";
+            UpdateSourceBar();
+            SetAlignmentCurrentIndex(_alignmentSession.CurrentIndex);
+            _labelStatus.Text = startIndex > 0
+                ? $"从第 {startIndex + 1} 句继续；空格结束本句，→ 跳过，Backspace 撤销，R 重播"
+                : "空格结束本句，→ 跳过，Backspace 撤销，R 重播";
+
+            if (_alignmentPlayer == null)
+            {
+                _alignmentPlayer = new NAudioMediaPlayer(_subtitleParser!);
+                _alignmentPlayer.PlaybackFinished += OnAlignmentPlaybackFinished;
+                _alignmentPlayer.PositionChanged += OnAlignmentPositionChanged;
+            }
+
+            _alignmentPlayer.Load(_alignmentContext.SourcePath);
+            _alignmentPlayer.LoadSubtitle(_alignmentContext.SubtitlePath);
+            _alignmentPlayer.Seek(TimeSpan.FromMilliseconds(startMs));
+            FireAndForget(_alignmentPlayer.PlayAsync());
+        }
+
+        private void SetAlignmentCurrentIndex(int index)
+        {
+            if (_alignmentSession == null || _alignmentCues.Count == 0)
+                return;
+
+            int safe = Math.Clamp(index, 0, _alignmentCues.Count - 1);
+            _currentIndex = safe;
+            _suppressListSelection = true;
+            try
+            {
+                _listSentences.SelectedIndex = safe;
+            }
+            finally
+            {
+                _suppressListSelection = false;
+            }
+
+            _labelCurrent.Text = _alignmentCues[safe].Text;
+            _labelInfo.Text = $"原声对齐 · 第 {safe + 1}/{_alignmentCues.Count} 句";
+            _labelScore.Text = "参考分：完成对齐后显示";
+            _listSentences.Invalidate();
+            _progressTrack.Invalidate();
+            UpdateReplayButtonState();
+        }
+
+        private void MarkAlignmentCue()
+        {
+            if (!_aligning || _alignmentSession == null)
+                return;
+
+            int position = _alignmentPlayer != null
+                ? (int)_alignmentPlayer.Position.TotalMilliseconds
+                : _alignmentSession.CursorStartMs;
+            var segment = _alignmentSession.Mark(position);
+            if (segment == null)
+            {
+                _labelStatus.Text = "本句间隔不足 0.3 秒，已忽略；请继续播放后重按空格。";
+                return;
+            }
+
+            if (_alignmentSession.IsCompleted)
+            {
+                SetAlignmentCurrentIndex(_alignmentSession.TotalCount - 1);
+                _labelStatus.Text = "全部句子已标记，点击「完成对齐」生成原声切片。";
+                _alignmentPlayer?.Pause();
+                _btnPlay.Text = "▶ 播放";
+            }
+            else
+            {
+                SetAlignmentCurrentIndex(_alignmentSession.CurrentIndex);
+                _labelStatus.Text =
+                    $"已标记 {ShadowingMarkSession.FormatTimestamp(segment.StartMs)}–" +
+                    $"{ShadowingMarkSession.FormatTimestamp(segment.EndMs)} · 空格继续";
+            }
+        }
+
+        private void SkipAlignmentCue()
+        {
+            if (!_aligning || _alignmentSession == null || !_alignmentSession.Skip())
+                return;
+
+            if (_alignmentSession.IsCompleted)
+            {
+                SetAlignmentCurrentIndex(_alignmentSession.TotalCount - 1);
+                _labelStatus.Text = "已跳过最后一句，点击「完成对齐」保存已标记切片。";
+            }
+            else
+            {
+                // Skip 已前进到下一句，文案使用前进后的序号，避免显示成“跳过的句”
+                SetAlignmentCurrentIndex(_alignmentSession.CurrentIndex);
+                _labelStatus.Text =
+                    $"已跳过上一句；当前第 {_alignmentSession.CurrentIndex + 1}/{_alignmentSession.TotalCount} 句。";
+            }
+        }
+
+        private void UndoAlignmentCue()
+        {
+            if (!_aligning || _alignmentSession == null || !_alignmentSession.Undo())
+            {
+                _labelStatus.Text = "没有可撤销的对齐记录。";
+                return;
+            }
+
+            SetAlignmentCurrentIndex(_alignmentSession.CurrentIndex);
+            _alignmentPlayer?.Seek(TimeSpan.FromMilliseconds(_alignmentSession.CursorStartMs));
+            _labelStatus.Text = "已撤销上一句，游标回到该句起点。";
+        }
+
+        private void ReplayAlignmentFromCursor()
+        {
+            if (!_aligning || _alignmentPlayer == null || _alignmentSession == null)
+                return;
+
+            _alignmentPlayer.Seek(TimeSpan.FromMilliseconds(_alignmentSession.CursorStartMs));
+            _lastAlignmentPositionTick = 0;
+            FireAndForget(_alignmentPlayer.PlayAsync());
+            _btnPlay.Text = "⏸ 原声";
+        }
+
+        private void ToggleAlignmentPlayback()
+        {
+            if (!_aligning || _alignmentPlayer == null)
+                return;
+
+            if (_alignmentPlayer.State == MediaPlaybackState.Playing)
+            {
+                _alignmentPlayer.Pause();
+                _btnPlay.Text = "▶ 播放";
+                return;
+            }
+
+            if (_alignmentSession != null
+                && _alignmentPlayer.Position.TotalMilliseconds < _alignmentSession.CursorStartMs - 100)
+            {
+                _alignmentPlayer.Seek(TimeSpan.FromMilliseconds(_alignmentSession.CursorStartMs));
+            }
+
+            FireAndForget(_alignmentPlayer.PlayAsync());
+            _btnPlay.Text = "⏸ 原声";
+        }
+
+        private void OnAlignmentPlaybackFinished(object? sender, EventArgs e)
+        {
+            if (!_aligning || sender != _alignmentPlayer)
+                return;
+
+            _btnPlay.Text = "▶ 播放";
+            _labelStatus.Text = _alignmentSession?.IsCompleted == true
+                ? "本页原声已播完，全部句已标记；点击「完成对齐」。"
+                : "本页原声已播完；按 R 从断点重播，或继续标记。";
+        }
+
+        private void OnAlignmentPositionChanged(object? sender, TimeSpan position)
+        {
+            if (!_aligning || _alignmentSession == null || IsDisposed)
+                return;
+
+            long now = Environment.TickCount64;
+            if (now - _lastAlignmentPositionTick < 500)
+                return;
+            _lastAlignmentPositionTick = now;
+
+            if (_alignmentSession.IsCompleted)
+                return;
+
+            _labelStatus.Text =
+                $"空格结束本句 · 原声 {ShadowingMarkSession.FormatTimestamp((int)position.TotalMilliseconds)}";
+        }
+
+        private async Task FinishAlignmentAsync()
+        {
+            if (!_aligning || _finishingAlignment)
+                return;
+
+            _finishingAlignment = true;
+            _btnAlign.Enabled = false;
+            _btnAlign.Text = "正在生成…";
+            try
+            {
+                _alignmentPlayer?.Pause();
+                var session = _alignmentSession;
+                var created = session?.CreatedSegments.ToList() ?? new List<ShadowingSegment>();
+                if (created.Count == 0)
+                {
+                    ExitAlignmentMode();
+                    ApplyActiveSource();
+                    _labelStatus.Text = "未生成新的原声切片。";
+                    return;
+                }
+
+                var manifest = _segmentStore.LoadSegments(_pdfPath, _pageIndex)
+                               ?? new ShadowingSegmentManifest { PageIndex = _pageIndex };
+                manifest.SchemaVersion = 3;
+                manifest.Source = BuildAlignmentSource(manifest.Source);
+                manifest.Session = BuildAlignmentSession(manifest.Session);
+
+                foreach (var segment in created)
+                {
+                    segment.SlicePath = _segmentStore.GetSliceRelativePath(segment.Id);
+                    int index = manifest.Segments.FindIndex(s =>
+                        string.Equals(s.Id, segment.Id, StringComparison.Ordinal));
+                    if (index >= 0)
+                    {
+                        var previous = manifest.Segments[index];
+                        // 重新对齐不覆盖已有跟读 take
+                        segment.Takes = previous.Takes;
+                        // 时间范围变化后旧切片已不对应本句，删除以强制重新生成
+                        if (previous.StartMs != segment.StartMs || previous.EndMs != segment.EndMs)
+                        {
+                            DeleteStaleSlice(previous.SlicePath);
+                            DeleteStaleSlice(segment.SlicePath);
+                        }
+                        manifest.Segments[index] = segment;
+                    }
+                    else
+                    {
+                        manifest.Segments.Add(segment);
+                    }
+                }
+
+                var requests = created
+                    .Where(segment => !File.Exists(_segmentStore.ResolvePath(segment.SlicePath)))
+                    .Select(segment => new AudioSliceRequest(
+                        segment.Id,
+                        _alignmentContext!.SourcePath,
+                        segment.StartMs,
+                        segment.EndMs,
+                        _segmentStore.ResolvePath(segment.SlicePath)))
+                    .ToList();
+
+                var failed = new HashSet<string>(StringComparer.Ordinal);
+                if (requests.Count > 0)
+                {
+                    _labelStatus.Text = $"正在生成原声切片 0/{requests.Count}…";
+                    var progress = new Progress<(int Done, int Total)>(p =>
+                    {
+                        if (!IsDisposed)
+                            _labelStatus.Text = $"正在生成原声切片 {p.Done}/{p.Total}…";
+                    });
+
+                    var results = await _audioSliceService
+                        .SliceAllAsync(requests, progress)
+                        .ConfigureAwait(true);
+                    foreach (var result in results.Where(result => !result.Success))
+                    {
+                        failed.Add(result.SegmentId);
+                        var segment = manifest.Segments.FirstOrDefault(s =>
+                            string.Equals(s.Id, result.SegmentId, StringComparison.Ordinal));
+                        if (segment != null)
+                            segment.SlicePath = string.Empty;
+                        Trace.TraceWarning(
+                            $"[SentenceShadowing] 原声切片失败 {result.SegmentId}: {result.Error}");
+                    }
+                }
+
+                await _segmentStore
+                    .SaveSegmentsAsync(_pdfPath, manifest, CancellationToken.None, preserveExistingTakes: true)
+                    .ConfigureAwait(true);
+
+                _segmentManifest = manifest;
+                _segments = manifest.Segments.OrderBy(s => s.StartMs).ToList();
+                _segmentMode = _segments.Count > 0;
+                ExitAlignmentMode();
+                ApplyActiveSource();
+
+                int successCount = created.Count - failed.Count;
+                _labelStatus.Text = failed.Count == 0
+                    ? $"原声对齐完成：新增/更新 {successCount} 句原生切片。"
+                    : $"原声对齐完成：{successCount}/{created.Count} 句有原声，失败 {failed.Count} 句已回退文字跟读。";
+            }
+            catch (Exception ex)
+            {
+                Trace.TraceWarning($"[SentenceShadowing] 保存原声对齐失败: {ex.Message}");
+                _labelStatus.Text = $"保存原声对齐失败：{ex.Message}";
+            }
+            finally
+            {
+                _finishingAlignment = false;
+                _btnAlign.Enabled = true;
+                _btnAlign.Text = _aligning ? "完成对齐" : "原声对齐";
+            }
+        }
+
+        /// <summary>
+        /// 删除与新打点时间范围不符的旧切片；切片服务按“文件存在即复用”工作，
+        /// 不删除会导致重新对齐后仍播放旧的音频区间。
+        /// </summary>
+        private void DeleteStaleSlice(string? relativePath)
+        {
+            if (string.IsNullOrWhiteSpace(relativePath))
+                return;
+
+            try
+            {
+                string path = _segmentStore.ResolvePath(relativePath);
+                if (!string.IsNullOrWhiteSpace(path) && File.Exists(path))
+                    File.Delete(path);
+            }
+            catch (Exception ex)
+            {
+                // 删除失败通常是被播放器占用；保留文件，记录后由人工重试
+                Trace.TraceWarning($"[SentenceShadowing] 删除旧切片失败 {relativePath}: {ex.Message}");
+            }
+        }
+
+        private ShadowingSegmentSource BuildAlignmentSource(ShadowingSegmentSource? existing)
+        {
+            var source = existing ?? new ShadowingSegmentSource();
+            source.TrackPath = _alignmentContext!.SourcePath;
+            source.DurationMs = AudioSliceService.ReadDurationMs(_alignmentContext.SourcePath);
+            source.Fingerprint = ShadowingSegmentStore.BuildFingerprint(
+                _alignmentContext.SourcePath, source.DurationMs);
+            return source;
+        }
+
+        private ShadowingSegmentSession BuildAlignmentSession(ShadowingSegmentSession? existing)
+        {
+            var session = existing ?? new ShadowingSegmentSession();
+            if (string.IsNullOrWhiteSpace(session.Id))
+                session.Id = ShadowingSegmentStore.CreateSessionId(DateTime.Now);
+            session.CaptureSpeed = 1.0;
+            session.LockedPage = false;
+            session.UpdatedAt = DateTime.Now;
+            return session;
+        }
+
+        private void ExitAlignmentMode()
+        {
+            _aligning = false;
+            _alignmentSession = null;
+            _alignmentPlayer?.Pause();
+            _btnPlay.Text = "▶ 播放";
+            _btnRecord.Enabled = _recorder != null;
+            _labelInfo.Text = _wholeBook ? _labelInfo.Text : $"第 {_pageIndex + 1} 页";
+            UpdateSourceBar();
+            UpdateReplayButtonState();
+            RefreshScoreLabel();
+        }
+
         private void OnSourceRadioChanged(object? sender, EventArgs e)
         {
             if (_sourceSwitching || sender is not RadioButton radio || !radio.Checked)
@@ -627,12 +1113,26 @@ namespace LearningAssistant.Forms.Pdf
             if (ReferenceEquals(radio, _radioSourceSegments) == _segmentMode)
                 return;
 
+            // 对齐期间列表固定为页面分句，切到原声切片会让打点索引错位
+            if (_aligning)
+            {
+                _labelStatus.Text = "对齐中不能切换来源；请先完成对齐。";
+                UpdateSourceBar();
+                return;
+            }
+
             SwitchSource(ReferenceEquals(radio, _radioSourceSegments));
         }
 
         /// <summary>清理本页原声切片、跟读 take 与合成成品，并回落到文字跟读。</summary>
         private async void OnClearSegmentsClicked(object? sender, EventArgs e)
         {
+            if (_aligning)
+            {
+                _labelStatus.Text = "对齐中不能清理切片；请先完成对齐。";
+                return;
+            }
+
             if (_segments.Count == 0)
                 return;
 
@@ -1347,6 +1847,15 @@ namespace LearningAssistant.Forms.Pdf
 
         private void MoveSentence(int delta)
         {
+            if (_aligning)
+            {
+                if (delta > 0)
+                    SkipAlignmentCue();
+                else
+                    _labelStatus.Text = "对齐模式下请按 Backspace 撤销上一句。";
+                return;
+            }
+
             if (_practice == null || _practice.Sentences.Count == 0)
                 return;
 
@@ -1357,6 +1866,12 @@ namespace LearningAssistant.Forms.Pdf
 
         private void StartPlayback()
         {
+            if (_aligning)
+            {
+                ToggleAlignmentPlayback();
+                return;
+            }
+
             if (_practice == null || _practice.Sentences.Count == 0)
                 return;
 
@@ -1374,6 +1889,17 @@ namespace LearningAssistant.Forms.Pdf
             StopRecordingIfAny(suppressAdvance: true);
             _recordingPlayer?.Stop();
             _practice?.StopPlayback();
+
+            if (_aligning)
+            {
+                _alignmentPlayer?.Pause();
+                _btnPlay.Text = "▶ 播放";
+                _circularStatus.Recording = false;
+                _circularStatus.Countdown = 0;
+                _labelStatus.Text = "原声已暂停；按 R 从断点重播，或继续标记。";
+                return;
+            }
+
             _btnRecord.Text = "🎤 录音";
             _circularStatus.Recording = false;
             _circularStatus.Countdown = 0;
@@ -1434,6 +1960,28 @@ namespace LearningAssistant.Forms.Pdf
 
         private void OnSentenceSelected(object? sender, EventArgs e)
         {
+            if (_aligning)
+            {
+                // 对齐必须按句顺序推进，点击列表只作查看，不改变当前句
+                if (!_suppressListSelection && _alignmentSession != null)
+                {
+                    _suppressListSelection = true;
+                    try
+                    {
+                        // 全部标记完成后 CurrentIndex 可能等于句数，需夹取到末句避免越界
+                        int count = _listSentences.Items.Count;
+                        _listSentences.SelectedIndex = count == 0
+                            ? -1
+                            : Math.Clamp(_alignmentSession.CurrentIndex, 0, count - 1);
+                    }
+                    finally
+                    {
+                        _suppressListSelection = false;
+                    }
+                }
+                return;
+            }
+
             if (_listSentences.SelectedIndex < 0 || _practice == null)
                 return;
 
@@ -1442,6 +1990,9 @@ namespace LearningAssistant.Forms.Pdf
 
         private void OnSentenceDoubleClick(object? sender, EventArgs e)
         {
+            if (_aligning)
+                return;
+
             if (_listSentences.SelectedIndex < 0 || _practice == null)
                 return;
 
@@ -1875,6 +2426,51 @@ namespace LearningAssistant.Forms.Pdf
                 FireAndForget(_practice.PrefetchAsync(start, count));
         }
 
+        protected override void OnFormClosing(FormClosingEventArgs e)
+        {
+            if (_finishingAlignment)
+            {
+                e.Cancel = true;
+                _labelStatus.Text = "正在生成原声切片，请稍候…";
+                return;
+            }
+
+            if (_aligning && _alignmentSession?.CreatedSegments.Count > 0)
+            {
+                var result = MessageBox.Show(
+                    this,
+                    "原声对齐还未完成，是否保存已标记的切片？",
+                    "原声对齐",
+                    MessageBoxButtons.YesNoCancel,
+                    MessageBoxIcon.Question);
+
+                if (result == DialogResult.Cancel)
+                {
+                    e.Cancel = true;
+                    return;
+                }
+
+                if (result == DialogResult.Yes)
+                {
+                    e.Cancel = true;
+                    FireAndForget(FinishAlignmentAndCloseAsync());
+                    return;
+                }
+
+                // No：丢弃本次未保存的打点，已有切片与录音不受影响
+                ExitAlignmentMode();
+            }
+
+            base.OnFormClosing(e);
+        }
+
+        private async Task FinishAlignmentAndCloseAsync()
+        {
+            await FinishAlignmentAsync();
+            if (!_aligning && IsHandleCreated && !IsDisposed)
+                Close();
+        }
+
         private void OnFormClosed(object? sender, FormClosedEventArgs e)
         {
             _countdownTimer.Stop();
@@ -1884,6 +2480,14 @@ namespace LearningAssistant.Forms.Pdf
             PdfSidebarTheme.ThemeChanged -= OnSidebarThemeChanged;
 
             StopRecordingIfAny(suppressAdvance: true);
+
+            if (_alignmentPlayer != null)
+            {
+                _alignmentPlayer.PlaybackFinished -= OnAlignmentPlaybackFinished;
+                _alignmentPlayer.PositionChanged -= OnAlignmentPositionChanged;
+                _alignmentPlayer.Dispose();
+                _alignmentPlayer = null;
+            }
 
             if (_recorder != null && _recordingHandler != null)
                 _recorder.RecordingCompleted -= _recordingHandler;
@@ -1911,7 +2515,7 @@ namespace LearningAssistant.Forms.Pdf
             BackColor = new PdfSidebarPalette(isDark).Background;
             PdfSidebarTheme.ApplyRecursive(this, isDark);
             var palette = PdfSidebarTheme.PaletteFor(this);
-            foreach (var button in new[] { _btnTakePreview, _btnTakeChoose, _btnTakeDelete, _btnCompose })
+            foreach (var button in new[] { _btnTakePreview, _btnTakeChoose, _btnTakeDelete, _btnCompose, _btnAlign })
             {
                 button.BackColor = palette.SurfaceAlt;
                 button.ForeColor = palette.Text;
@@ -1921,6 +2525,29 @@ namespace LearningAssistant.Forms.Pdf
 
         protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
         {
+            // 对齐模式独占空格：结束当前句并切片；普通模式仍为播放/暂停
+            if (_aligning)
+            {
+                switch (keyData)
+                {
+                    case Keys.Space:
+                        MarkAlignmentCue();
+                        return true;
+                    case Keys.R:
+                        ReplayAlignmentFromCursor();
+                        return true;
+                    case Keys.Right:
+                        SkipAlignmentCue();
+                        return true;
+                    case Keys.Back:
+                        UndoAlignmentCue();
+                        return true;
+                    case Keys.Escape:
+                        FireAndForget(FinishAlignmentAsync());
+                        return true;
+                }
+            }
+
             if (keyData == Keys.Space)
             {
                 StartPlayback();

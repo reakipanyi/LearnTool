@@ -56,6 +56,20 @@ namespace LearningAssistant.Services.Shadowing
         public static string CreateSegmentId(int pageIndex)
             => $"sg_{pageIndex:000}_{Guid.NewGuid().ToString("N")[..8]}";
 
+        /// <summary>
+        /// 由稳定锚点生成确定性 segment ID：同一句重新对齐时命中旧切片与旧 take，
+        /// 不会每次打点都产生一条新记录。
+        /// </summary>
+        public static string CreateAnchoredSegmentId(int pageIndex, string? anchorKey)
+        {
+            if (string.IsNullOrWhiteSpace(anchorKey))
+                return CreateSegmentId(pageIndex);
+
+            string hash = Convert.ToHexString(
+                SHA256.HashData(Encoding.UTF8.GetBytes(anchorKey)))[..8].ToLowerInvariant();
+            return $"sg_{pageIndex:000}_{hash}";
+        }
+
         public static string CreateSessionId(DateTime localTime)
             => $"ss_{localTime:yyyyMMdd_HHmm}";
 
@@ -153,7 +167,8 @@ namespace LearningAssistant.Services.Shadowing
         /// 未出现在本次保存里的旧段与旧成品保留，避免多窗口互删。
         /// </summary>
         public async Task<ShadowingSegmentManifest> SaveSegmentsAsync(
-            string pdfPath, ShadowingSegmentManifest manifest, CancellationToken cancellationToken = default)
+            string pdfPath, ShadowingSegmentManifest manifest, CancellationToken cancellationToken = default,
+            bool preserveExistingTakes = false)
         {
             ArgumentNullException.ThrowIfNull(manifest);
 
@@ -163,8 +178,8 @@ namespace LearningAssistant.Services.Shadowing
             {
                 string path = GetSegmentsPath(pdfPath, manifest.PageIndex);
                 var existing = JsonHelper.LoadFromFile<ShadowingSegmentManifest>(path);
-                var merged = existing == null ? manifest : Merge(existing, manifest);
-                merged.SchemaVersion = 2;
+                var merged = existing == null ? manifest : Merge(existing, manifest, preserveExistingTakes);
+                merged.SchemaVersion = 3;
                 merged.PageIndex = manifest.PageIndex;
                 JsonHelper.SaveToFile(path, merged);
                 return merged;
@@ -253,16 +268,26 @@ namespace LearningAssistant.Services.Shadowing
         public SemaphoreSlim GetLock(string pdfPath)
             => _locks.GetOrAdd($"{_rootDir}|{_userId}|{GetDocumentHash(pdfPath)}", _ => new SemaphoreSlim(1, 1));
 
-        private static ShadowingSegmentManifest Merge(ShadowingSegmentManifest existing, ShadowingSegmentManifest incoming)
+        private static ShadowingSegmentManifest Merge(
+            ShadowingSegmentManifest existing,
+            ShadowingSegmentManifest incoming,
+            bool preserveExistingTakes)
         {
             var segments = new List<ShadowingSegment>(existing.Segments);
             foreach (var segment in incoming.Segments)
             {
                 int index = segments.FindIndex(s => string.Equals(s.Id, segment.Id, StringComparison.Ordinal));
                 if (index >= 0)
+                {
+                    // 重新对齐只更新时间与文本，不覆盖用户已有的跟读 take
+                    if (preserveExistingTakes)
+                        segment.Takes = segments[index].Takes;
                     segments[index] = segment;
+                }
                 else
+                {
                     segments.Add(segment);
+                }
             }
 
             var composed = new List<ShadowingComposedAudio>(existing.Composed);
@@ -277,7 +302,7 @@ namespace LearningAssistant.Services.Shadowing
 
             return new ShadowingSegmentManifest
             {
-                SchemaVersion = 2,
+                SchemaVersion = 3,
                 PageIndex = incoming.PageIndex,
                 Source = incoming.Source,
                 Session = incoming.Session,

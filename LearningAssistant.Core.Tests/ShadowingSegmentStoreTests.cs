@@ -59,7 +59,7 @@ public class ShadowingSegmentStoreTests
             var loaded = await store.LoadSegmentsAsync(pdf, 11);
 
             Assert.NotNull(loaded);
-            Assert.Equal(2, loaded!.SchemaVersion);
+            Assert.Equal(3, loaded!.SchemaVersion);
             Assert.Equal(11, loaded.PageIndex);
             Assert.Equal(203400, loaded.Source.DurationMs);
             Assert.Equal(1.0, loaded.Session.CaptureSpeed);
@@ -145,6 +145,82 @@ public class ShadowingSegmentStoreTests
         {
             DeleteTempRoot(root);
         }
+    }
+
+    [Fact]
+    public async Task SaveSegments_PreserveTakes_KeepsTakesOnRealignment()
+    {
+        string root = CreateTempRoot();
+        try
+        {
+            string pdf = Path.Combine(root, "book.pdf");
+            var store = new ShadowingSegmentStore(root, "tester");
+            var take = new ShadowingTake
+            {
+                Id = "tk_003_aaaaaaaa",
+                Path = "takes/tk_003_aaaaaaaa.wav",
+                DurationMs = 1200,
+                Score = 88,
+                Chosen = true
+            };
+            var first = new ShadowingSegmentManifest
+            {
+                PageIndex = 3,
+                Segments =
+                {
+                    new ShadowingSegment
+                    {
+                        Id = "sg_003_aaaaaaaa",
+                        StartMs = 0,
+                        EndMs = 1200,
+                        Text = "First version.",
+                        Takes = { take }
+                    }
+                }
+            };
+            await store.SaveSegmentsAsync(pdf, first);
+
+            var realigned = new ShadowingSegmentManifest
+            {
+                PageIndex = 3,
+                Segments =
+                {
+                    new ShadowingSegment
+                    {
+                        Id = "sg_003_aaaaaaaa",
+                        StartMs = 100,
+                        EndMs = 1500,
+                        Text = "Realigned text."
+                    }
+                }
+            };
+            await store.SaveSegmentsAsync(pdf, realigned, preserveExistingTakes: true);
+
+            var loaded = await store.LoadSegmentsAsync(pdf, 3);
+            Assert.NotNull(loaded);
+            var segment = Assert.Single(loaded!.Segments);
+            Assert.Equal(100, segment.StartMs);
+            Assert.Equal(1500, segment.EndMs);
+            Assert.Single(segment.Takes);
+            Assert.Equal("tk_003_aaaaaaaa", segment.Takes[0].Id);
+            Assert.True(segment.Takes[0].Chosen);
+        }
+        finally
+        {
+            DeleteTempRoot(root);
+        }
+    }
+
+    [Fact]
+    public void CreateAnchoredSegmentId_IsDeterministicAndStable()
+    {
+        string first = ShadowingSegmentStore.CreateAnchoredSegmentId(11, "hl:11:abcd:0|s1");
+        string second = ShadowingSegmentStore.CreateAnchoredSegmentId(11, "hl:11:abcd:0|s1");
+        string other = ShadowingSegmentStore.CreateAnchoredSegmentId(11, "hl:11:abcd:0|s2");
+
+        Assert.Equal(first, second);
+        Assert.NotEqual(first, other);
+        Assert.Matches("^sg_011_[0-9a-f]{8}$", first);
     }
 
     [Fact]

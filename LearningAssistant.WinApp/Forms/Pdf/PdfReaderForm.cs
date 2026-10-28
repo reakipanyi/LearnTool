@@ -17,6 +17,7 @@ using LearningAssistant.Services.Learning;
 using LearningAssistant.Services.Media;
 using LearningAssistant.Services.Pdf;
 using LearningAssistant.Services.Practice;
+using LearningAssistant.Models.Shadowing;
 using LearningAssistant.Services.Shadowing;
 using LearningAssistant.Views;
 using Microsoft.Extensions.Logging;
@@ -1128,6 +1129,49 @@ namespace LearningAssistant.Forms.Pdf
                 _logger?.LogWarning(ex, "读取本页翻译缓存原文失败");
                 return string.Empty;
             }
+        }
+
+        /// <summary>
+        /// 构造本页原声对齐上下文。分页音频从 0 开始；整篇单音频沿用阅读器当前位置，
+        /// 因为单音频没有页起始时间，用户需先把播放位置移到本页起点。
+        /// </summary>
+        private ShadowingAlignmentContext? BuildShadowingAlignmentContext()
+        {
+            if (string.IsNullOrWhiteSpace(_currentPdfPath))
+                return null;
+
+            AudioTrack? track = null;
+            try
+            {
+                if (_audioTrackManager?.Result?.PageIndex.TryGetValue(_currentPageIndex, out var mapped) == true)
+                    track = mapped;
+                else
+                    track = _audioTrackManager?.CurrentTrack;
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "读取当前页音频失败");
+                return null;
+            }
+
+            if (track == null || string.IsNullOrWhiteSpace(track.FilePath) || !File.Exists(track.FilePath))
+                return null;
+
+            int startMs = 0;
+            if (track.IsSingleAudio
+                && string.Equals(_audioTrackManager?.CurrentTrack?.FilePath, track.FilePath,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                startMs = (int)Math.Max(0, _audioTrackManager!.Playback.Player.Position.TotalMilliseconds);
+            }
+
+            return new ShadowingAlignmentContext
+            {
+                SourcePath = track.FilePath,
+                SubtitlePath = track.SubtitlePath,
+                StartMs = startMs,
+                Highlights = GetUsablePageShadowingHighlights()
+            };
         }
 
         /// <summary>取当前页可用于跟读评分的高亮文本。</summary>
@@ -8966,9 +9010,11 @@ namespace LearningAssistant.Forms.Pdf
                 return;
 
             string documentTitle = Path.GetFileNameWithoutExtension(_currentPdfPath);
+            // 原声对齐上下文：本页音频 + 本页可用高亮；无音频时窗口只保留文字跟读
+            var alignment = BuildShadowingAlignmentContext();
             var window = new SentenceShadowingForm(
                 _currentPdfPath, _currentPageIndex, originalText, documentTitle,
-                _nightModeManager?.IsNightMode ?? false);
+                _nightModeManager?.IsNightMode ?? false, alignment);
             // 只清理当前窗口，避免旧窗口关闭事件误清空新窗口引用
             window.FormClosed += (_, _) =>
             {

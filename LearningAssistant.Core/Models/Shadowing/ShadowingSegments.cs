@@ -6,7 +6,7 @@ namespace LearningAssistant.Models.Shadowing
     /// </summary>
     public class ShadowingSegmentManifest
     {
-        public int SchemaVersion { get; set; } = 2;
+        public int SchemaVersion { get; set; } = 3;
 
         public int PageIndex { get; set; }
 
@@ -58,8 +58,26 @@ namespace LearningAssistant.Models.Shadowing
 
         public string? Text { get; set; }
 
-        /// <summary>srt / lrc / ocr / manual；只作标签，不做强制对齐。</summary>
+        /// <summary>srt / lrc / ocr / manual / highlight / auto-highlight / page-text；只作标签，不做强制对齐。</summary>
         public string? TextSource { get; set; }
+
+        /// <summary>绑定的手动或自动高亮 ID；为空表示只有页面文字，没有高亮锚点。</summary>
+        public string? HighlightId { get; set; }
+
+        /// <summary>
+        /// 稳定高亮锚点：页码 + 规范化文本 + 量化坐标 + 句内序号。
+        /// 自动高亮整本重建后 ID 会变化，用该锚点仍可找回原声切片。
+        /// </summary>
+        public string? HighlightAnchor { get; set; }
+
+        /// <summary>一条高亮拆成多句时，当前句在其中的序号；未拆分时为 0。</summary>
+        public int CuePartIndex { get; set; }
+
+        /// <summary>边界来源：tap（空格打点）/ vad / subtitle；用于区分切片精度。</summary>
+        public string? BoundarySource { get; set; }
+
+        /// <summary>自动对齐置信度 0..1；手动打点为 1。</summary>
+        public double? AlignmentConfidence { get; set; }
 
         /// <summary>相对 Shadowings 根目录的切片路径，例 slices/sg_011_7c3a9e21.wav。</summary>
         public string SlicePath { get; set; } = string.Empty;
