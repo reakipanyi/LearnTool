@@ -73,6 +73,26 @@ namespace LearningAssistant.Views
         bool IsAIExplanationEnabled { get; set; }
 
         /// <summary>
+        /// AI 服务商（provider key，如 doubao/deepseek）
+        /// </summary>
+        string AiProvider { get; set; }
+
+        /// <summary>
+        /// AI 模型名称
+        /// </summary>
+        string AiModel { get; set; }
+
+        /// <summary>
+        /// AI API 密钥
+        /// </summary>
+        string AiApiKey { get; set; }
+
+        /// <summary>
+        /// AI 接口地址
+        /// </summary>
+        string AiBaseUrl { get; set; }
+
+        /// <summary>
         /// 当前选中的用户ID
         /// </summary>
         string SelectedUserId { get; set; }

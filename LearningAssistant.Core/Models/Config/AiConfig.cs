@@ -131,7 +131,7 @@ namespace LearningAssistant.Models.Config
             {
                 "qwen", new AiProviderInfo
                 {
-                    Name = "通义千问 (Qwen/DashScope)",
+                    Name = "阿里云百炼 (Qwen/DashScope)",
                     BaseUrl = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
                     DefaultModel = "qwen-turbo",
                     Models = new List<string>
@@ -139,7 +139,8 @@ namespace LearningAssistant.Models.Config
                         "qwen-turbo",
                         "qwen-plus",
                         "qwen-max",
-                        "qwen-long"
+                        "qwen-long",
+                        "deepseek-v4.1-flash-1017"
                     },
                     WebViewUrl = "https://tongyi.aliyun.com/qianwen"
                 }

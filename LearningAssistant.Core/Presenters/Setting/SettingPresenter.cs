@@ -82,6 +82,14 @@ namespace LearningAssistant.Presenters
             _view.IsVoiceEnabled = _appConfig.AppSettings.IsVoiceEnabled;
             _view.PronunciationScope = _appConfig.AppSettings.PronunciationScope;
             _view.IsAIExplanationEnabled = _appConfig.AppSettings.IsAIExplanationEnabled;
+
+            // AI 服务配置：按当前 provider 解析实际端点（含 per-provider 覆盖与内置默认值）
+            var aiConfig = _appConfig.AiConfig;
+            var aiEndpoint = aiConfig.ResolveEndpoint(aiConfig.Provider);
+            _view.AiProvider = aiConfig.Provider;
+            _view.AiModel = aiEndpoint.Model;
+            _view.AiApiKey = aiEndpoint.ApiKey;
+            _view.AiBaseUrl = aiEndpoint.BaseUrl;
         }
 
         private void View_SaveClicked(object? sender, EventArgs e)
@@ -107,6 +115,20 @@ namespace LearningAssistant.Presenters
                 _appConfig.AppSettings.IsVoiceEnabled = _view.IsVoiceEnabled;
                 _appConfig.AppSettings.PronunciationScope = _view.PronunciationScope;
                 _appConfig.AppSettings.IsAIExplanationEnabled = _view.IsAIExplanationEnabled;
+
+                // AI 服务配置：写全局配置（对当前 provider 生效），并同步 per-provider 覆盖，
+                // 保证切换服务商后各自的 Key/模型/BaseUrl 不丢失
+                var aiConfig = _appConfig.AiConfig;
+                aiConfig.Provider = _view.AiProvider;
+                aiConfig.ApiKey = _view.AiApiKey.Trim();
+                aiConfig.Model = _view.AiModel.Trim();
+                aiConfig.BaseUrl = _view.AiBaseUrl.Trim();
+                aiConfig.ProviderConfigs[aiConfig.Provider] = new AiProviderInfo
+                {
+                    ApiKey = aiConfig.ApiKey,
+                    Model = aiConfig.Model,
+                    BaseUrl = aiConfig.BaseUrl
+                };
 
                 _persistenceService.SaveConfig(_appConfig);
                 _persistenceService.PersistCache();

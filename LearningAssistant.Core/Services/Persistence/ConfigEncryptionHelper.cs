@@ -16,6 +16,10 @@ namespace LearningAssistant.Services.Persistence
             if (config.AiConfig != null)
             {
                 config.AiConfig.ApiKey = SecureConfigManager.Encrypt(config.AiConfig.ApiKey);
+                foreach (var providerConfig in config.AiConfig.ProviderConfigs.Values)
+                {
+                    providerConfig.ApiKey = SecureConfigManager.Encrypt(providerConfig.ApiKey);
+                }
             }
             if (config.TranslationConfig != null)
             {
@@ -44,6 +48,10 @@ namespace LearningAssistant.Services.Persistence
             if (config.AiConfig != null)
             {
                 config.AiConfig.ApiKey = TryDecrypt(config.AiConfig.ApiKey);
+                foreach (var providerConfig in config.AiConfig.ProviderConfigs.Values)
+                {
+                    providerConfig.ApiKey = TryDecrypt(providerConfig.ApiKey);
+                }
             }
             if (config.TranslationConfig != null)
             {
