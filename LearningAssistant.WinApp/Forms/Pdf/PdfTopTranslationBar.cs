@@ -18,6 +18,7 @@ public sealed class PdfTopTranslationBar : Panel
     private readonly Label _badge = new();
     private readonly Label _original = new();
     private readonly Label _translation = new();
+    private readonly Button _btnShadow = new();
     private readonly Button _btnSpeak = new();
     private readonly Button _btnCopy = new();
     private readonly Button _btnPlay = new();
@@ -47,6 +48,9 @@ public sealed class PdfTopTranslationBar : Panel
 
     /// <summary>请求朗读选区原文。</summary>
     public event EventHandler? SpeakRequested;
+
+    /// <summary>请求打开跟读窗口并定位到当前句。</summary>
+    public event EventHandler? ShadowingRequested;
 
     /// <summary>请求复制原文与译文。</summary>
     public event EventHandler? CopyRequested;
@@ -79,6 +83,7 @@ public sealed class PdfTopTranslationBar : Panel
         _original.Text = originalText;
         _translation.Text = "正在识别并翻译…";
         _translation.ForeColor = PdfSidebarTheme.Muted;
+        _btnShadow.Visible = false;
         _btnSpeak.Visible = false;
         _btnCopy.Visible = false;
         _btnPlay.Visible = false;
@@ -101,6 +106,7 @@ public sealed class PdfTopTranslationBar : Panel
         _original.Text = originalText;
         _translation.Text = translation;
         _translation.ForeColor = PdfSidebarTheme.Text;
+        _btnShadow.Visible = !string.IsNullOrWhiteSpace(originalText);
         _btnSpeak.Visible = !string.IsNullOrWhiteSpace(originalText);
         _btnCopy.Visible = !string.IsNullOrWhiteSpace(translation);
         _btnPlay.Visible = false;
@@ -119,6 +125,7 @@ public sealed class PdfTopTranslationBar : Panel
         _original.Text = originalText;
         _translation.Text = message;
         _translation.ForeColor = PdfSidebarTheme.Danger;
+        _btnShadow.Visible = !string.IsNullOrWhiteSpace(originalText);
         _btnSpeak.Visible = false;
         _btnCopy.Visible = false;
         _btnPlay.Visible = false;
@@ -257,15 +264,18 @@ public sealed class PdfTopTranslationBar : Panel
         _translation.Font = _translationFont;
         _translation.TabStop = false;
 
+        StyleActionButton(_btnShadow, "🎙");
         StyleActionButton(_btnSpeak, "🔊");
         StyleActionButton(_btnCopy, "⧉");
         StyleActionButton(_btnPlay, "▶");
         StyleActionButton(_btnClose, "✕");
+        _tooltip.SetToolTip(_btnShadow, "跟读此句");
         _tooltip.SetToolTip(_btnSpeak, "朗读原文");
         _tooltip.SetToolTip(_btnCopy, "复制原文与译文");
         _tooltip.SetToolTip(_btnPlay, "回放刚才的跟读");
         _tooltip.SetToolTip(_btnClose, "关闭译条");
 
+        _btnShadow.Click += (_, _) => ShadowingRequested?.Invoke(this, EventArgs.Empty);
         _btnSpeak.Click += (_, _) => SpeakRequested?.Invoke(this, EventArgs.Empty);
         _btnCopy.Click += (_, _) => CopyRequested?.Invoke(this, EventArgs.Empty);
         _btnPlay.Click += (_, _) => PlayTakeRequested?.Invoke(this, EventArgs.Empty);
@@ -278,6 +288,7 @@ public sealed class PdfTopTranslationBar : Panel
         Controls.Add(_badge);
         Controls.Add(_original);
         Controls.Add(_translation);
+        Controls.Add(_btnShadow);
         Controls.Add(_btnSpeak);
         Controls.Add(_btnCopy);
         Controls.Add(_btnPlay);
@@ -299,6 +310,7 @@ public sealed class PdfTopTranslationBar : Panel
 
     private void ShowShadowingActions(bool canPlay, bool canClose)
     {
+        _btnShadow.Visible = false;
         _btnSpeak.Visible = false;
         _btnCopy.Visible = false;
         _btnPlay.Visible = canPlay && _hasTake;
@@ -312,7 +324,7 @@ public sealed class PdfTopTranslationBar : Panel
         _original.ForeColor = palette.Muted;
         _badge.BackColor = palette.BrandSoft;
         _badge.ForeColor = PdfSidebarTheme.Brand;
-        foreach (var button in new[] { _btnSpeak, _btnCopy, _btnPlay, _btnClose })
+        foreach (var button in new[] { _btnShadow, _btnSpeak, _btnCopy, _btnPlay, _btnClose })
         {
             button.BackColor = palette.Surface;
             button.ForeColor = palette.Text;
@@ -373,7 +385,7 @@ public sealed class PdfTopTranslationBar : Panel
         const int left = 12;
         const int actionSize = 30;
         const int actionGap = 2;
-        var actionsWidth = actionSize * 3 + actionGap * 2;
+        var actionsWidth = actionSize * 4 + actionGap * 3;
         var textWidth = Math.Max(80, Width - left - actionsWidth - 24);
 
         _badge.SetBounds(left, 10, 78, 20);
@@ -388,6 +400,7 @@ public sealed class PdfTopTranslationBar : Panel
         _btnPlay.SetBounds(right - actionSize - actionGap, 14, actionSize, actionSize);
         _btnCopy.SetBounds(right - (actionSize + actionGap) * 2, 14, actionSize, actionSize);
         _btnSpeak.SetBounds(right - (actionSize + actionGap) * 3, 14, actionSize, actionSize);
+        _btnShadow.SetBounds(right - (actionSize + actionGap) * 4, 14, actionSize, actionSize);
     }
 
     private static string FormatDuration(TimeSpan elapsed)

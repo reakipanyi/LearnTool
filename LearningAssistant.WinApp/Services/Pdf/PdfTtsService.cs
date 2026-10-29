@@ -20,22 +20,24 @@ namespace LearningAssistant.Services.Pdf
 
         public bool IsAvailable => _ttsService.Available;
 
-        public async Task SpeakTextAsync(string text, string language, float speed)
+        public async Task SpeakTextAsync(string text, string language, float speed, CancellationToken cancellationToken = default)
         {
             float actualSpeed = speed > 0 ? speed : _ttsConfig.Speed;
             _logger.LogInformation("PdfTtsService.SpeakTextAsync: paramSpeed={ParamSpeed}, actualSpeed={ActualSpeed}, configSpeed={ConfigSpeed}", 
                 speed, actualSpeed, _ttsConfig.Speed);
-            await _ttsService.SpeakAsync(text, language, actualSpeed);
+            await _ttsService.SpeakAsync(text, language, actualSpeed, cancellationToken);
         }
 
-        public async Task SpeakTextAsync(string text, float speed = -1f)
+        public async Task SpeakTextAsync(string text, float speed = -1f, CancellationToken cancellationToken = default)
         {
             float actualSpeed = speed > 0 ? speed : _ttsConfig.Speed;
             string lang = DetectTextLanguage(text);
             _logger.LogInformation("PdfTtsService.SpeakTextAsync: paramSpeed={ParamSpeed}, actualSpeed={ActualSpeed}, lang={Lang}, configSpeed={ConfigSpeed}", 
                 speed, actualSpeed, lang, _ttsConfig.Speed);
-            await _ttsService.SpeakAsync(text, lang, actualSpeed);
+            await _ttsService.SpeakAsync(text, lang, actualSpeed, cancellationToken);
         }
+
+        public Task StopAsync() => _ttsService.StopAsync();
 
         private string DetectTextLanguage(string text)
         {

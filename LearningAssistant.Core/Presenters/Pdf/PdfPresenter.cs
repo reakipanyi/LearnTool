@@ -840,6 +840,51 @@ namespace LearningAssistant.Presenters
         }
 
         /// <summary>
+        /// 朗读文本并等待播放结束（语言按文本自动判定）。
+        /// 供点读与连续朗读调度使用：停止/切句引发的取消静默处理，不弹错误提示。
+        /// </summary>
+        public async Task SpeakTextAndWaitAsync(string text, float speed = -1f, CancellationToken cancellationToken = default)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+                return;
+
+            if (_pdfTtsService == null || !_pdfTtsService.IsAvailable)
+            {
+                _view?.ShowWarning("朗读服务不可用，请检查TTS配置");
+                return;
+            }
+
+            try
+            {
+                await _pdfTtsService.SpeakTextAsync(text, speed, cancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                // 用户停止/切句/暂停，属于预期取消
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error in SpeakTextAndWaitAsync");
+            }
+        }
+
+        /// <summary>停止当前朗读（切页、暂停、关闭译条时调用）。</summary>
+        public async Task StopSpeakingAsync()
+        {
+            if (_pdfTtsService == null)
+                return;
+
+            try
+            {
+                await _pdfTtsService.StopAsync();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Error in StopSpeakingAsync");
+            }
+        }
+
+        /// <summary>
         /// 自动朗读（用于高亮识别后），不弹窗，静默处理错误
         /// </summary>
         public async Task TryAutoSpeakAsync(string text)

@@ -88,6 +88,19 @@ namespace LearningAssistant.Forms.Pdf
         private Panel? _highlightEmptyHost;
         private IAudioRecorderService? _audioRecorderService;
 
+        // 连续朗读：控制条 + 调度器 + 当前句高亮
+        private PdfReadingPlaybackBar? _readingPlaybackBar;
+        private PdfReadingPlaybackManager? _readingPlaybackManager;
+        // 阅读辅助：护眼色层/引导线（纯视图层）与阅读时长统计
+        private PdfReadingAidManager? _readingAidManager;
+        private PdfReadingTimeTracker? _readingTimeTracker;
+        // 点读单句：请求代次与“朗读中”框高亮，切页/重复点击时立即失效
+        private int _sentenceReadRequestId;
+        private bool _sentenceReadActive;
+        private int _sentenceReadPageIndex = -1;
+        private IReadOnlyList<PdfTextLine>? _sentenceReadLines;
+        private CancellationTokenSource? _sentenceReadCts;
+
         // 顶部悬浮译条：选区翻译与“暂停跟读”共用同一浮层
         private PdfTopTranslationBar? _topTranslationBar;
         private IPdfSelectionTranslationCache? _selectionTranslationCache;
@@ -524,6 +537,23 @@ namespace LearningAssistant.Forms.Pdf
                 _logger, this, _highlightService, _highlightManager, _autoLayoutService);
             _navigationManager = new PdfReaderNavigationManager(_logger, this);
 
+            // 连续朗读：句子调度、同步高亮状态与断点续听
+            var positionStore = Program.ServiceProvider?.GetService(typeof(PdfReadingPositionStore)) as PdfReadingPositionStore
+                ?? new PdfReadingPositionStore(AppPaths.PdfReadingPositionDir);
+            _readingPlaybackManager = new PdfReadingPlaybackManager(
+                _logger, this, positionStore, _autoLayoutService);
+            _readingPlaybackManager.StateChanged += (_, _) => RefreshReadingPlaybackBar();
+
+            // 阅读辅助（纯视图层）：护眼色层与阅读引导线，叠加绘制不进入标注数据
+            _readingAidManager = new PdfReadingAidManager();
+
+            // 阅读时长统计：窗口激活且已打开文档时按心跳累计，按文档与日期落盘
+            var readingTimeStore = Program.ServiceProvider?.GetService(typeof(PdfReadingTimeStore)) as PdfReadingTimeStore
+                ?? new PdfReadingTimeStore(AppPaths.PdfReadingStatsDir);
+            _readingTimeTracker = new PdfReadingTimeTracker(readingTimeStore);
+            Activated += (_, _) => _readingTimeTracker?.SetActive(true);
+            Deactivate += (_, _) => _readingTimeTracker?.SetActive(false);
+
             // 订阅两个 Manager 的撤销动作入栈事件，统一记录到 _unifiedUndoStack，
             // 供工具栏撤销按钮按时间顺序智能撤销最近一次操作（画笔或高亮）。
             _highlightManager.UndoActionRecorded += (s, e) => _unifiedUndoStack.Push(UndoActionKind.Highlight);
@@ -570,6 +600,7 @@ namespace LearningAssistant.Forms.Pdf
             {
                 _pictureBoxPdf.MouseDown += _navigationManager.MouseDown;
                 _pictureBoxPdf.MouseMove += _navigationManager.MouseMove;
+                _pictureBoxPdf.MouseMove += OnReadingGuideMouseMove;
                 _pictureBoxPdf.MouseUp += PictureBoxPdf_MouseUp;
             }
 
@@ -698,14 +729,21 @@ namespace LearningAssistant.Forms.Pdf
 
             _topTranslationBar = new PdfTopTranslationBar();
             _topTranslationBar.SpeakRequested += (_, _) => _ = SpeakTopBarOriginalAsync();
+            _topTranslationBar.ShadowingRequested += (_, _) => OpenShadowingForTopBarSentence();
             _topTranslationBar.CopyRequested += (_, _) => CopyTopBarContent();
             _topTranslationBar.PlayTakeRequested += (_, _) => PlayShadowingTake();
-            // 用户手动关闭译条时丢弃仍在途的翻译回包，避免关闭后又自动弹出
-            _topTranslationBar.CloseRequested += (_, _) => ++_selectionTranslationRequestId;
+            // 用户手动关闭译条时丢弃仍在途的翻译回包，并停止点读音频，避免残留播放
+            _topTranslationBar.CloseRequested += (_, _) =>
+            {
+                ++_selectionTranslationRequestId;
+                CancelSentenceReading();
+            };
             _panelPdf.Controls.Add(_topTranslationBar);
             _topTranslationBar.BringToFront();
             _panelPdf.Resize += (_, _) => PositionTopTranslationBar();
             PositionTopTranslationBar();
+
+            InitializeReadingPlaybackBar();
         }
 
         /// <summary>把译条固定在画布顶部；悬浮但不参与布局，避免页面重排。</summary>
@@ -1735,6 +1773,577 @@ namespace LearningAssistant.Forms.Pdf
 
         #endregion
 
+        #region 连续朗读与点读闭环
+
+        /// <summary>初始化连续朗读控制条：挂在画布底部，默认收起。</summary>
+        private void InitializeReadingPlaybackBar()
+        {
+            if (_readingPlaybackBar != null || _panelPdf == null)
+                return;
+
+            var bar = new PdfReadingPlaybackBar();
+            bar.PlayPauseRequested += (_, _) => ToggleReadingPlayback();
+            bar.PreviousRequested += (_, _) => _readingPlaybackManager?.Skip(-1);
+            bar.NextRequested += (_, _) => _readingPlaybackManager?.Skip(1);
+            bar.StopRequested += (_, _) => _readingPlaybackManager?.Stop();
+            bar.ResumeRequested += (_, _) => ResumeReadingFromSavedPosition();
+            bar.SpeedChanged += (_, _) => _readingPlaybackManager?.SetSpeed(bar.Speed);
+            bar.CloseRequested += (_, _) =>
+            {
+                _readingPlaybackManager?.Stop();
+                bar.Visible = false;
+            };
+
+            double speed = _appConfig?.TtsConfig?.Speed ?? 1.0;
+            bar.SetSpeed(speed);
+            _readingPlaybackManager?.SetSpeed(speed);
+
+            _readingPlaybackBar = bar;
+            _panelPdf.Controls.Add(bar);
+            bar.SetIdle();
+            bar.SetResumeAvailable(_readingPlaybackManager?.SavedPosition != null);
+        }
+
+        /// <summary>「更多」菜单入口：展开控制条并开始/暂停朗读。</summary>
+        private void ToggleReadingPlaybackFromMenu()
+        {
+            if (_readingPlaybackBar == null)
+                InitializeReadingPlaybackBar();
+            if (_readingPlaybackBar == null)
+                return;
+
+            if (!_readingPlaybackBar.Visible)
+            {
+                _readingPlaybackBar.Visible = true;
+                _readingPlaybackBar.BringToFront();
+                _readingPlaybackBar.SetResumeAvailable(_readingPlaybackManager?.SavedPosition != null);
+            }
+
+            ToggleReadingPlayback();
+        }
+
+        /// <summary>播放/暂停切换；未在朗读时从当前页（或本页断点）开始。</summary>
+        private void ToggleReadingPlayback()
+        {
+            if (_readingPlaybackBar == null || _readingPlaybackManager == null)
+                return;
+
+            if (_readingPlaybackManager.IsActive)
+            {
+                if (_readingPlaybackManager.IsPaused)
+                    _readingPlaybackManager.Resume();
+                else
+                    _readingPlaybackManager.Pause();
+                return;
+            }
+
+            int page = Math.Max(0, _currentPageIndex);
+            int sentence = 0;
+            var saved = _readingPlaybackManager.SavedPosition;
+            if (saved != null && saved.PageIndex == page)
+                sentence = Math.Max(0, saved.SentenceIndex);
+
+            _readingPlaybackManager.SetSpeed(_readingPlaybackBar.Speed);
+            if (_readingPlaybackManager.Start(page, sentence))
+                _readingPlaybackBar.SetStatusText("正在准备朗读…");
+        }
+
+        /// <summary>断点续听：跳到上次保存的页与句。</summary>
+        private void ResumeReadingFromSavedPosition()
+        {
+            if (_readingPlaybackBar == null || _readingPlaybackManager == null)
+                return;
+
+            var position = _readingPlaybackManager.SavedPosition;
+            if (position == null)
+            {
+                ShowToast("没有可续听的断点");
+                return;
+            }
+
+            _readingPlaybackBar.Visible = true;
+            _readingPlaybackBar.BringToFront();
+            _readingPlaybackManager.SetSpeed(_readingPlaybackBar.Speed);
+            if (_readingPlaybackManager.Start(position.PageIndex, position.SentenceIndex))
+                _readingPlaybackBar.SetStatusText("正在准备续听…");
+        }
+
+        /// <summary>按调度器状态刷新控制条。</summary>
+        private void RefreshReadingPlaybackBar()
+        {
+            var bar = _readingPlaybackBar;
+            var manager = _readingPlaybackManager;
+            if (bar == null || manager == null)
+                return;
+
+            bar.SetResumeAvailable(manager.SavedPosition != null && !manager.IsActive);
+            if (!bar.Visible)
+                return;
+
+            var sentence = manager.CurrentSentence;
+            if (sentence == null)
+            {
+                if (!manager.IsActive)
+                    bar.SetIdle();
+                return;
+            }
+
+            int total = manager.GetSentencesForPage(sentence.PageIndex).Count;
+            if (manager.IsPaused)
+                bar.SetPaused(sentence.PageIndex, sentence.IndexInPage, total);
+            else
+                bar.SetPlaying(sentence.PageIndex, sentence.IndexInPage, total);
+        }
+
+        /// <summary>换文档后按断点刷新续听入口，并提示上次听到的位置。</summary>
+        private void UpdateReadingResumeHint()
+        {
+            var position = _readingPlaybackManager?.SavedPosition;
+            var bar = _readingPlaybackBar;
+            if (bar == null)
+                return;
+
+            if (position == null)
+            {
+                bar.SetResumeAvailable(false);
+                return;
+            }
+
+            bar.SetResumeAvailable(true);
+            ShowToast($"上次听读停在 第 {position.PageIndex + 1} 页 第 {position.SentenceIndex + 1} 句，可打开「连续朗读」续听");
+        }
+
+        /// <summary>
+        /// 点读闭环：点击自动框后朗读完整句子，译条显示原文+译文，并可一键跟读。
+        /// </summary>
+        private async Task ReadAutoHighlightSentenceAsync(PdfHighlight highlight)
+        {
+            if (highlight == null)
+                return;
+
+            string blockText = highlight.Text?.Trim() ?? string.Empty;
+            if (blockText.Length == 0)
+            {
+                ShowToast("该框没有可朗读的文字");
+                return;
+            }
+
+            // 点读与连续朗读互斥，避免两路 TTS 叠加
+            _readingPlaybackManager?.Stop();
+
+            int pageIndex = highlight.PageIndex;
+            var sentences = _readingPlaybackManager?.GetSentencesForPage(pageIndex) ?? new List<PdfSentence>();
+            var sentence = PdfSentenceSegmenter.FindSentenceForBlock(sentences, blockText);
+            string text = sentence != null && !string.IsNullOrWhiteSpace(sentence.Text)
+                ? sentence.Text
+                : blockText;
+
+            // 无文本层/OCR 版面时明确提示：按框内识别文字朗读，而不是静默降级
+            if (sentences.Count == 0)
+                ShowToast("该页没有文本层，按框内识别文字朗读");
+
+            // 重复点击同一框：取消上一次合成/播放，避免叠加
+            var previousCts = _sentenceReadCts;
+            try
+            {
+                previousCts?.Cancel();
+            }
+            catch (ObjectDisposedException)
+            {
+                // 上一次朗读恰好结束
+            }
+
+            var cts = new CancellationTokenSource();
+            _sentenceReadCts = cts;
+
+            int speakId = ++_sentenceReadRequestId;
+            int translationId = ShowSelectionTranslationLoading(pageIndex, text);
+            _ = SpeakSentencePreviewAsync(speakId, pageIndex, text, sentence?.Lines, cts);
+            await TranslateSentenceForTopBarAsync(translationId, pageIndex, text);
+        }
+
+        /// <summary>朗读点读命中的完整句子；期间在画布上标出该句。</summary>
+        private async Task SpeakSentencePreviewAsync(
+            int requestId,
+            int pageIndex,
+            string text,
+            IReadOnlyList<PdfTextLine>? lines,
+            CancellationTokenSource cts)
+        {
+            var presenter = _presenter;
+            if (presenter == null)
+                return;
+
+            if (!presenter.IsTTSServiceAvailable())
+            {
+                ShowToast("朗读服务不可用，请检查 TTS 配置");
+                return;
+            }
+
+            _sentenceReadActive = true;
+            _sentenceReadPageIndex = pageIndex;
+            _sentenceReadLines = lines is { Count: > 0 } ? lines : null;
+            _pictureBoxPdf?.Invalidate();
+
+            try
+            {
+                await presenter.StopSpeakingAsync();
+                if (requestId != _sentenceReadRequestId)
+                    return;
+
+                await presenter.SpeakTextAndWaitAsync(text, GetSentenceReadSpeed(), cts.Token);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "点读朗读失败");
+            }
+            finally
+            {
+                if (requestId == _sentenceReadRequestId)
+                {
+                    _sentenceReadActive = false;
+                    _sentenceReadPageIndex = -1;
+                    _sentenceReadLines = null;
+                    _pictureBoxPdf?.Invalidate();
+                }
+
+                if (ReferenceEquals(_sentenceReadCts, cts))
+                    _sentenceReadCts = null;
+                cts.Dispose();
+            }
+        }
+
+        /// <summary>点读句子的译文：命中缓存直接回显，否则请求翻译并写入本页缓存。</summary>
+        private async Task TranslateSentenceForTopBarAsync(int requestId, int pageIndex, string text)
+        {
+            var presenter = _presenter;
+            if (presenter == null)
+                return;
+
+            if (TryGetCachedSelectionTranslation(pageIndex, text, out var cached)
+                && !string.IsNullOrWhiteSpace(cached))
+            {
+                CompleteSelectionTranslation(requestId, pageIndex, text, cached, true);
+                return;
+            }
+
+            try
+            {
+                string? translation = await presenter.TranslateTextForRegionAsync(text);
+                if (requestId != _selectionTranslationRequestId)
+                    return;
+
+                if (string.IsNullOrWhiteSpace(translation))
+                {
+                    FailSelectionTranslation(requestId, pageIndex, text, "翻译失败，请稍后重试");
+                    return;
+                }
+
+                StoreSelectionTranslation(pageIndex, text, translation);
+                CompleteSelectionTranslation(requestId, pageIndex, text, translation, false);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "点读句子翻译失败");
+                FailSelectionTranslation(requestId, pageIndex, text, "翻译失败，请稍后重试");
+            }
+        }
+
+        /// <summary>关闭译条/切换页面时停止点读音频与高亮，避免残留。</summary>
+        private void CancelSentenceReading()
+        {
+            if (!_sentenceReadActive)
+                return;
+
+            ++_sentenceReadRequestId;
+            _sentenceReadActive = false;
+            _sentenceReadPageIndex = -1;
+            _sentenceReadLines = null;
+
+            var cts = _sentenceReadCts;
+            _sentenceReadCts = null;
+            try
+            {
+                cts?.Cancel();
+            }
+            catch (ObjectDisposedException)
+            {
+                // 朗读恰好结束
+            }
+
+            _ = _presenter?.StopSpeakingAsync();
+            _pictureBoxPdf?.Invalidate();
+        }
+
+        /// <summary>「跟读此句」：用当前页文本打开跟读窗口并定位到译条中的句子。</summary>
+        private void OpenShadowingForTopBarSentence()
+        {
+            if (_topTranslationBar == null)
+                return;
+            if (string.IsNullOrEmpty(_currentPdfPath))
+            {
+                ShowWarning("请先打开 PDF 文档。");
+                return;
+            }
+
+            int pageIndex = _topTranslationBar.PageIndex;
+            string sentence = _topTranslationBar.OriginalText?.Trim() ?? string.Empty;
+            if (pageIndex < 0 || sentence.Length == 0)
+            {
+                ShowWarning("当前没有可跟读的句子。");
+                return;
+            }
+
+            string pageText = _presenter?.GetPageText(pageIndex) ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(pageText))
+                pageText = sentence;
+
+            // 指定句定位需要重建窗口；旧窗口若为整本模式也一并关闭，避免模式冲突
+            if (_shadowingForm is { IsDisposed: false })
+                _shadowingForm.Close();
+
+            string documentTitle = Path.GetFileNameWithoutExtension(_currentPdfPath);
+            var alignment = BuildShadowingAlignmentContext();
+            var window = new SentenceShadowingForm(
+                _currentPdfPath, pageIndex, pageText, documentTitle,
+                _nightModeManager?.IsNightMode ?? false, alignment, sentence);
+            window.FormClosed += (_, _) =>
+            {
+                if (ReferenceEquals(_shadowingForm, window))
+                    _shadowingForm = null;
+            };
+            _shadowingForm = window;
+            window.Show(this);
+        }
+
+        /// <summary>点读语速：控制条可见时跟随控制条，否则取全局 TTS 配置。</summary>
+        private float GetSentenceReadSpeed()
+        {
+            if (_readingPlaybackBar is { Visible: true })
+                return (float)_readingPlaybackBar.Speed;
+            return _appConfig?.TtsConfig?.Speed ?? 1f;
+        }
+
+        /// <summary>点读/连续朗读的当前句高亮；独立于标注图层，不写入任何标注数据。</summary>
+        private void DrawReadingPlaybackOverlay(Graphics g)
+        {
+            var sentence = _readingPlaybackManager?.CurrentSentence;
+            if (sentence != null && TryGetReadingTargetRect(sentence.PageIndex, out var target))
+            {
+                DrawSentenceLines(g, sentence.Lines, target,
+                    Color.FromArgb(64, 255, 214, 0), Color.FromArgb(235, 255, 170, 0));
+            }
+
+            if (_sentenceReadActive
+                && _sentenceReadLines is { Count: > 0 }
+                && TryGetReadingTargetRect(_sentenceReadPageIndex, out var blockTarget))
+            {
+                DrawSentenceLines(g, _sentenceReadLines, blockTarget,
+                    Color.FromArgb(36, 0, 160, 255), Color.FromArgb(220, 0, 140, 255));
+            }
+        }
+
+        /// <summary>取指定页在控件内的绘制矩形；双页模式区分左右页。</summary>
+        private bool TryGetReadingTargetRect(int pageIndex, out Rectangle rect)
+        {
+            rect = Rectangle.Empty;
+            if (_currentPageImage == null)
+                return false;
+
+            if (_isDualPage)
+            {
+                var (leftRect, rightRect) = GetDualPageRects();
+                if (pageIndex == _currentPageIndex)
+                {
+                    rect = leftRect;
+                    return true;
+                }
+                if (pageIndex == _currentPageIndex + 1 && _secondPageImage != null)
+                {
+                    rect = rightRect;
+                    return true;
+                }
+                return false;
+            }
+
+            if (pageIndex != _currentPageIndex)
+                return false;
+
+            rect = ToRectangle(GetImageDisplayRect());
+            return rect.Width > 0 && rect.Height > 0;
+        }
+
+        private static void DrawSentenceLines(
+            Graphics g,
+            IReadOnlyList<PdfTextLine>? lines,
+            Rectangle target,
+            Color fillColor,
+            Color borderColor)
+        {
+            if (lines == null || lines.Count == 0)
+                return;
+
+            using var fill = new SolidBrush(fillColor);
+            using var pen = new Pen(borderColor, 2f);
+            foreach (var line in lines)
+            {
+                if (line.Width <= 0 || line.Height <= 0)
+                    continue;
+
+                var rect = new RectangleF(
+                    target.X + line.X * target.Width,
+                    target.Y + line.Y * target.Height,
+                    Math.Max(1f, line.Width * target.Width),
+                    Math.Max(1f, line.Height * target.Height));
+                g.FillRectangle(fill, rect);
+                g.DrawRectangle(pen, rect.X, rect.Y, rect.Width, rect.Height);
+            }
+        }
+
+        #endregion
+
+        #region 阅读辅助（色层/护眼/引导线/时长统计）
+
+        /// <summary>护眼色层与阅读引导线：只叠加在页面位图之上，不写入标注数据。</summary>
+        private void DrawReadingAidOverlay(Graphics g)
+        {
+            if (_readingAidManager == null || !_readingAidManager.HasVisibleEffect || _currentPageImage == null)
+                return;
+
+            if (_isDualPage)
+            {
+                var (leftRect, rightRect) = GetDualPageRects();
+                _readingAidManager.Draw(g, leftRect);
+                if (_secondPageImage != null)
+                    _readingAidManager.Draw(g, rightRect);
+                return;
+            }
+
+            var singleRect = ToRectangle(GetImageDisplayRect());
+            if (singleRect.Width > 0 && singleRect.Height > 0)
+                _readingAidManager.Draw(g, singleRect);
+        }
+
+        /// <summary>鼠标移动时让引导线跟随指针；位置被限制在当前可见页内。</summary>
+        private void OnReadingGuideMouseMove(object? sender, MouseEventArgs e)
+        {
+            if (_readingAidManager == null || !_readingAidManager.IsGuideEnabled)
+                return;
+
+            if (_readingAidManager.UpdateGuidePosition(e.Location, GetReadingGuideArea()))
+                _pictureBoxPdf?.Invalidate();
+        }
+
+        /// <summary>取引导线允许移动的区域：单页为页面矩形，双页为两页并集。</summary>
+        private Rectangle GetReadingGuideArea()
+        {
+            if (_isDualPage)
+            {
+                var (leftRect, rightRect) = GetDualPageRects();
+                if (_secondPageImage != null)
+                    return Rectangle.Union(leftRect, rightRect);
+                return leftRect;
+            }
+
+            return ToRectangle(GetImageDisplayRect());
+        }
+
+        /// <summary>构建「更多 - 阅读辅助」子菜单：色层预设、引导线开关与时长统计。</summary>
+        private ToolStripMenuItem CreateReadingAidMenu()
+        {
+            var root = new ToolStripMenuItem("阅读辅助");
+            root.Image = CreateGlyphIcon("🌿");
+
+            var tintRoot = new ToolStripMenuItem("护眼 / 色层");
+            foreach (var option in PdfReadingAidManager.Options)
+            {
+                var item = new ToolStripMenuItem(option.Name)
+                {
+                    Checked = _readingAidManager?.Preset == option.Preset
+                };
+                item.Click += (_, _) =>
+                {
+                    if (_readingAidManager == null) return;
+
+                    _readingAidManager.SetPreset(option.Preset);
+                    foreach (ToolStripItem child in tintRoot.DropDownItems)
+                    {
+                        if (child is ToolStripMenuItem childItem)
+                            childItem.Checked = childItem.Text == option.Name;
+                    }
+
+                    _pictureBoxPdf?.Invalidate();
+                    ShowToast(option.Preset == ReadingOverlayPreset.None
+                        ? "已关闭护眼色层"
+                        : $"已启用{option.Name}");
+                };
+                tintRoot.DropDownItems.Add(item);
+            }
+            root.DropDownItems.Add(tintRoot);
+
+            var guideItem = new ToolStripMenuItem("阅读引导线")
+            {
+                Checked = _readingAidManager?.IsGuideEnabled == true
+            };
+            guideItem.Click += (_, _) => ToggleReadingGuide(guideItem);
+            root.DropDownItems.Add(guideItem);
+
+            root.DropDownItems.Add(new ToolStripSeparator());
+
+            var statsItem = new ToolStripMenuItem("阅读时长统计…");
+            statsItem.Click += (_, _) => ShowReadingTimeStats();
+            root.DropDownItems.Add(statsItem);
+
+            return root;
+        }
+
+        /// <summary>开关阅读引导线；开启时先放到当前可见页的中线，之后跟随鼠标。</summary>
+        private void ToggleReadingGuide(ToolStripMenuItem? menuItem = null)
+        {
+            if (_readingAidManager == null) return;
+
+            bool enabled = _readingAidManager.ToggleGuide();
+            if (menuItem != null)
+                menuItem.Checked = enabled;
+
+            if (enabled && _readingAidManager.GuideCenterY < 0)
+            {
+                var area = GetReadingGuideArea();
+                if (area.Height > 0)
+                {
+                    _readingAidManager.UpdateGuidePosition(
+                        new Point(area.Left, area.Top + area.Height / 2), area);
+                }
+            }
+
+            _pictureBoxPdf?.Invalidate();
+            ShowToast(enabled ? "阅读引导线已开启，移动鼠标可跟随" : "阅读引导线已关闭");
+        }
+
+        /// <summary>展示今日 / 近 7 天 / 本文档 / 累计阅读时长。</summary>
+        private void ShowReadingTimeStats()
+        {
+            if (_readingTimeTracker == null)
+            {
+                ShowToast("阅读时长统计尚未初始化");
+                return;
+            }
+
+            var snapshot = _readingTimeTracker.GetSnapshot();
+            string docName = string.IsNullOrWhiteSpace(_currentPdfPath)
+                ? "未打开文档"
+                : Path.GetFileName(_currentPdfPath);
+
+            ShowMessage(
+                $"今日阅读：{PdfReadingTimeSnapshot.Format(snapshot.Today)}\n" +
+                $"近 7 天：{PdfReadingTimeSnapshot.Format(snapshot.LastSevenDays)}\n" +
+                $"本文档（{docName}）：{PdfReadingTimeSnapshot.Format(snapshot.Document)}\n" +
+                $"累计阅读：{PdfReadingTimeSnapshot.Format(snapshot.Total)}",
+                "阅读时长统计");
+        }
+
+        #endregion
+
         #region 选择联动与工具栏视觉
 
         /// <summary>
@@ -1765,10 +2374,11 @@ namespace LearningAssistant.Forms.Pdf
                 fromCache = true;
             }
 
-            // 自动框选默认不翻译：只有点击某个框且无缓存译文时才按需请求翻译
+            // 自动框选点击走点读闭环：朗读完整句子 + 译条显示原文与译文 + 一键跟读
             if (highlight.IsAutoGenerated)
             {
-                _ = _autoHighlightManager?.HandleHighlightSelectedAsync(highlight);
+                _ = ReadAutoHighlightSentenceAsync(highlight);
+                return;
             }
 
             if (string.IsNullOrWhiteSpace(translation)) return;
@@ -3152,6 +3762,14 @@ namespace LearningAssistant.Forms.Pdf
                 // 面板原文/译文可能来自上一本文档的高亮或 OCR，先清空，
                 // 等 SetCurrentPageIndex 再从新文档的页缓存回显
                 SyncTranslationPanelToCurrentPage(restoreCachedEntry: false);
+
+                // 换文档：停止点读与连续朗读，并加载本文档的听读断点
+                CancelSentenceReading();
+                _readingPlaybackManager?.OnDocumentChanged();
+                UpdateReadingResumeHint();
+
+                // 阅读时长按文档分别累计，切换时先把上一本文档的剩余片段记账
+                _readingTimeTracker?.SetDocument(pdfPath);
             }
             RefreshHighlightList();
             // 打开文档时渲染器尚未初始化，优先使用调用方传入的页数，避免按 0 页匹配导致配套音频不加载
@@ -3459,6 +4077,10 @@ namespace LearningAssistant.Forms.Pdf
                 _shadowingPageCandidates = new List<string>();
                 // 录音中翻页：先保存当前跟读，再延迟续播新页音频
                 HandleShadowingPageChange();
+                // 点读音频与当前句高亮属于上一页，切页时立即停止；
+                // 连续朗读由调度器区分“自动翻页”与“用户手动翻页”
+                CancelSentenceReading();
+                _readingPlaybackManager?.HandlePageChanged();
             }
             _currentPageIndex = pageIndex;
             _audioTrackManager?.OnPageChanged(pageIndex);
@@ -5704,6 +6326,15 @@ namespace LearningAssistant.Forms.Pdf
             batchOcrItem.Image = CreateGlyphIcon("📄");
             batchOcrItem.Click += (s, e) => BatchOcrExport_Click();
             moreMenu.Items.Add(batchOcrItem);
+
+            // 连续朗读属于阅读类低频入口，放在「更多」中展开底部控制条
+            var readingItem = new ToolStripMenuItem("连续朗读（整篇）");
+            readingItem.Image = CreateGlyphIcon("🔊");
+            readingItem.Click += (s, e) => ToggleReadingPlaybackFromMenu();
+            moreMenu.Items.Add(readingItem);
+
+            // 阅读辅助：护眼色层、阅读引导线与阅读时长统计（纯视图层）
+            moreMenu.Items.Add(CreateReadingAidMenu());
             AddMoreMenuItem(moreMenu, "检查清单", _buttonChecklistMode, () => ButtonChecklistMode_Click(this, EventArgs.Empty));
             AddMoreMenuItem(moreMenu, "插入图片", _buttonImageEmbedMode, () => ButtonImageEmbedMode_Click(this, EventArgs.Empty));
             AddMoreMenuItem(moreMenu, "聚光灯", _buttonSpotlightMode, () => ButtonSpotlightMode_Click(this, EventArgs.Empty));
@@ -6943,6 +7574,8 @@ namespace LearningAssistant.Forms.Pdf
             {
                 ClearBackground(e.Graphics, e.ClipRectangle);
                 DrawPageImage(e.Graphics);
+                // 阅读辅助（护眼色层/引导线）：仅视图叠加，不写入标注、不影响导出与 OCR
+                DrawReadingAidOverlay(e.Graphics);
                 DrawSelectionRect(e.Graphics);
 
                 if (!string.IsNullOrEmpty(_currentPdfPath) && _currentPageImage != null)
@@ -6952,6 +7585,9 @@ namespace LearningAssistant.Forms.Pdf
                         DrawHighlightsFromLayer(e.Graphics);
                     }
                 }
+
+                // 点读/连续朗读的当前句高亮：仅视图层叠加，不写入标注数据
+                DrawReadingPlaybackOverlay(e.Graphics);
 
                 DrawAnnotations(e.Graphics);
             }
@@ -9518,6 +10154,16 @@ namespace LearningAssistant.Forms.Pdf
                 _navigationManager?.Dispose();
                 _audioManager?.Dispose();
                 _audioTrackManager?.Dispose();
+
+                // 停止连续朗读与点读，避免窗口关闭后音频仍在播放
+                _readingPlaybackManager?.Dispose();
+                var sentenceReadCts = _sentenceReadCts;
+                _sentenceReadCts = null;
+                try { sentenceReadCts?.Cancel(); } catch { }
+
+                // 关闭前补记最后一小段阅读时长并释放计时器
+                _readingTimeTracker?.Dispose();
+                _readingTimeTracker = null;
 
                 // 释放Timer资源
                 _longPressTimer?.Stop();

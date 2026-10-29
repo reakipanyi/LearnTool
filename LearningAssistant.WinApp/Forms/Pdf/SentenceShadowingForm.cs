@@ -61,6 +61,7 @@ namespace LearningAssistant.Forms.Pdf
         private NAudioMediaPlayer? _recordingPlayer;
         private readonly ShadowingAlignmentContext? _alignmentContext;
         private readonly IReadOnlyList<ShadowingCue> _alignmentCues;
+        private readonly string? _initialSentenceText;
         private readonly AudioSliceService _audioSliceService = new();
         private readonly Button _btnAlign = new();
         private NAudioMediaPlayer? _alignmentPlayer;
@@ -97,8 +98,9 @@ namespace LearningAssistant.Forms.Pdf
             string pageText,
             string documentTitle,
             bool isDark = false,
-            ShadowingAlignmentContext? alignment = null)
-            : this(pdfPath, pageIndex, SentenceSegmenter.Segment(pageText), null, false, documentTitle, isDark, alignment)
+            ShadowingAlignmentContext? alignment = null,
+            string? initialSentenceText = null)
+            : this(pdfPath, pageIndex, SentenceSegmenter.Segment(pageText), null, false, documentTitle, isDark, alignment, initialSentenceText)
         {
         }
 
@@ -126,13 +128,16 @@ namespace LearningAssistant.Forms.Pdf
             bool wholeBook,
             string documentTitle,
             bool isDark,
-            ShadowingAlignmentContext? alignment)
+            ShadowingAlignmentContext? alignment,
+            string? initialSentenceText = null)
         {
             _pdfPath = pdfPath;
             _pageIndex = pageIndex;
             _documentTitle = documentTitle;
             _textSentences = textSentences;
             _wholeBook = wholeBook;
+            // 整本模式忽略单句定位，避免跨页句号错位
+            _initialSentenceText = wholeBook ? null : initialSentenceText;
             _alignmentContext = wholeBook ? null : alignment;
 
             for (int i = 0; i < _textSentences.Count; i++)
@@ -294,7 +299,7 @@ namespace LearningAssistant.Forms.Pdf
             {
                 int initialIndex = _wholeBook
                     ? ResolveWholeBookInitialIndex()
-                    : _segmentMode ? ResolveInitialIndex() : 0;
+                    : _segmentMode ? ResolveInitialIndex() : ResolveTextInitialIndex(sentences);
                 SetCurrentIndex(initialIndex, play);
             }
             else
@@ -399,6 +404,49 @@ namespace LearningAssistant.Forms.Pdf
             }
 
             return 0;
+        }
+
+        /// <summary>
+        /// 文字跟读模式：点读传入的句子优先定位，找不到时回落到第一句。
+        /// 用去空白/小写比较，兼容分句器跨行补空格与标点差异。
+        /// </summary>
+        private int ResolveTextInitialIndex(IReadOnlyList<ShadowingSentence> sentences)
+        {
+            if (string.IsNullOrWhiteSpace(_initialSentenceText) || sentences.Count == 0)
+                return 0;
+
+            string target = NormalizeForMatch(_initialSentenceText);
+            if (target.Length == 0)
+                return 0;
+
+            for (int i = 0; i < sentences.Count; i++)
+            {
+                if (string.Equals(NormalizeForMatch(sentences[i].Text), target, StringComparison.Ordinal))
+                    return i;
+            }
+
+            for (int i = 0; i < sentences.Count; i++)
+            {
+                string text = NormalizeForMatch(sentences[i].Text);
+                if (text.Length > 0 && (text.Contains(target, StringComparison.Ordinal) || target.Contains(text, StringComparison.Ordinal)))
+                    return i;
+            }
+
+            return 0;
+        }
+
+        private static string NormalizeForMatch(string? text)
+        {
+            if (string.IsNullOrEmpty(text))
+                return string.Empty;
+
+            var builder = new System.Text.StringBuilder(text.Length);
+            foreach (char c in text)
+            {
+                if (!char.IsWhiteSpace(c))
+                    builder.Append(char.ToLowerInvariant(c));
+            }
+            return builder.ToString();
         }
 
         /// <summary>整本模式从当前阅读页对应的第一条高亮开始。</summary>
