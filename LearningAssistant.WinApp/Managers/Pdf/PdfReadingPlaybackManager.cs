@@ -18,7 +18,7 @@ namespace LearningAssistant.Managers
         /// <summary>页级句子缓存：一次朗读会话内复用，换文档时清空</summary>
         private readonly Dictionary<int, List<PdfSentence>> _sentenceCache = new();
 
-        private readonly SemaphoreSlim _resumeGate = new(0);
+        private readonly SemaphoreSlim _resumeGate = new(0, 1);
 
         private CancellationTokenSource? _runCts;
         /// <summary>当前句的取消源：暂停/跳句时取消，避免合成完成后仍开始播放</summary>
@@ -29,6 +29,11 @@ namespace LearningAssistant.Managers
         private int _speechVersion;
         private bool _autoAdvancingPage;
         private bool _disposed;
+
+        /// <summary>内存断点对应的文档路径：落盘时用保存时的路径，避免换文档后写错位置</summary>
+        private string? _positionPath;
+        /// <summary>内存断点是否尚未落盘</summary>
+        private bool _positionDirty;
 
         public PdfReadingPlaybackManager(
             ILogger logger,
@@ -78,7 +83,7 @@ namespace LearningAssistant.Managers
             }
             catch (Exception ex)
             {
-                _logger.LogDebug(ex, "读取第 {Page} 页文本行失败", pageIndex);
+                _logger.LogWarning(ex, "读取第 {Page} 页文本行失败", pageIndex);
             }
 
             if (sentences.Count == 0 && _autoLayoutService != null && !string.IsNullOrWhiteSpace(_form.CurrentPdfPath))
@@ -91,7 +96,7 @@ namespace LearningAssistant.Managers
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogDebug(ex, "读取第 {Page} 页 OCR 版面失败", pageIndex);
+                    _logger.LogWarning(ex, "读取第 {Page} 页 OCR 版面失败", pageIndex);
                 }
             }
 
@@ -141,6 +146,8 @@ namespace LearningAssistant.Managers
 
             _paused = true;
             CancelSpeech();
+            // 暂停是自然的断点时机：此处把内存断点落盘
+            PersistPosition();
             RaiseState();
         }
 
@@ -151,7 +158,7 @@ namespace LearningAssistant.Managers
                 return;
 
             _paused = false;
-            _resumeGate.Release();
+            TryReleaseResumeGate();
             RaiseState();
         }
 
@@ -166,7 +173,7 @@ namespace LearningAssistant.Managers
             // 跳句即视为继续播放，避免暂停态下跳句后卡住
             _paused = false;
             CancelSpeech();
-            _resumeGate.Release();
+            TryReleaseResumeGate();
             RaiseState();
         }
 
@@ -204,6 +211,9 @@ namespace LearningAssistant.Managers
             _paused = false;
             _skipRequested = false;
             CurrentSentence = null;
+            // 旧文档断点已在 StopCore 落盘，切文档后重置内存标记
+            _positionPath = null;
+            _positionDirty = false;
             SavedPosition = _positionStore.Load(_form.CurrentPdfPath);
             RaiseState();
             InvalidateCanvas();
@@ -223,6 +233,8 @@ namespace LearningAssistant.Managers
         /// <summary>清除本文档断点。</summary>
         public void ClearSavedPosition()
         {
+            _positionDirty = false;
+            _positionPath = null;
             _positionStore.Clear(_form.CurrentPdfPath);
             SavedPosition = null;
         }
@@ -318,7 +330,8 @@ namespace LearningAssistant.Managers
 
                     var current = sentences[sentence];
                     CurrentSentence = current;
-                    SavePosition(page, sentence);
+                    // 逐句只更新内存断点，落盘交给翻页/跳句/暂停/停止统一触发
+                    SavePosition(page, sentence, persistImmediately: false);
                     RaiseState();
                     InvalidateCanvas();
 
@@ -422,9 +435,12 @@ namespace LearningAssistant.Managers
                 await Task.Delay(50, token);
         }
 
-        private void SavePosition(int pageIndex, int sentenceIndex)
+        /// <summary>
+        /// 更新内存断点；persistImmediately 为 false 时只标记待落盘，
+        /// 避免逐句朗读时每句都同步写文件。翻页/跳句/暂停/停止时再统一落盘。
+        /// </summary>
+        private void SavePosition(int pageIndex, int sentenceIndex, bool persistImmediately = true)
         {
-            _positionStore.Save(_form.CurrentPdfPath, pageIndex, sentenceIndex);
             // 同步内存断点，保证停止后「续听」立即指向最新句，而不是文档打开时的旧位置
             SavedPosition = new PdfReadingPosition
             {
@@ -432,6 +448,21 @@ namespace LearningAssistant.Managers
                 SentenceIndex = sentenceIndex,
                 UpdatedAtUtc = DateTime.UtcNow
             };
+            _positionPath = _form.CurrentPdfPath;
+            _positionDirty = true;
+
+            if (persistImmediately)
+                PersistPosition();
+        }
+
+        /// <summary>把待落盘的内存断点写入文件；已落盘则直接返回。</summary>
+        private void PersistPosition()
+        {
+            if (!_positionDirty || SavedPosition == null)
+                return;
+
+            _positionStore.Save(_positionPath, SavedPosition.PageIndex, SavedPosition.SentenceIndex);
+            _positionDirty = false;
         }
 
         private void CancelSpeech()
@@ -454,6 +485,9 @@ namespace LearningAssistant.Managers
 
         private void StopCore()
         {
+            // 可能停在两句之间：先把待落盘的断点写入，避免丢失当前位置
+            PersistPosition();
+
             var cts = _runCts;
             if (cts == null)
                 return;
@@ -476,6 +510,22 @@ namespace LearningAssistant.Managers
         }
 
         private void RaiseState() => StateChanged?.Invoke(this, EventArgs.Empty);
+
+        /// <summary>
+        /// 释放一次「恢复」信号；信号量上限为 1，已有待消费信号时忽略重复释放，
+        /// 避免暂停态下累积计数导致恢复后空转。
+        /// </summary>
+        private void TryReleaseResumeGate()
+        {
+            try
+            {
+                _resumeGate.Release();
+            }
+            catch (SemaphoreFullException)
+            {
+                // 已存在待消费的恢复信号，无需重复计数
+            }
+        }
 
         private void InvalidateCanvas()
         {

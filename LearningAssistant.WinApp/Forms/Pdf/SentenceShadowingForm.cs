@@ -415,38 +415,24 @@ namespace LearningAssistant.Forms.Pdf
             if (string.IsNullOrWhiteSpace(_initialSentenceText) || sentences.Count == 0)
                 return 0;
 
-            string target = NormalizeForMatch(_initialSentenceText);
+            string target = PdfSentenceSegmenter.Normalize(_initialSentenceText);
             if (target.Length == 0)
                 return 0;
 
             for (int i = 0; i < sentences.Count; i++)
             {
-                if (string.Equals(NormalizeForMatch(sentences[i].Text), target, StringComparison.Ordinal))
+                if (string.Equals(PdfSentenceSegmenter.Normalize(sentences[i].Text), target, StringComparison.Ordinal))
                     return i;
             }
 
             for (int i = 0; i < sentences.Count; i++)
             {
-                string text = NormalizeForMatch(sentences[i].Text);
+                string text = PdfSentenceSegmenter.Normalize(sentences[i].Text);
                 if (text.Length > 0 && (text.Contains(target, StringComparison.Ordinal) || target.Contains(text, StringComparison.Ordinal)))
                     return i;
             }
 
             return 0;
-        }
-
-        private static string NormalizeForMatch(string? text)
-        {
-            if (string.IsNullOrEmpty(text))
-                return string.Empty;
-
-            var builder = new System.Text.StringBuilder(text.Length);
-            foreach (char c in text)
-            {
-                if (!char.IsWhiteSpace(c))
-                    builder.Append(char.ToLowerInvariant(c));
-            }
-            return builder.ToString();
         }
 
         /// <summary>整本模式从当前阅读页对应的第一条高亮开始。</summary>

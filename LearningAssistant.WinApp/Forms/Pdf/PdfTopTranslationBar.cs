@@ -385,7 +385,8 @@ public sealed class PdfTopTranslationBar : Panel
         const int left = 12;
         const int actionSize = 30;
         const int actionGap = 2;
-        var actionsWidth = actionSize * 4 + actionGap * 3;
+        // 共 5 个操作按钮（跟读/朗读/复制/播放/关闭），宽度需覆盖全部按钮
+        var actionsWidth = actionSize * 5 + actionGap * 4;
         var textWidth = Math.Max(80, Width - left - actionsWidth - 24);
 
         _badge.SetBounds(left, 10, 78, 20);

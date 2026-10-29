@@ -1796,7 +1796,8 @@ namespace LearningAssistant.Forms.Pdf
 
             double speed = _appConfig?.TtsConfig?.Speed ?? 1.0;
             bar.SetSpeed(speed);
-            _readingPlaybackManager?.SetSpeed(speed);
+            // 以控制条实际吸附的档位为准，避免调度器与界面显示的语速不一致
+            _readingPlaybackManager?.SetSpeed(bar.Speed);
 
             _readingPlaybackBar = bar;
             _panelPdf.Controls.Add(bar);
@@ -1929,37 +1930,45 @@ namespace LearningAssistant.Forms.Pdf
             }
 
             // 点读与连续朗读互斥，避免两路 TTS 叠加
-            _readingPlaybackManager?.Stop();
-
-            int pageIndex = highlight.PageIndex;
-            var sentences = _readingPlaybackManager?.GetSentencesForPage(pageIndex) ?? new List<PdfSentence>();
-            var sentence = PdfSentenceSegmenter.FindSentenceForBlock(sentences, blockText);
-            string text = sentence != null && !string.IsNullOrWhiteSpace(sentence.Text)
-                ? sentence.Text
-                : blockText;
-
-            // 无文本层/OCR 版面时明确提示：按框内识别文字朗读，而不是静默降级
-            if (sentences.Count == 0)
-                ShowToast("该页没有文本层，按框内识别文字朗读");
-
-            // 重复点击同一框：取消上一次合成/播放，避免叠加
-            var previousCts = _sentenceReadCts;
             try
             {
-                previousCts?.Cancel();
+                _readingPlaybackManager?.Stop();
+
+                int pageIndex = highlight.PageIndex;
+                var sentences = _readingPlaybackManager?.GetSentencesForPage(pageIndex) ?? new List<PdfSentence>();
+                var sentence = PdfSentenceSegmenter.FindSentenceForBlock(sentences, blockText);
+                string text = sentence != null && !string.IsNullOrWhiteSpace(sentence.Text)
+                    ? sentence.Text
+                    : blockText;
+
+                // 无文本层/OCR 版面时明确提示：按框内识别文字朗读，而不是静默降级
+                if (sentences.Count == 0)
+                    ShowToast("该页没有文本层，按框内识别文字朗读");
+
+                // 重复点击同一框：取消上一次合成/播放，避免叠加
+                var previousCts = _sentenceReadCts;
+                try
+                {
+                    previousCts?.Cancel();
+                }
+                catch (ObjectDisposedException)
+                {
+                    // 上一次朗读恰好结束
+                }
+
+                var cts = new CancellationTokenSource();
+                _sentenceReadCts = cts;
+
+                int speakId = ++_sentenceReadRequestId;
+                int translationId = ShowSelectionTranslationLoading(pageIndex, text);
+                _ = SpeakSentencePreviewAsync(speakId, pageIndex, text, sentence?.Lines, cts);
+                await TranslateSentenceForTopBarAsync(translationId, pageIndex, text);
             }
-            catch (ObjectDisposedException)
+            catch (Exception ex)
             {
-                // 上一次朗读恰好结束
+                // 本方法为后台触发，需自行兜底，避免未观察的异常被静默丢弃
+                _logger.LogError(ex, "点读闭环失败");
             }
-
-            var cts = new CancellationTokenSource();
-            _sentenceReadCts = cts;
-
-            int speakId = ++_sentenceReadRequestId;
-            int translationId = ShowSelectionTranslationLoading(pageIndex, text);
-            _ = SpeakSentencePreviewAsync(speakId, pageIndex, text, sentence?.Lines, cts);
-            await TranslateSentenceForTopBarAsync(translationId, pageIndex, text);
         }
 
         /// <summary>朗读点读命中的完整句子；期间在画布上标出该句。</summary>
@@ -1971,22 +1980,22 @@ namespace LearningAssistant.Forms.Pdf
             CancellationTokenSource cts)
         {
             var presenter = _presenter;
-            if (presenter == null)
-                return;
-
-            if (!presenter.IsTTSServiceAvailable())
-            {
-                ShowToast("朗读服务不可用，请检查 TTS 配置");
-                return;
-            }
-
-            _sentenceReadActive = true;
-            _sentenceReadPageIndex = pageIndex;
-            _sentenceReadLines = lines is { Count: > 0 } ? lines : null;
-            _pictureBoxPdf?.Invalidate();
-
             try
             {
+                if (presenter == null)
+                    return;
+
+                if (!presenter.IsTTSServiceAvailable())
+                {
+                    ShowToast("朗读服务不可用，请检查 TTS 配置");
+                    return;
+                }
+
+                _sentenceReadActive = true;
+                _sentenceReadPageIndex = pageIndex;
+                _sentenceReadLines = lines is { Count: > 0 } ? lines : null;
+                _pictureBoxPdf?.Invalidate();
+
                 await presenter.StopSpeakingAsync();
                 if (requestId != _sentenceReadRequestId)
                     return;
@@ -10159,7 +10168,17 @@ namespace LearningAssistant.Forms.Pdf
                 _readingPlaybackManager?.Dispose();
                 var sentenceReadCts = _sentenceReadCts;
                 _sentenceReadCts = null;
-                try { sentenceReadCts?.Cancel(); } catch { }
+                if (sentenceReadCts != null)
+                {
+                    try
+                    {
+                        sentenceReadCts.Cancel();
+                    }
+                    catch (ObjectDisposedException)
+                    {
+                        // 点读朗读恰好结束，取消源已释放
+                    }
+                }
 
                 // 关闭前补记最后一小段阅读时长并释放计时器
                 _readingTimeTracker?.Dispose();

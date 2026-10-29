@@ -865,6 +865,8 @@ namespace LearningAssistant.Presenters
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error in SpeakTextAndWaitAsync");
+                // 上抛真实失败，供连续朗读终止会话；用户取消已在上面静默处理
+                throw;
             }
         }
 

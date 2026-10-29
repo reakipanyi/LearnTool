@@ -15,6 +15,12 @@ namespace LearningAssistant.Services.Pdf
         /// <summary>句末标点之后仍属于同一句的收尾符号</summary>
         private const string ClosingChars = "\"'”’」』）)】]》〉";
 
+        /// <summary>英文常见缩写：其后的句点不是句末（统一按小写去点比较）</summary>
+        private static readonly HashSet<string> Abbreviations = new(StringComparer.Ordinal)
+        {
+            "mr", "mrs", "ms", "dr", "prof", "sr", "jr", "st", "vs", "fig", "eq", "no", "inc", "ltd", "co", "dept", "est"
+        };
+
         /// <summary>
         /// 按页内文本行构建句子集合；行按从上到下、从左到右排序，避免 PDF 输出顺序错乱。
         /// </summary>
@@ -108,6 +114,10 @@ namespace LearningAssistant.Services.Pdf
                 char c = value[i];
                 builder.Append(c);
                 if (!IsSentenceEndChar(c))
+                    continue;
+
+                // 缩写（Mr./Dr.）与小数（3.14）后的句点不断句，继续累积
+                if (IsFalsePeriodEnd(value, i))
                     continue;
 
                 // 吸收紧跟的句末符号（如 ?!、...）和右引号/右括号
@@ -230,7 +240,38 @@ namespace LearningAssistant.Services.Pdf
             int i = text.Length - 1;
             while (i >= 0 && IsClosingChar(text[i]))
                 i--;
-            return i >= 0 && IsSentenceEndChar(text[i]);
+            if (i < 0 || !IsSentenceEndChar(text[i]))
+                return false;
+
+            return !IsFalsePeriodEnd(text, i);
+        }
+
+        /// <summary>
+        /// 判断句点是否为“假句末”：小数（3.14）、缩写（Mr./Dr./e.g.）、
+        /// 以及单字母人名首字母（J. Smith）后的句点都应继续累积，不在此断句。
+        /// </summary>
+        private static bool IsFalsePeriodEnd(string text, int index)
+        {
+            if (index < 0 || index >= text.Length || text[index] != '.')
+                return false;
+
+            // 小数：数字.数字
+            if (index > 0 && index + 1 < text.Length
+                && char.IsDigit(text[index - 1]) && char.IsDigit(text[index + 1]))
+            {
+                return true;
+            }
+
+            int start = index - 1;
+            while (start >= 0 && char.IsLetter(text[start]))
+                start--;
+
+            string word = text.Substring(start + 1, index - start - 1);
+            // 单字母（人名首字母、e.g. 的 e/g）不断句
+            if (word.Length <= 1)
+                return word.Length == 1;
+
+            return Abbreviations.Contains(word.ToLowerInvariant());
         }
 
         private static bool IsSentenceEndChar(char c) => SentenceEnds.IndexOf(c) >= 0;
