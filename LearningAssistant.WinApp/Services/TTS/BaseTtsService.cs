@@ -50,7 +50,9 @@ namespace LearningAssistant.Services.TTS
 
         protected async Task PlayAudioAsync(string filePath, float volume = 1.0f, float speed = 1.0f, CancellationToken cancellationToken = default)
         {
-            _playbackTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            // 每次播放使用独立的完成源：旧播放器的 PlaybackStopped 只能结束它自己，
+            // 否则连续朗读逐句调用时会互相“提前完成”，表现为任务堆叠/重复播放
+            var playbackTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
 
             WaveOutEvent? waveOut = null;
             AudioFileReader? audioReader = null;
@@ -82,11 +84,11 @@ namespace LearningAssistant.Services.TTS
                     {
                         if (e.Exception != null)
                         {
-                            _playbackTcs?.TrySetException(e.Exception);
+                            playbackTcs.TrySetException(e.Exception);
                         }
                         else
                         {
-                            _playbackTcs?.TrySetResult(true);
+                            playbackTcs.TrySetResult(true);
                         }
                     }
                     catch { }
@@ -98,6 +100,7 @@ namespace LearningAssistant.Services.TTS
                 {
                     StopPlaybackInternal();
                     _stopRequested = false;
+                    _playbackTcs = playbackTcs;
                     _waveOut = waveOut;
                     _audioReader = audioReader;
                     _playbackStream = playbackStream;
@@ -121,7 +124,7 @@ namespace LearningAssistant.Services.TTS
                     try { waveOut?.Stop(); } catch { }
                 }))
                 {
-                    await _playbackTcs.Task.ConfigureAwait(false);
+                    await playbackTcs.Task.ConfigureAwait(false);
                 }
 
                 _logger?.LogInformation("PlayAudioAsync: playback completed");
@@ -129,6 +132,7 @@ namespace LearningAssistant.Services.TTS
             catch (OperationCanceledException)
             {
                 _logger?.LogDebug("PlayAudioAsync: cancelled");
+                playbackTcs.TrySetCanceled();
                 StopPlayback();
                 throw;
             }
@@ -146,7 +150,8 @@ namespace LearningAssistant.Services.TTS
 
         protected async Task PlayAudioFromStreamAsync(Stream stream, float volume = 1.0f, float speed = 1.0f, CancellationToken cancellationToken = default)
         {
-            _playbackTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            // 与 PlayAudioAsync 一致：完成源按调用隔离，避免旧播放器结束事件影响新播放
+            var playbackTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
 
             WaveOutEvent? waveOut = null;
             WaveFileReader? waveFileReader = null;
@@ -166,11 +171,11 @@ namespace LearningAssistant.Services.TTS
                     {
                         if (e.Exception != null)
                         {
-                            _playbackTcs?.TrySetException(e.Exception);
+                            playbackTcs.TrySetException(e.Exception);
                         }
                         else
                         {
-                            _playbackTcs?.TrySetResult(true);
+                            playbackTcs.TrySetResult(true);
                         }
                     }
                     catch { }
@@ -182,6 +187,7 @@ namespace LearningAssistant.Services.TTS
                 {
                     StopPlaybackInternal();
                     _stopRequested = false;
+                    _playbackTcs = playbackTcs;
                     _waveOut = waveOut;
                     playerAssigned = true;
                 }
@@ -202,7 +208,7 @@ namespace LearningAssistant.Services.TTS
                     try { waveOut?.Stop(); } catch { }
                 }))
                 {
-                    await _playbackTcs.Task.ConfigureAwait(false);
+                    await playbackTcs.Task.ConfigureAwait(false);
                 }
 
                 _logger?.LogInformation("PlayAudioFromStreamAsync: playback completed");
@@ -210,6 +216,7 @@ namespace LearningAssistant.Services.TTS
             catch (OperationCanceledException)
             {
                 _logger?.LogDebug("PlayAudioFromStreamAsync: cancelled");
+                playbackTcs.TrySetCanceled();
                 StopPlayback();
                 throw;
             }

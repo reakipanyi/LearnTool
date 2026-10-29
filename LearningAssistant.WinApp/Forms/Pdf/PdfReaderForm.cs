@@ -2058,6 +2058,23 @@ namespace LearningAssistant.Forms.Pdf
             }
         }
 
+        /// <summary>是否有朗读正在进行（连续朗读或点读）。</summary>
+        private bool IsTtsPlaybackActive()
+            => _readingPlaybackManager?.IsActive == true || _sentenceReadActive;
+
+        /// <summary>
+        /// 停止全部朗读：中断连续朗读、点读与后台 TTS 播放。
+        /// 用于快捷键紧急停止，避免合成/播放任务继续堆叠出声。
+        /// </summary>
+        private void StopAllTtsPlayback()
+        {
+            _readingPlaybackManager?.Stop();
+            CancelSentenceReading();
+            _ = _presenter?.StopSpeakingAsync();
+            _readingPlaybackBar?.SetIdle();
+            ShowToast("已停止朗读");
+        }
+
         /// <summary>关闭译条/切换页面时停止点读音频与高亮，避免残留。</summary>
         private void CancelSentenceReading()
         {
@@ -2833,6 +2850,13 @@ namespace LearningAssistant.Forms.Pdf
             bool shortcutsSuspended = _shadowingRecording
                 || (_audioDrawer?.Visible == true && _audioDrawer.ContainsFocus);
 
+            if (keyData == Keys.Escape && !_shadowingRecording && IsTtsPlaybackActive())
+            {
+                // 朗读中按 Esc 只停止朗读，避免在命令键阶段直接退出全屏
+                StopAllTtsPlayback();
+                return true;
+            }
+
             if (keyData == Keys.Escape && !shortcutsSuspended && isFullscreenSurface)
             {
                 // 无边框窗口只可能来自全屏，状态标记若因异常未同步则在此兜底
@@ -2864,6 +2888,14 @@ namespace LearningAssistant.Forms.Pdf
                 if (e.KeyCode == Keys.Escape && _shadowingRecording)
                 {
                     EndPauseShadowing(save: false, resume: true);
+                    e.Handled = e.SuppressKeyPress = true;
+                    return;
+                }
+
+                // 朗读进行中按 Esc 优先停止全部 TTS；再次按 Esc 才走全屏/抽屉等原逻辑
+                if (e.KeyCode == Keys.Escape && IsTtsPlaybackActive())
+                {
+                    StopAllTtsPlayback();
                     e.Handled = e.SuppressKeyPress = true;
                     return;
                 }
