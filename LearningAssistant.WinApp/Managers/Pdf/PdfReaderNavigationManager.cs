@@ -953,6 +953,9 @@ namespace LearningAssistant.Managers
                     {
                         var selectedHighlight = _selectionManager.SelectedHighlight;
 
+                        // 本次是否真的移动/缩放过：仅位置变化时才重新取词，避免单击也触发 OCR/翻译
+                        bool boundsChanged = HasSelectedHighlightBoundsChanged(selectedHighlight);
+
                         // 持久化高亮位置变化
                         var highlightService = _form.HighlightService;
                         if (highlightService != null && !string.IsNullOrEmpty(_form.CurrentPdfPath))
@@ -962,14 +965,27 @@ namespace LearningAssistant.Managers
 
                         // 重建高亮离屏图层，使拖动/缩放后的位置立即生效（双页时按页码选择图层）
                         _form.HighlightManager?.RefreshHighlightLayerForPage(selectedHighlight.PageIndex);
+
+                        // 保持选中状态：若在此处走 LoadAnnotationsForCurrentPage 会清空选中，
+                        // 选中框与缩放句柄随之消失，导致双击选中后无法继续调整大小。
+                        _selectionManager.SelectedHighlightOriginalBounds = new RectangleF(
+                            selectedHighlight.NormalizedX, selectedHighlight.NormalizedY,
+                            selectedHighlight.NormalizedWidth, selectedHighlight.NormalizedHeight);
+
+                        // 位置/大小变化后按新矩形重新取词（文本层优先，OCR 兜底），
+                        // 更新高亮列表文本并触发翻译
+                        if (boundsChanged)
+                        {
+                            _ = _form.HighlightManager?.ReextractHighlightTextAsync(selectedHighlight);
+                        }
                     }
                     else
                     {
                         _form.Presenter?.SaveAnnotationForCurrentPage();
+                        // 重新加载标注位图，使调整后的位置立即生效
+                        LoadAnnotationsForCurrentPage();
                     }
 
-                    // 重新加载标注位图，使调整后的位置立即生效
-                    LoadAnnotationsForCurrentPage();
                     _form.PictureBoxPdf.Invalidate();
                 }
 
@@ -1030,6 +1046,21 @@ namespace LearningAssistant.Managers
                 _longPressDragStarted = false;
                 StopLongPressTimer();
             }
+        }
+
+        /// <summary>
+        /// 判断当前选中高亮相对本次按下时的矩形是否发生移动/缩放。
+        /// </summary>
+        private bool HasSelectedHighlightBoundsChanged(PdfHighlight highlight)
+        {
+            var start = _selectionManager.SelectedHighlightInteractionStartBounds;
+            if (start.Width <= 0 || start.Height <= 0) return false;
+
+            const float epsilon = 0.002f;
+            return Math.Abs(highlight.NormalizedX - start.X) > epsilon
+                || Math.Abs(highlight.NormalizedY - start.Y) > epsilon
+                || Math.Abs(highlight.NormalizedWidth - start.Width) > epsilon
+                || Math.Abs(highlight.NormalizedHeight - start.Height) > epsilon;
         }
 
         private void StartLongPressTimer()

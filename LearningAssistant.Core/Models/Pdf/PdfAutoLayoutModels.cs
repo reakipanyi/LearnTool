@@ -46,6 +46,8 @@ namespace LearningAssistant.Models.Pdf
     {
         public int PageIndex { get; set; }
         public PdfTextLineSource Source { get; set; }
+        /// <summary>本版面是否按多行合并规则生成，用于区分两种分块模式的缓存</summary>
+        public bool MergeMultiLine { get; set; } = true;
         public List<PdfAutoTextBlock> Blocks { get; set; } = new();
         public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
     }

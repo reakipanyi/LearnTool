@@ -9246,6 +9246,35 @@ namespace LearningAssistant.Forms.Pdf
         }
 
         /// <summary>
+        /// 「多行合并」开关：同步自动高亮分块模式，已生成的可见页立即按新模式重建。
+        /// </summary>
+        private async Task ApplyMergeMultiLineAsync()
+        {
+            if (_autoHighlightManager == null || _highlightPanel is not { IsDisposed: false })
+                return;
+
+            bool mergeMultiLine = _highlightPanel.MergeMultiLineCheck.Checked;
+            // 连续朗读的扫描页句子取自同模式的版面缓存，一并同步
+            if (_readingPlaybackManager != null)
+                _readingPlaybackManager.MergeMultiLine = mergeMultiLine;
+
+            UpdateAutoHighlightButtonState(busy: true);
+            try
+            {
+                await _autoHighlightManager.ApplyMergeMultiLineAsync(mergeMultiLine);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "切换多行合并开关失败");
+                ShowToast("切换多行合并失败，请稍后重试");
+            }
+            finally
+            {
+                UpdateAutoHighlightButtonState(busy: false);
+            }
+        }
+
+        /// <summary>
         /// 自动高亮右键菜单：整本框选、取消整本任务、清除整本自动高亮。
         /// </summary>
         private void BuildAutoHighlightContextMenu(Button button)
@@ -9536,6 +9565,7 @@ namespace LearningAssistant.Forms.Pdf
 
             _highlightPanel.AutoHighlightButton.Click += (_, _) => ButtonAutoHighlight_Click();
             BuildAutoHighlightContextMenu(_highlightPanel.AutoHighlightButton);
+            _highlightPanel.MergeMultiLineCheck.CheckedChanged += async (_, _) => await ApplyMergeMultiLineAsync();
 
             _listBoxHighlights = _highlightPanel.HighlightList;
             _listBoxHighlights.DrawItem += ListBoxHighlights_DrawItem;

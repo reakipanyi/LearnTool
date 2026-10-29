@@ -563,6 +563,157 @@ namespace LearningAssistant.Managers
         }
 
         /// <summary>
+        /// Select 模式下移动/缩放高亮后，按新矩形重新取词：文本层优先，OCR 兜底；
+        /// 文本有变化时写回高亮并刷新列表，随后触发翻译。
+        /// </summary>
+        public async Task ReextractHighlightTextAsync(PdfHighlight highlight)
+        {
+            if (highlight == null || string.IsNullOrEmpty(_form.CurrentPdfPath)) return;
+
+            try
+            {
+                var bounds = new RectangleF(
+                    highlight.NormalizedX, highlight.NormalizedY,
+                    highlight.NormalizedWidth, highlight.NormalizedHeight);
+                // 文字层取词（与渲染共用同一 Pdfium 实例，保持在 UI 线程执行）
+                string text = ExtractHighlightTextFromTextLayer(highlight);
+                if (string.IsNullOrWhiteSpace(text))
+                {
+                    text = await GetOcrTextFromHighlightAreaAsync(highlight);
+                }
+                if (string.IsNullOrWhiteSpace(text)) return;
+
+                if (!IsSameBounds(highlight, bounds)) return;
+
+                bool textChanged = false;
+                if (!string.Equals(text, highlight.Text, StringComparison.Ordinal))
+                {
+                    highlight.Text = text;
+                    highlight.TranslationText = null;
+                    // 旧译文对应旧文本，先清空再重新翻译，避免列表短暂显示不匹配的译文
+                    // （UpdateHighlightContent 中 null 表示不修改，清空需显式传空字符串）
+                    _highlightService.UpdateHighlightContent(_form.CurrentPdfPath, highlight.Id, text, string.Empty);
+                    RefreshHighlightList();
+                    textChanged = true;
+                }
+
+                await TranslateHighlightAsync(_form.CurrentPdfPath, highlight, text);
+
+                // 翻译完成后重绘列表，让「已译」标记同步更新（不重建整表）
+                if (textChanged) _form.ListBoxHighlights?.Invalidate();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "调整高亮后重新取词失败");
+            }
+        }
+
+        /// <summary>
+        /// 判断取词后的矩形是否仍与开始时一致（期间可能又被拖动）。
+        /// </summary>
+
+        private static bool IsSameBounds(PdfHighlight highlight, RectangleF bounds)
+        {
+            const float epsilon = 0.002f;
+            return Math.Abs(highlight.NormalizedX - bounds.X) <= epsilon
+                && Math.Abs(highlight.NormalizedY - bounds.Y) <= epsilon
+                && Math.Abs(highlight.NormalizedWidth - bounds.Width) <= epsilon
+                && Math.Abs(highlight.NormalizedHeight - bounds.Height) <= epsilon;
+        }
+
+        /// <summary>从文字层行框中取出与高亮矩形重叠的文本；无文本层时返回空字符串。</summary>
+        private string ExtractHighlightTextFromTextLayer(PdfHighlight highlight)
+        {
+            var presenter = _form.Presenter;
+            if (presenter == null) return string.Empty;
+
+            var lines = presenter.GetPageTextLines(highlight.PageIndex);
+            if (lines == null || lines.Count == 0) return string.Empty;
+
+            float left = highlight.NormalizedX;
+            float top = highlight.NormalizedY;
+            float right = left + highlight.NormalizedWidth;
+            float bottom = top + highlight.NormalizedHeight;
+            if (right <= left || bottom <= top) return string.Empty;
+
+            var matched = new List<PdfTextLine>();
+            foreach (var line in lines)
+            {
+                if (line == null || string.IsNullOrWhiteSpace(line.Text)) continue;
+                if (line.Width <= 0 || line.Height <= 0) continue;
+
+                // 行框与高亮矩形重叠面积占行面积的比例，避免把擦边行也算进来
+                float overlapWidth = Math.Max(0, Math.Min(right, line.Right) - Math.Max(left, line.X));
+                float overlapHeight = Math.Max(0, Math.Min(bottom, line.Bottom) - Math.Max(top, line.Y));
+                float overlapRatio = (overlapWidth * overlapHeight) / (line.Width * line.Height);
+
+                bool centerInside = line.CenterX >= left && line.CenterX <= right
+                    && line.CenterY >= top && line.CenterY <= bottom;
+                if (overlapRatio >= 0.3f || centerInside)
+                {
+                    matched.Add(line);
+                }
+            }
+
+            if (matched.Count == 0) return string.Empty;
+
+            matched.Sort((a, b) =>
+            {
+                int byRow = a.Y.CompareTo(b.Y);
+                return byRow != 0 ? byRow : a.X.CompareTo(b.X);
+            });
+
+            return string.Join(" ", matched.Select(l => l.Text.Trim()));
+        }
+
+        /// <summary>
+        /// OCR 兜底：裁剪高亮矩形对应的页面位图后识别文本。
+        /// </summary>
+        private async Task<string> GetOcrTextFromHighlightAreaAsync(PdfHighlight highlight)
+        {
+            var presenter = _form.Presenter;
+            if (presenter == null || !presenter.IsOcrAvailable()) return string.Empty;
+
+            Bitmap? pageImage;
+            if (highlight.PageIndex == _form.CurrentPageIndex)
+            {
+                pageImage = _form.CurrentPageImage;
+            }
+            else if (_form.IsDualPage && highlight.PageIndex == _form.CurrentPageIndex + 1)
+            {
+                pageImage = _form.SecondPageImage;
+            }
+            else
+            {
+                return string.Empty;
+            }
+
+            if (pageImage == null) return string.Empty;
+
+            int imgWidth = pageImage.Width;
+            int imgHeight = pageImage.Height;
+            var cropRect = Rectangle.Intersect(
+                new Rectangle(0, 0, imgWidth, imgHeight),
+                new Rectangle(
+                    (int)Math.Round(highlight.NormalizedX * imgWidth),
+                    (int)Math.Round(highlight.NormalizedY * imgHeight),
+                    (int)Math.Round(highlight.NormalizedWidth * imgWidth),
+                    (int)Math.Round(highlight.NormalizedHeight * imgHeight)));
+            if (cropRect.Width <= 0 || cropRect.Height <= 0) return string.Empty;
+
+            using var cropped = new Bitmap(cropRect.Width, cropRect.Height, pageImage.PixelFormat);
+            using (var g = Graphics.FromImage(cropped))
+            {
+                g.DrawImage(pageImage, new Rectangle(0, 0, cropRect.Width, cropRect.Height), cropRect, GraphicsUnit.Pixel);
+            }
+
+            using var ocrStream = new MemoryStream();
+            cropped.Save(ocrStream, System.Drawing.Imaging.ImageFormat.Png);
+            var result = await presenter.OcrBitmapAsync(ocrStream.ToArray());
+            return result ?? string.Empty;
+        }
+
+        /// <summary>
         /// 发布高亮事件（供学习积分等模块消费）。
         /// </summary>
         private void PublishHighlightEvent(string pdfPath, string ocrText)

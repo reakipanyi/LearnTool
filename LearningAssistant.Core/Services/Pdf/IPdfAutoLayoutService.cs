@@ -17,8 +17,9 @@ namespace LearningAssistant.Services.Pdf
         /// <summary>计算文档指纹；缓存与指纹绑定，文件变化后自动失效。</summary>
         string GetFingerprint(string pdfPath);
 
-        /// <summary>尝试读取已缓存的页面版面；未命中或指纹不匹配时返回 null。</summary>
-        PdfAutoLayoutPage? TryGetCachedPage(string pdfPath, int pageIndex);
+        /// <summary>尝试读取已缓存的页面版面；未命中、指纹或分块模式不匹配时返回 null。</summary>
+        /// <param name="mergeMultiLine">分块模式：true 合并多行成段，false 每行一块</param>
+        PdfAutoLayoutPage? TryGetCachedPage(string pdfPath, int pageIndex, bool mergeMultiLine = true);
 
         /// <summary>
         /// 获取页面版面：命中缓存直接返回，否则提取文字层（必要时 OCR）并落盘。
@@ -27,12 +28,14 @@ namespace LearningAssistant.Services.Pdf
         /// <param name="pageIndex">页码索引（从 0 开始）</param>
         /// <param name="allowOcr">无文本层时是否回退 OCR（扫描页）</param>
         /// <param name="forceRebuild">true 时忽略缓存重建</param>
+        /// <param name="mergeMultiLine">分块模式：true 合并多行成段，false 每行一块</param>
         /// <param name="cancellationToken">取消令牌</param>
         Task<PdfAutoLayoutPage> GetOrBuildPageAsync(
             string pdfPath,
             int pageIndex,
             bool allowOcr,
             bool forceRebuild = false,
+            bool mergeMultiLine = true,
             CancellationToken cancellationToken = default);
 
         /// <summary>
@@ -41,11 +44,13 @@ namespace LearningAssistant.Services.Pdf
         /// <param name="pdfPath">PDF 完整路径</param>
         /// <param name="allowOcr">无文本层的页是否回退 OCR</param>
         /// <param name="progress">进度回调</param>
+        /// <param name="mergeMultiLine">分块模式：true 合并多行成段，false 每行一块</param>
         /// <param name="cancellationToken">取消令牌</param>
         Task<PdfAutoLayoutSummary> BuildDocumentAsync(
             string pdfPath,
             bool allowOcr,
             IProgress<PdfAutoLayoutProgress>? progress = null,
+            bool mergeMultiLine = true,
             CancellationToken cancellationToken = default);
 
         /// <summary>读取文档级状态；无状态或指纹不匹配时返回默认状态。</summary>

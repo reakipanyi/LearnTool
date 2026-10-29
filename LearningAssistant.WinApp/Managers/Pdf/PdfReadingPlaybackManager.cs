@@ -29,6 +29,7 @@ namespace LearningAssistant.Managers
         private int _speechVersion;
         private bool _autoAdvancingPage;
         private bool _disposed;
+        private bool _mergeMultiLine = true;
 
         /// <summary>内存断点对应的文档路径：落盘时用保存时的路径，避免换文档后写错位置</summary>
         private string? _positionPath;
@@ -66,6 +67,22 @@ namespace LearningAssistant.Managers
         public PdfReadingPosition? SavedPosition { get; private set; }
 
         /// <summary>
+        /// 与自动高亮一致的分块模式：扫描页句子取自对应模式的版面缓存，
+        /// 切换后清空句子缓存，避免沿用旧模式的版面
+        /// </summary>
+        public bool MergeMultiLine
+        {
+            get => _mergeMultiLine;
+            set
+            {
+                if (_mergeMultiLine == value) return;
+
+                _mergeMultiLine = value;
+                _sentenceCache.Clear();
+            }
+        }
+
+        /// <summary>
         /// 取指定页的句子：文本层优先，扫描页回退到已缓存的 OCR 版面块。
         /// </summary>
         public List<PdfSentence> GetSentencesForPage(int pageIndex)
@@ -90,7 +107,8 @@ namespace LearningAssistant.Managers
             {
                 try
                 {
-                    var layout = _autoLayoutService.TryGetCachedPage(_form.CurrentPdfPath!, pageIndex);
+                    var layout = _autoLayoutService.TryGetCachedPage(
+                        _form.CurrentPdfPath!, pageIndex, _mergeMultiLine);
                     if (layout != null)
                         sentences = PdfSentenceSegmenter.BuildSentencesFromBlocks(pageIndex, layout.Blocks);
                 }

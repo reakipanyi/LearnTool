@@ -43,6 +43,9 @@ namespace LearningAssistant.Managers
         /// <summary>是否正在生成当前页框选，避免重复点击。</summary>
         public bool IsBusy { get; private set; }
 
+        /// <summary>多行合并开关：true 时连续多行合并为一个高亮块，false 时每行一块（默认开启）</summary>
+        public bool MergeMultiLine { get; set; } = true;
+
         /// <summary>是否正在执行整本自动框选。</summary>
         public bool IsWholeBookRunning { get; private set; }
 
@@ -98,6 +101,38 @@ namespace LearningAssistant.Managers
         }
 
         /// <summary>
+        /// 切换多行合并开关：已生成自动框选的可见页立即按新模式重建，后续生成沿用新设置。
+        /// </summary>
+        public async Task ApplyMergeMultiLineAsync(bool mergeMultiLine)
+        {
+            if (MergeMultiLine == mergeMultiLine) return;
+
+            MergeMultiLine = mergeMultiLine;
+
+            if (IsBusy || IsWholeBookRunning) return;
+
+            var pdfPath = _form.CurrentPdfPath;
+            if (string.IsNullOrWhiteSpace(pdfPath)) return;
+
+            var pages = GetVisiblePages();
+            if (pages.Count == 0) return;
+
+            // 本页还没有自动框选时不主动生成，等用户点击按钮时按新设置生成
+            if (!pages.Any(page => GetAutoHighlights(page).Count > 0)) return;
+
+            IsBusy = true;
+            try
+            {
+                await ClearPagesAsync(pdfPath, pages, showToast: false);
+                await BuildPagesAsync(pdfPath, pages);
+            }
+            finally
+            {
+                IsBusy = false;
+            }
+        }
+
+        /// <summary>
         /// 整本自动框选：逐页生成版面缓存；完成后只把当前可见页转成高亮，其余页浏览时懒加载。
         /// </summary>
         /// <param name="allowOcr">无文本层的页是否使用 OCR（整本扫描件）</param>
@@ -137,7 +172,8 @@ namespace LearningAssistant.Managers
                 }
 
                 var summary = await _autoLayoutService.BuildDocumentAsync(
-                    pdfPath, allowOcr, progress, _wholeBookCts.Token);
+                    pdfPath, allowOcr, progress,
+                    mergeMultiLine: MergeMultiLine, cancellationToken: _wholeBookCts.Token);
 
                 foreach (var page in GetVisiblePages())
                     await EnsurePageMaterializedAsync(page);
@@ -218,7 +254,22 @@ namespace LearningAssistant.Managers
                 if (GetAutoHighlights(pageIndex).Count > 0)
                     return;
 
-                var layout = await Task.Run(() => _autoLayoutService.TryGetCachedPage(pdfPath, pageIndex));
+                var layout = await Task.Run(() => _autoLayoutService.TryGetCachedPage(pdfPath, pageIndex, MergeMultiLine));
+                if (layout == null)
+                {
+                    // 切换多行开关后旧模式的版面缓存不再可用：整本模式下按需按新模式重建本页，
+                    // 并沿用原页面的来源决定是否 OCR，避免扫描页被重复识别
+                    var otherMode = await Task.Run(
+                        () => _autoLayoutService.TryGetCachedPage(pdfPath, pageIndex, !MergeMultiLine));
+                    if (otherMode == null)
+                        return;
+
+                    layout = await _autoLayoutService.GetOrBuildPageAsync(
+                        pdfPath, pageIndex,
+                        allowOcr: otherMode.Source != PdfTextLineSource.None,
+                        mergeMultiLine: MergeMultiLine);
+                }
+
                 if (layout == null || layout.Blocks.Count == 0)
                     return;
 
@@ -295,7 +346,7 @@ namespace LearningAssistant.Managers
                 .ToList();
         }
 
-        private async Task ClearPagesAsync(string pdfPath, IReadOnlyList<int> pages)
+        private async Task ClearPagesAsync(string pdfPath, IReadOnlyList<int> pages, bool showToast = true)
         {
             if (pages.Count == 0) return;
 
@@ -321,7 +372,8 @@ namespace LearningAssistant.Managers
             }
 
             RefreshAfterChange(pages);
-            _form.ShowToast("已清除本页自动框选");
+            if (showToast)
+                _form.ShowToast("已清除本页自动框选");
         }
 
         private async Task BuildPagesAsync(string pdfPath, IReadOnlyList<int> pages)
@@ -431,7 +483,7 @@ namespace LearningAssistant.Managers
                 try
                 {
                     var page = await _autoLayoutService.GetOrBuildPageAsync(
-                        pdfPath, pageIndex, allowOcr);
+                        pdfPath, pageIndex, allowOcr, mergeMultiLine: MergeMultiLine);
                     return new PageLayoutResult(page, null);
                 }
                 catch (Exception ex)
@@ -461,9 +513,11 @@ namespace LearningAssistant.Managers
                 textLines = Array.Empty<PdfTextLine>();
             }
 
+            var buildOptions = new PdfTextBlockBuildOptions { MergeMultiLine = MergeMultiLine };
+
             if (textLines.Count > 0)
             {
-                var blocks = PdfTextBlockBuilder.Build(textLines);
+                var blocks = PdfTextBlockBuilder.Build(textLines, buildOptions);
                 return new PageLayoutResult(new PdfAutoLayoutPage
                 {
                     PageIndex = pageIndex,
@@ -545,7 +599,7 @@ namespace LearningAssistant.Managers
                 });
             }
 
-            var ocrBlocks = PdfTextBlockBuilder.Build(ocrLines);
+            var ocrBlocks = PdfTextBlockBuilder.Build(ocrLines, buildOptions);
             return new PageLayoutResult(new PdfAutoLayoutPage
             {
                 PageIndex = pageIndex,

@@ -82,11 +82,11 @@ namespace LearningAssistant.Services.Pdf
             }
         }
 
-        public PdfAutoLayoutPage? TryGetCachedPage(string pdfPath, int pageIndex)
+        public PdfAutoLayoutPage? TryGetCachedPage(string pdfPath, int pageIndex, bool mergeMultiLine = true)
         {
             if (pageIndex < 0) return null;
 
-            var file = GetPageFilePath(pdfPath, pageIndex);
+            var file = GetPageFilePath(pdfPath, pageIndex, mergeMultiLine);
             if (!File.Exists(file)) return null;
 
             try
@@ -94,6 +94,7 @@ namespace LearningAssistant.Services.Pdf
                 var json = File.ReadAllText(file, Encoding.UTF8);
                 var page = JsonSerializer.Deserialize<PdfAutoLayoutPage>(json, JsonOptions);
                 if (page == null || page.PageIndex != pageIndex) return null;
+                if (page.MergeMultiLine != mergeMultiLine) return null;
                 return page;
             }
             catch (Exception ex)
@@ -108,20 +109,21 @@ namespace LearningAssistant.Services.Pdf
             int pageIndex,
             bool allowOcr,
             bool forceRebuild = false,
+            bool mergeMultiLine = true,
             CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            if (!forceRebuild && TryGetCachedPage(pdfPath, pageIndex) is { } cached)
+            if (!forceRebuild && TryGetCachedPage(pdfPath, pageIndex, mergeMultiLine) is { } cached)
                 return cached;
 
             await _buildGate.WaitAsync(cancellationToken).ConfigureAwait(false);
             try
             {
-                if (!forceRebuild && TryGetCachedPage(pdfPath, pageIndex) is { } cachedAgain)
+                if (!forceRebuild && TryGetCachedPage(pdfPath, pageIndex, mergeMultiLine) is { } cachedAgain)
                     return cachedAgain;
 
-                var page = await BuildPageCoreAsync(pdfPath, pageIndex, allowOcr, cancellationToken)
+                var page = await BuildPageCoreAsync(pdfPath, pageIndex, allowOcr, mergeMultiLine, cancellationToken)
                     .ConfigureAwait(false);
 
                 SavePage(pdfPath, pageIndex, page);
@@ -137,6 +139,7 @@ namespace LearningAssistant.Services.Pdf
             string pdfPath,
             bool allowOcr,
             IProgress<PdfAutoLayoutProgress>? progress = null,
+            bool mergeMultiLine = true,
             CancellationToken cancellationToken = default)
         {
             var summary = new PdfAutoLayoutSummary();
@@ -163,7 +166,8 @@ namespace LearningAssistant.Services.Pdf
                 try
                 {
                     page = await GetOrBuildPageAsync(
-                            pdfPath, pageIndex, allowOcr, forceRebuild: false, cancellationToken)
+                            pdfPath, pageIndex, allowOcr, forceRebuild: false,
+                            mergeMultiLine: mergeMultiLine, cancellationToken: cancellationToken)
                         .ConfigureAwait(false);
                 }
                 catch (OperationCanceledException)
@@ -256,8 +260,12 @@ namespace LearningAssistant.Services.Pdf
         {
             try
             {
-                var file = GetPageFilePath(pdfPath, pageIndex);
-                if (File.Exists(file)) File.Delete(file);
+                // 两种分块模式各有一份页面缓存，清除本页时一并删除
+                foreach (var mergeMultiLine in new[] { true, false })
+                {
+                    var file = GetPageFilePath(pdfPath, pageIndex, mergeMultiLine);
+                    if (File.Exists(file)) File.Delete(file);
+                }
             }
             catch (Exception ex)
             {
@@ -292,8 +300,11 @@ namespace LearningAssistant.Services.Pdf
             string pdfPath,
             int pageIndex,
             bool allowOcr,
+            bool mergeMultiLine,
             CancellationToken cancellationToken)
         {
+            var buildOptions = new PdfTextBlockBuildOptions { MergeMultiLine = mergeMultiLine };
+
             IReadOnlyList<PdfTextLine> textLines;
             try
             {
@@ -306,13 +317,14 @@ namespace LearningAssistant.Services.Pdf
                 textLines = Array.Empty<PdfTextLine>();
             }
 
-            var blocks = PdfTextBlockBuilder.Build(textLines);
+            var blocks = PdfTextBlockBuilder.Build(textLines, buildOptions);
             if (textLines.Count > 0)
             {
                 return new PdfAutoLayoutPage
                 {
                     PageIndex = pageIndex,
                     Source = PdfTextLineSource.TextLayer,
+                    MergeMultiLine = mergeMultiLine,
                     Blocks = blocks.ToList()
                 };
             }
@@ -322,7 +334,8 @@ namespace LearningAssistant.Services.Pdf
                 return new PdfAutoLayoutPage
                 {
                     PageIndex = pageIndex,
-                    Source = PdfTextLineSource.None
+                    Source = PdfTextLineSource.None,
+                    MergeMultiLine = mergeMultiLine
                 };
             }
 
@@ -334,7 +347,8 @@ namespace LearningAssistant.Services.Pdf
                 return new PdfAutoLayoutPage
                 {
                     PageIndex = pageIndex,
-                    Source = PdfTextLineSource.None
+                    Source = PdfTextLineSource.None,
+                    MergeMultiLine = mergeMultiLine
                 };
             }
 
@@ -353,12 +367,13 @@ namespace LearningAssistant.Services.Pdf
             }
 
             var ocrLines = ConvertOcrLines(ocrLayout);
-            var ocrBlocks = PdfTextBlockBuilder.Build(ocrLines);
+            var ocrBlocks = PdfTextBlockBuilder.Build(ocrLines, buildOptions);
 
             return new PdfAutoLayoutPage
             {
                 PageIndex = pageIndex,
                 Source = ocrLayout == null ? PdfTextLineSource.None : PdfTextLineSource.Ocr,
+                MergeMultiLine = mergeMultiLine,
                 Blocks = ocrBlocks.ToList()
             };
         }
@@ -432,7 +447,7 @@ namespace LearningAssistant.Services.Pdf
             try
             {
                 var json = JsonSerializer.Serialize(page, JsonOptions);
-                WriteAllTextAtomic(GetPageFilePath(pdfPath, pageIndex), json);
+                WriteAllTextAtomic(GetPageFilePath(pdfPath, pageIndex, page.MergeMultiLine), json);
             }
             catch (Exception ex)
             {
@@ -451,12 +466,15 @@ namespace LearningAssistant.Services.Pdf
             File.Move(temp, file, overwrite: true);
         }
 
-        private string GetPageFilePath(string pdfPath, int pageIndex)
+        private string GetPageFilePath(string pdfPath, int pageIndex, bool mergeMultiLine)
         {
             var fingerprint = GetFingerprint(pdfPath);
+            // 分块模式并入缓存键：多行合并与逐行模式各自缓存，切换互不覆盖；
+            // 多行合并沿用原缓存键，兼容此前已生成的缓存
+            var cacheKey = mergeMultiLine ? fingerprint : $"{fingerprint}|sl";
             return Path.Combine(
                 _rootDir,
-                $"{GetPathKey(pdfPath)}_{HashKey(fingerprint)}_p{pageIndex}.json");
+                $"{GetPathKey(pdfPath)}_{HashKey(cacheKey)}_p{pageIndex}.json");
         }
 
         private string GetStateFilePath(string pdfPath)

@@ -16,10 +16,12 @@ public partial class PdfHighlightPanel : UserControl
         _tip.SetToolTip(editButton, "编辑所选高亮");
         _tip.SetToolTip(batchRemoveButton, "批量删除所选高亮");
         _tip.SetToolTip(autoHighlightButton, "自动高亮：框选本页文字（右键整本）");
+        _tip.SetToolTip(mergeMultiLineCheck, "开启后连续多行合并为一个高亮块（默认）；关闭后每行单独一个高亮块");
         removeButton.AccessibleName = "删除所选高亮";
         editButton.AccessibleName = "编辑所选高亮";
         batchRemoveButton.AccessibleName = "批量删除所选高亮";
         autoHighlightButton.AccessibleName = "自动高亮";
+        mergeMultiLineCheck.AccessibleName = "多行合并开关";
     }
 
     /// <summary>
@@ -79,6 +81,11 @@ public partial class PdfHighlightPanel : UserControl
     [Browsable(false)]
     [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
     public Button AutoHighlightButton => autoHighlightButton;
+
+    /// <summary>多行合并开关，默认选中；关闭后每个文字行单独生成高亮块。</summary>
+    [Browsable(false)]
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    public CheckBox MergeMultiLineCheck => mergeMultiLineCheck;
 
     /// <summary>
     /// 同步自动高亮按钮状态：忙碌时禁用；本页已有自动框时切换为「清除」语义。

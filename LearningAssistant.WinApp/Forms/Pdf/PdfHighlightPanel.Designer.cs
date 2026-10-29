@@ -15,14 +15,17 @@ partial class PdfHighlightPanel
         components = new System.ComponentModel.Container();
         root = new TableLayoutPanel();
         header = new SidebarHeaderBar();
+        optionsBar = new Panel();
         listHost = new Panel();
         highlightList = new ListBox();
+        mergeMultiLineCheck = new CheckBox();
         removeButton = new Button();
         editButton = new Button();
         batchRemoveButton = new Button();
         autoHighlightButton = new Button();
         _tip = new ToolTip(components);
         root.SuspendLayout();
+        optionsBar.SuspendLayout();
         listHost.SuspendLayout();
         SuspendLayout();
         // 
@@ -32,13 +35,15 @@ partial class PdfHighlightPanel
         root.ColumnCount = 1;
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
         root.Controls.Add(header, 0, 0);
-        root.Controls.Add(listHost, 0, 1);
+        root.Controls.Add(optionsBar, 0, 1);
+        root.Controls.Add(listHost, 0, 2);
         root.Dock = DockStyle.Fill;
         root.Margin = Padding.Empty;
         root.Name = "root";
         root.Padding = new Padding(6, 2, 6, 6);
-        root.RowCount = 2;
+        root.RowCount = 3;
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 48F));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 30F));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
         root.Size = new Size(288, 600);
         root.TabIndex = 0;
@@ -57,6 +62,31 @@ partial class PdfHighlightPanel
         header.Size = new Size(276, 48);
         header.TabIndex = 0;
         header.TitleText = "高亮";
+        // 
+        // optionsBar
+        // 
+        optionsBar.BackColor = Color.FromArgb(247, 248, 251);
+        optionsBar.Controls.Add(mergeMultiLineCheck);
+        optionsBar.Dock = DockStyle.Fill;
+        optionsBar.Margin = new Padding(0, 0, 0, 2);
+        optionsBar.Name = "optionsBar";
+        optionsBar.Size = new Size(276, 30);
+        optionsBar.TabIndex = 1;
+        // 
+        // mergeMultiLineCheck
+        // 
+        mergeMultiLineCheck.AutoSize = true;
+        mergeMultiLineCheck.BackColor = Color.Transparent;
+        mergeMultiLineCheck.Checked = true;
+        mergeMultiLineCheck.CheckState = CheckState.Checked;
+        mergeMultiLineCheck.FlatStyle = FlatStyle.System;
+        mergeMultiLineCheck.ForeColor = Color.FromArgb(15, 23, 42);
+        mergeMultiLineCheck.Location = new Point(2, 5);
+        mergeMultiLineCheck.Name = "mergeMultiLineCheck";
+        mergeMultiLineCheck.Size = new Size(88, 21);
+        mergeMultiLineCheck.TabIndex = 0;
+        mergeMultiLineCheck.Text = "多行合并";
+        mergeMultiLineCheck.UseVisualStyleBackColor = true;
         // 
         // listHost
         // 
@@ -162,6 +192,8 @@ partial class PdfHighlightPanel
         Size = new Size(300, 612);
         root.ResumeLayout(false);
         root.PerformLayout();
+        optionsBar.ResumeLayout(false);
+        optionsBar.PerformLayout();
         listHost.ResumeLayout(false);
         ResumeLayout(false);
     }
@@ -170,8 +202,10 @@ partial class PdfHighlightPanel
 
     private TableLayoutPanel root;
     private SidebarHeaderBar header;
+    private Panel optionsBar;
     private Panel listHost;
     private ListBox highlightList;
+    private CheckBox mergeMultiLineCheck;
     private Button removeButton;
     private Button editButton;
     private Button batchRemoveButton;

@@ -21,6 +21,8 @@ namespace LearningAssistant.Managers
         public PdfHighlight? SelectedHighlight { get; set; }
         public int SelectedHighlightIndex { get; set; } = -1;
         public RectangleF SelectedHighlightOriginalBounds { get; set; } = RectangleF.Empty;
+        /// <summary>本次按下鼠标时高亮的初始矩形，用于判断松开后是否真的移动/缩放过</summary>
+        public RectangleF SelectedHighlightInteractionStartBounds { get; set; } = RectangleF.Empty;
 
         public AnnotationText? SelectedText { get; set; }
         public int SelectedTextIndex { get; set; } = -1;
@@ -214,6 +216,7 @@ namespace LearningAssistant.Managers
                         SelectedHighlightOriginalBounds = new RectangleF(
                             SelectedHighlight.NormalizedX, SelectedHighlight.NormalizedY,
                             SelectedHighlight.NormalizedWidth, SelectedHighlight.NormalizedHeight);
+                        SelectedHighlightInteractionStartBounds = SelectedHighlightOriginalBounds;
                         InvalidateView?.Invoke();
                         return;
                     }
@@ -230,6 +233,10 @@ namespace LearningAssistant.Managers
                     {
                         SelectionState = SelectionInteractionState.Moving;
                         SelectionDragStart = imgPoint;
+                        // 已选中时再次按下：重新记录本次交互起点，避免把单击误判为移动
+                        SelectedHighlightInteractionStartBounds = new RectangleF(
+                            highlights[i].NormalizedX, highlights[i].NormalizedY,
+                            highlights[i].NormalizedWidth, highlights[i].NormalizedHeight);
                         _lastClickTime = DateTime.Now;
                         _lastClickLocation = clientPoint;
                     }
@@ -242,6 +249,7 @@ namespace LearningAssistant.Managers
                         SelectedHighlightOriginalBounds = new RectangleF(
                             highlights[i].NormalizedX, highlights[i].NormalizedY,
                             highlights[i].NormalizedWidth, highlights[i].NormalizedHeight);
+                        SelectedHighlightInteractionStartBounds = SelectedHighlightOriginalBounds;
                         _logger.LogInformation("Selected highlight at index {Index}", i);
                     }
                     HighlightSelected?.Invoke(highlights[i]);

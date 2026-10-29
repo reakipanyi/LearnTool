@@ -48,6 +48,39 @@ public class PdfTextBlockBuilderTests
     }
 
     [Fact]
+    public void Build_MergeMultiLineDisabled_KeepsOneBlockPerLine()
+    {
+        var lines = new[]
+        {
+            Line("This is the first line of a paragraph", 0.1f, 0.10f, 0.6f, 0.02f),
+            Line("that continues on the second line and", 0.1f, 0.125f, 0.62f, 0.02f),
+            Line("finishes here.", 0.1f, 0.15f, 0.4f, 0.02f)
+        };
+
+        var blocks = PdfTextBlockBuilder.Build(lines, new PdfTextBlockBuildOptions { MergeMultiLine = false });
+
+        Assert.Equal(3, blocks.Count);
+        Assert.Equal("This is the first line of a paragraph", blocks[0].Text);
+        Assert.Equal("finishes here.", blocks[2].Text);
+        Assert.All(blocks, block => Assert.Equal(1, block.LineCount));
+    }
+
+    [Fact]
+    public void Build_MergeMultiLineDisabled_StillJoinsSameVisualLine()
+    {
+        var lines = new[]
+        {
+            Line("Hello", 0.10f, 0.10f, 0.10f, 0.02f),
+            Line("world", 0.22f, 0.10f, 0.10f, 0.02f)
+        };
+
+        var blocks = PdfTextBlockBuilder.Build(lines, new PdfTextBlockBuildOptions { MergeMultiLine = false });
+
+        var block = Assert.Single(blocks);
+        Assert.Equal("Hello world", block.Text);
+    }
+
+    [Fact]
     public void Build_PageNumbersInEdgeBands_AreRemoved()
     {
         var lines = new[]

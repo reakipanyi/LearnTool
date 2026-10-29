@@ -32,6 +32,9 @@ public sealed class PdfTextBlockBuildOptions
 
     /// <summary>字号超过该倍数视为标题，强制断块</summary>
     public float HeadingFontScale { get; init; } = 1.3f;
+
+    /// <summary>是否把连续多行合并为一个段落块；关闭后每个视觉行各自成一个高亮块</summary>
+    public bool MergeMultiLine { get; init; } = true;
 }
 
 /// <summary>
@@ -151,7 +154,10 @@ public static class PdfTextBlockBuilder
         foreach (var line in lines)
         {
             if (last != null && TryAppendToRow(last, line, options))
+            {
+                last.Append(line);
                 continue;
+            }
 
             last = new TextRow(line);
             rows.Add(last);
@@ -179,6 +185,10 @@ public static class PdfTextBlockBuilder
 
     private static List<PdfAutoTextBlock> BuildBlocks(List<TextRow> rows, PdfTextBlockBuildOptions options)
     {
+        // 关闭多行合并时，每个视觉行直接独立成块，只保留行内拼接
+        if (!options.MergeMultiLine)
+            return rows.Select(CreateBlock).ToList();
+
         var blocks = new List<PdfAutoTextBlock>();
         PdfAutoTextBlock? current = null;
         float currentLineHeight = 0f;
