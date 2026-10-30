@@ -56,10 +56,6 @@ namespace LearningAssistant.Managers
         /// <summary>刷新工具栏“锁定视图”按钮的开启态配色（锁定 = 品牌柔底）</summary>
         void ApplyLockViewButtonState(bool isLocked);
 
-        Panel? StatusBar { get; }
-        Label? StatusLabelLeft { get; }
-        Label? StatusLabelRight { get; }
-
         Color BackColor { get; set; }
 
         Rectangle GetImageDisplayRect();

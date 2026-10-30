@@ -49,7 +49,6 @@ namespace LearningAssistant.Forms.Pdf
             _buttonPenTypeMarker = new Button();
             _buttonPenTypePen = new Button();
             _buttonChecklistMode = new Button();
-            _buttonCollapseNav = new Button();
             _buttonExportAnnotationsAsImage = new Button();
             _toolbarGroupView = new Panel();
             _trackBarZoom = new PdfToolbarSlider();
@@ -113,9 +112,6 @@ namespace LearningAssistant.Forms.Pdf
             _buttonTextMode = new Button();
             _buttonEraserMode = new Button();
             _buttonMoreTools = new Button();
-            _statusBar = new Panel();
-            _statusLabelLeft = new Label();
-            _statusLabelRight = new Label();
             _pictureBoxPdf = new BufferedPictureBox();
             _contextMenuPdf = new ContextMenuStrip(components);
             menuItemCopy = new ToolStripMenuItem();
@@ -167,7 +163,6 @@ namespace LearningAssistant.Forms.Pdf
             _panelAnnotationOptions.SuspendLayout();
             ((ISupportInitialize)_trackBarThickness).BeginInit();
             _panelColor.SuspendLayout();
-            _statusBar.SuspendLayout();
             ((ISupportInitialize)_pictureBoxPdf).BeginInit();
             _contextMenuPdf.SuspendLayout();
             _ocrPanel.SuspendLayout();
@@ -204,7 +199,6 @@ namespace LearningAssistant.Forms.Pdf
             // 
             _panelPdf.BackColor = Color.FromArgb(240, 240, 240);
             _panelPdf.Controls.Add(_panelNavigation);
-            _panelPdf.Controls.Add(_statusBar);
             _panelPdf.Controls.Add(_pictureBoxPdf);
             _panelPdf.Controls.Add(_ocrPanel);
             _panelPdf.Controls.Add(_pageTransitionOverlay);
@@ -234,7 +228,6 @@ namespace LearningAssistant.Forms.Pdf
             _toolbarGroupTools.Controls.Add(_buttonImageEmbedMode);
             _toolbarGroupTools.Controls.Add(panel2);
             _toolbarGroupTools.Controls.Add(_buttonChecklistMode);
-            _toolbarGroupTools.Controls.Add(_buttonCollapseNav);
             _toolbarGroupTools.Controls.Add(_buttonExportAnnotationsAsImage);
             _toolbarGroupTools.Controls.Add(_toolbarGroupView);
             _toolbarGroupTools.Controls.Add(_buttonStrikethroughMode);
@@ -380,21 +373,6 @@ namespace LearningAssistant.Forms.Pdf
             _toolTip.SetToolTip(_buttonChecklistMode, "核对清单 (C)");
             _buttonChecklistMode.UseVisualStyleBackColor = false;
             _buttonChecklistMode.Click += ButtonChecklistMode_Click;
-            // 
-            // _buttonCollapseNav
-            // 
-            _buttonCollapseNav.FlatAppearance.BorderColor = Color.FromArgb(217, 217, 217);
-            _buttonCollapseNav.FlatStyle = FlatStyle.Flat;
-            _buttonCollapseNav.Font = new Font("Microsoft YaHei UI", 8F);
-            _buttonCollapseNav.ForeColor = Color.FromArgb(80, 80, 80);
-            _buttonCollapseNav.Location = new Point(1486, 44);
-            _buttonCollapseNav.Name = "_buttonCollapseNav";
-            _buttonCollapseNav.Size = new Size(24, 24);
-            _buttonCollapseNav.TabIndex = 30;
-            _buttonCollapseNav.Text = "▾";
-            _toolTip.SetToolTip(_buttonCollapseNav, "折叠/展开工具栏");
-            _buttonCollapseNav.UseVisualStyleBackColor = false;
-            _buttonCollapseNav.Visible = false;
             // 
             // _buttonExportAnnotationsAsImage
             // 
@@ -1162,41 +1140,6 @@ namespace LearningAssistant.Forms.Pdf
             _buttonMoreTools.UseVisualStyleBackColor = false;
             _buttonMoreTools.Click += ButtonMoreTools_Click;
             // 
-            // _statusBar
-            // 
-            _statusBar.BackColor = Color.White;
-            _statusBar.Controls.Add(_statusLabelLeft);
-            _statusBar.Controls.Add(_statusLabelRight);
-            _statusBar.Dock = DockStyle.Bottom;
-            _statusBar.Location = new Point(0, 1010);
-            _statusBar.Name = "_statusBar";
-            _statusBar.Size = new Size(1296, 24);
-            _statusBar.TabIndex = 4;
-            // 
-            // _statusLabelLeft
-            // 
-            _statusLabelLeft.AutoSize = true;
-            _statusLabelLeft.Font = new Font("Microsoft YaHei UI", 9F);
-            _statusLabelLeft.ForeColor = Color.FromArgb(71, 85, 105);
-            _statusLabelLeft.Location = new Point(12, 4);
-            _statusLabelLeft.Name = "_statusLabelLeft";
-            _statusLabelLeft.Size = new Size(142, 17);
-            _statusLabelLeft.TabIndex = 0;
-            _statusLabelLeft.Text = "第 1 页 / 共 1 页 · 100%";
-            // 
-            // _statusLabelRight
-            // 
-            _statusLabelRight.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-            _statusLabelRight.AutoSize = true;
-            _statusLabelRight.Font = new Font("Microsoft YaHei UI", 9F);
-            _statusLabelRight.ForeColor = Color.FromArgb(71, 85, 105);
-            _statusLabelRight.Location = new Point(1146, 4);
-            _statusLabelRight.Name = "_statusLabelRight";
-            _statusLabelRight.Size = new Size(130, 17);
-            _statusLabelRight.TabIndex = 1;
-            _statusLabelRight.Text = "缩放: 100% · 高亮模式";
-            _statusLabelRight.TextAlign = ContentAlignment.MiddleRight;
-            // 
             // _pictureBoxPdf
             // 
             _pictureBoxPdf.ContextMenuStrip = _contextMenuPdf;
@@ -1555,8 +1498,6 @@ namespace LearningAssistant.Forms.Pdf
             _panelAnnotationOptions.PerformLayout();
             ((ISupportInitialize)_trackBarThickness).EndInit();
             _panelColor.ResumeLayout(false);
-            _statusBar.ResumeLayout(false);
-            _statusBar.PerformLayout();
             ((ISupportInitialize)_pictureBoxPdf).EndInit();
             _contextMenuPdf.ResumeLayout(false);
             _ocrPanel.ResumeLayout(false);

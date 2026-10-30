@@ -39,7 +39,6 @@ namespace LearningAssistant.Managers
                 ApplyNightModeToMainForm();
                 ApplyNightModeToTabPageTranslate();
                 ApplyNightModeToBookmarksAndHighlights();
-                ApplyNightModeToStatusBar();
                 UpdateThumbnailsBackground();
 
                 // 三个侧栏面板与跟读窗口共用同一套主题令牌；夜间状态按窗口独立记录
@@ -167,29 +166,6 @@ namespace LearningAssistant.Managers
                 button.BackColor = SystemColors.Control;
                 button.ForeColor = SystemColors.ControlText;
             }
-        }
-
-        private void ApplyNightModeToStatusBar()
-        {
-            if (_form.StatusBar == null) return;
-
-            if (_isNightMode)
-            {
-                _form.StatusBar.BackColor = Color.FromArgb(35, 35, 35);
-            }
-            else
-            {
-                _form.StatusBar.BackColor = Color.White;
-            }
-
-            ApplyStatusLabelNightMode(_form.StatusLabelLeft);
-            ApplyStatusLabelNightMode(_form.StatusLabelRight);
-        }
-
-        private void ApplyStatusLabelNightMode(Label? label)
-        {
-            if (label == null) return;
-            label.ForeColor = _isNightMode ? Color.FromArgb(180, 180, 180) : Color.FromArgb(71, 85, 105);
         }
 
         public void UpdateThumbnailsBackground()

@@ -103,6 +103,9 @@ namespace LearningAssistant.Forms.Pdf
 
         // 顶部悬浮译条：选区翻译与“暂停跟读”共用同一浮层
         private PdfTopTranslationBar? _topTranslationBar;
+        // 用户拖动译条后相对默认位置的偏移，窗口缩放/重新显示时保持手动位置
+        private Point _translationBarDragOffset = Point.Empty;
+        private Rectangle _translationBarDragStartBounds;
         private IPdfSelectionTranslationCache? _selectionTranslationCache;
         private IPronunciationScorer? _pronunciationScorer;
         // 选区翻译请求代次：翻页或再次选择时丢弃过期结果
@@ -195,10 +198,6 @@ namespace LearningAssistant.Forms.Pdf
         private Label? _studyHighlightCount;
         private Label? _studyLearningCount;
         private Label? _studySentenceCount;
-        private Button? _buttonStudyAddHighlights;
-        private Button? _buttonStudyFlashcards;
-        private Button? _buttonStudyShadowing;
-        private Button? _buttonStudyWholeBookShadowing;
         private FlowLayoutPanel? _studyItemList;
         private PdfStudyPanel? _studyPanel;
         // 学习页签内的工作台：摘录/翻译独立面板 + 显式联动
@@ -268,7 +267,6 @@ namespace LearningAssistant.Forms.Pdf
         private Button _buttonTemporaryPenMode;
         private Button _buttonMosaicMode;
         private Button _buttonStrikethroughMode;
-        private Button _buttonCollapseNav;
         private Button _buttonTextMode;
         private Button _buttonUndoAnnotation;
         private Button _buttonClearAllAnnotations;
@@ -279,9 +277,6 @@ namespace LearningAssistant.Forms.Pdf
         private Button _buttonImageEmbedMode;
         private Button _buttonSpotlightMode;
         private Button _buttonMagnifierMode;
-        private Button _buttonStrokeStyleDot;
-        private Button _buttonStrokeStyleArrow;
-        //private Button _buttonFavoriteToolbar;
         private Panel _panelAnnotationOptions;
         private TrackBar _trackBarThickness;
         private Label _labelThicknessValue;
@@ -345,11 +340,9 @@ namespace LearningAssistant.Forms.Pdf
             Color.MediumVioletRed, // 14: 紫红
             Color.DodgerBlue  // 15: 亮蓝
         };
-        private Panel? _statusBar;
-        private Label? _statusLabelLeft;
-        private Label? _statusLabelRight;
         private Panel? _pageTransitionOverlay;
         private System.Windows.Forms.Timer? _pageTransitionTimer;
+
         private string _currentPdfPath = string.Empty;
         private SentenceShadowingForm? _shadowingForm;
         private int _currentPageIndex = 0;
@@ -533,6 +526,8 @@ namespace LearningAssistant.Forms.Pdf
         {
             _nightModeManager = new PdfReaderNightModeManager(_logger, this);
             _highlightManager = new PdfReaderHighlightManager(_logger, this, _highlightService, _annotationService, _eventBus);
+            // 摘录列表自身重建后同步空状态/条数，避免新增摘录要翻页才可见
+            _highlightManager.HighlightListChanged += (_, _) => UpdateHighlightEmptyState();
             _autoHighlightManager = new PdfAutoHighlightManager(
                 _logger, this, _highlightService, _highlightManager, _autoLayoutService);
             _navigationManager = new PdfReaderNavigationManager(_logger, this);
@@ -639,6 +634,8 @@ namespace LearningAssistant.Forms.Pdf
                     {
                         Visible = false
                     };
+                    // 音频条显隐会改变底部高度，同步重排悬浮的译条与状态条
+                    _audioPlayerBar.VisibleChanged += (_, _) => PositionTopTranslationBar();
                     _panelPdf.Controls.Add(_audioPlayerBar);
                 }
             }
@@ -686,7 +683,7 @@ namespace LearningAssistant.Forms.Pdf
                 _buttonMosaicMode, _buttonTextMode, _buttonStrikethroughMode, _buttonEraserMode,
                 _buttonUndoAnnotation, _buttonClearAllAnnotations, _buttonDashStyle,
                 _buttonToggleAnnotationLayer, _buttonChecklistMode, _buttonImageEmbedMode,
-                _buttonSpotlightMode, _buttonMagnifierMode, _buttonAskAi, _buttonTranslationToggle, _buttonCollapseNav,
+                _buttonSpotlightMode, _buttonMagnifierMode, _buttonAskAi, _buttonTranslationToggle,
                 _buttonPrev, _buttonNext, _buttonZoomOut, _buttonZoomIn, _buttonResetView,
                 _buttonRotate, _buttonLockView, _buttonNightMode, _buttonDualPage, _buttonFullscreen,
                 _buttonAddToLearningContent
@@ -699,17 +696,17 @@ namespace LearningAssistant.Forms.Pdf
             // 翻译 / 高亮 / 听读三个侧栏面板统一为同一套设计语言
             ApplySidebarRedesign();
 
-            // 顶部译条与暂停跟读依赖音频/录音服务，放到管理器初始化之后
+            // 悬浮译条与暂停跟读依赖音频/录音服务，放到管理器初始化之后
             InitializeTopTranslationBar();
             InitializePauseShadowing();
         }
 
         #endregion
 
-        #region 顶部译条与暂停跟读
+        #region 译条与底部悬浮层
 
         /// <summary>
-        /// 顶部译条初始化：解析选区翻译缓存与发音评分器，并挂到画布顶部。
+        /// 译条初始化：解析选区翻译缓存与发音评分器，并挂到画布底部。
         /// </summary>
         private void InitializeTopTranslationBar()
         {
@@ -732,6 +729,10 @@ namespace LearningAssistant.Forms.Pdf
             _topTranslationBar.ShadowingRequested += (_, _) => OpenShadowingForTopBarSentence();
             _topTranslationBar.CopyRequested += (_, _) => CopyTopBarContent();
             _topTranslationBar.PlayTakeRequested += (_, _) => PlayShadowingTake();
+            // 译条可拖动：记录拖动起点，按累计偏移实时移动并做边界收敛
+            _topTranslationBar.DragStarted += (_, _) =>
+                _translationBarDragStartBounds = _topTranslationBar.Bounds;
+            _topTranslationBar.DragMoved += (_, delta) => MoveTranslationBarByUser(delta);
             // 用户手动关闭译条时丢弃仍在途的翻译回包，并停止点读音频，避免残留播放
             _topTranslationBar.CloseRequested += (_, _) =>
             {
@@ -740,23 +741,92 @@ namespace LearningAssistant.Forms.Pdf
             };
             _panelPdf.Controls.Add(_topTranslationBar);
             _topTranslationBar.BringToFront();
-            _panelPdf.Resize += (_, _) => PositionTopTranslationBar();
             PositionTopTranslationBar();
+
+            // 画布尺寸变化时重新摆放译条（译条不参与布局，避免显示/隐藏造成页面重排）
+            _panelPdf.Resize += (_, _) => PositionTopTranslationBar();
 
             InitializeReadingPlaybackBar();
         }
 
-        /// <summary>把译条固定在画布顶部；悬浮但不参与布局，避免页面重排。</summary>
+        /// <summary>
+        /// 把译条固定在画布底部悬浮：不参与布局，避免显示/隐藏时页面重排。
+        /// </summary>
         private void PositionTopTranslationBar()
         {
-            if (_topTranslationBar == null) return;
+            if (_panelPdf == null) return;
 
-            var top = _panelNavigation is { Visible: true } ? _panelNavigation.Bottom + 8 : 8;
-            var available = Math.Max(240, _panelPdf.ClientSize.Width - 24);
+            int panelWidth = _panelPdf.ClientSize.Width;
+            int panelHeight = _panelPdf.ClientSize.Height;
+            int dockedBottomHeight = GetVisibleBottomDockHeight();
+
+            if (_topTranslationBar != null)
+            {
+                var defaultBounds = ComputeTranslationBarDefaultBounds(panelWidth, panelHeight, dockedBottomHeight);
+                var bounds = defaultBounds;
+                bounds.Offset(_translationBarDragOffset);
+                bounds = ClampTranslationBarBounds(bounds);
+                _translationBarDragOffset = new Point(bounds.X - defaultBounds.X, bounds.Y - defaultBounds.Y);
+                _topTranslationBar.SetBounds(bounds.X, bounds.Y, bounds.Width, bounds.Height);
+                _topTranslationBar.BringToFront();
+            }
+        }
+
+        /// <summary>译条未拖动时的默认位置（画布底部、居中）。</summary>
+        private Rectangle ComputeTranslationBarDefaultBounds(
+            int panelWidth, int panelHeight, int dockedBottomHeight)
+        {
+            var topLimit = _panelNavigation is { Visible: true } ? _panelNavigation.Bottom + 8 : 8;
+            var available = Math.Max(240, panelWidth - 24);
             var width = Math.Min(980, available);
-            var x = Math.Max(12, (_panelPdf.ClientSize.Width - width) / 2);
-            _topTranslationBar.SetBounds(x, top, width, 58);
-            _topTranslationBar.BringToFront();
+            var x = Math.Max(12, (panelWidth - width) / 2);
+            var bottomInset = dockedBottomHeight + 8;
+            var y = Math.Max(topLimit, panelHeight - bottomInset - PdfTopTranslationBar.BarHeight);
+            return new Rectangle(x, y, width, PdfTopTranslationBar.BarHeight);
+        }
+
+        /// <summary>把译条限制在画布范围内，避免拖出可视区域。</summary>
+        private Rectangle ClampTranslationBarBounds(Rectangle bounds)
+        {
+            int panelWidth = _panelPdf.ClientSize.Width;
+            int panelHeight = _panelPdf.ClientSize.Height;
+            var topLimit = _panelNavigation is { Visible: true } ? _panelNavigation.Bottom + 4 : 4;
+            int maxX = Math.Max(4, panelWidth - bounds.Width - 4);
+            int maxY = Math.Max(topLimit, panelHeight - bounds.Height - 4);
+            bounds.X = Math.Min(Math.Max(4, bounds.X), maxX);
+            bounds.Y = Math.Min(Math.Max(topLimit, bounds.Y), maxY);
+            return bounds;
+        }
+
+        /// <summary>用户拖动译条：按相对拖动起点的累计偏移移动，并记住手动位置。</summary>
+        private void MoveTranslationBarByUser(Point delta)
+        {
+            if (_topTranslationBar == null || _panelPdf == null)
+                return;
+
+            var bounds = _translationBarDragStartBounds;
+            bounds.Offset(delta);
+            bounds = ClampTranslationBarBounds(bounds);
+            _topTranslationBar.SetBounds(bounds.X, bounds.Y, bounds.Width, bounds.Height);
+
+            var defaultBounds = ComputeTranslationBarDefaultBounds(
+                _panelPdf.ClientSize.Width,
+                _panelPdf.ClientSize.Height,
+                GetVisibleBottomDockHeight());
+            _translationBarDragOffset = new Point(
+                bounds.X - defaultBounds.X,
+                bounds.Y - defaultBounds.Y);
+        }
+
+        /// <summary>当前可见的底部停靠条占用的总高度。</summary>
+        private int GetVisibleBottomDockHeight()
+        {
+            int height = 0;
+            if (_audioPlayerBar is { Visible: true })
+                height += _audioPlayerBar.Height;
+            if (_readingPlaybackBar is { Visible: true })
+                height += _readingPlaybackBar.Height;
+            return height;
         }
 
         /// <summary>当前选区翻译使用的目标语言；与翻译面板保持一致。</summary>
@@ -1800,6 +1870,8 @@ namespace LearningAssistant.Forms.Pdf
             _readingPlaybackManager?.SetSpeed(bar.Speed);
 
             _readingPlaybackBar = bar;
+            // 底部停靠条显隐会改变译条/状态条的避让高度，实时重排
+            bar.VisibleChanged += (_, _) => PositionTopTranslationBar();
             _panelPdf.Controls.Add(bar);
             bar.SetIdle();
             bar.SetResumeAvailable(_readingPlaybackManager?.SavedPosition != null);
@@ -2540,7 +2612,7 @@ namespace LearningAssistant.Forms.Pdf
                 _buttonToggleAnnotationLayer, _buttonChecklistMode, _buttonImageEmbedMode,
                 _buttonExportAnnotationsAsImage,
                 _buttonSpotlightMode, _buttonMagnifierMode, _buttonAskAi, _buttonTranslationToggle,
-                _buttonCollapseNav, _buttonMoreTools
+                _buttonMoreTools
             };
         }
 
@@ -2774,10 +2846,6 @@ namespace LearningAssistant.Forms.Pdf
         /// 锁定视图按钮走统一的开启态登记，锁定/解锁与夜间切换后的配色保持一致。
         /// </summary>
         public void ApplyLockViewButtonState(bool isLocked) => UpdateToolButtonState(_buttonLockView, isLocked);
-
-        public Panel? StatusBar => _statusBar;
-        public Label? StatusLabelLeft => _statusLabelLeft;
-        public Label? StatusLabelRight => _statusLabelRight;
 
         public Pen Pen => _pen;
 
@@ -3260,17 +3328,14 @@ namespace LearningAssistant.Forms.Pdf
                 {
                     // 记录进入全屏前的状态，退出时按原样恢复
                     _windowStateBeforeFullscreen = WindowState;
-                    // 隐藏前先判断焦点是否落在即将隐藏的工具栏/状态栏内：
+                    // 隐藏前先判断焦点是否落在即将隐藏的工具栏内：
                     // 隐藏后焦点若残留在其中（如页码输入框），快捷键会先被输入框守卫拦下
-                    bool focusInsideHiddenBar = _panelNavigation?.ContainsFocus == true
-                        || _statusBar?.ContainsFocus == true;
+                    bool focusInsideHiddenBar = _panelNavigation?.ContainsFocus == true;
 
                     FormBorderStyle = FormBorderStyle.None;
                     WindowState = FormWindowState.Maximized;
                     if (_panelNavigation != null)
                         _panelNavigation.Visible = false;
-                    if (_statusBar != null)
-                        _statusBar.Visible = false;
                     // 焦点收回窗体，保证全屏下 PgUp/PgDn、Esc 等阅读快捷键直达窗体
                     if (focusInsideHiddenBar)
                         ResetKeyboardFocusToForm();
@@ -3284,9 +3349,9 @@ namespace LearningAssistant.Forms.Pdf
                         : _windowStateBeforeFullscreen;
                     if (_panelNavigation != null)
                         _panelNavigation.Visible = true;
-                    if (_statusBar != null)
-                        _statusBar.Visible = true;
                     _isFullscreen = false;
+                    // 退出全屏后恢复标题中的页码/状态（进入全屏前标题未被清除，这里保持同步）
+                    UpdateStatusBar();
                 }
             }
             catch (Exception ex)
@@ -3313,51 +3378,45 @@ namespace LearningAssistant.Forms.Pdf
             _pictureBoxPdf.Invalidate();
         }
 
+        /// <summary>
+        /// 刷新窗口标题：文件名 + 当前页码 + 工具/页模式。
+        /// 底部状态栏已移除，页码与状态统一在标题栏呈现。
+        /// </summary>
         private void UpdateStatusBar()
         {
-            if (_statusLabelLeft != null)
+            int totalPages = 0;
+            if (_labelPageCount != null && !string.IsNullOrEmpty(_labelPageCount.Text))
             {
-                int totalPages = 0;
-                if (_labelPageCount != null && !string.IsNullOrEmpty(_labelPageCount.Text))
-                {
-                    var parts = _labelPageCount.Text.Replace("/", "").Trim();
-                    int.TryParse(parts, out totalPages);
-                }
-                int currentPage = _currentPageIndex + 1;
-
-                string fileName = string.Empty;
-                if (!string.IsNullOrEmpty(_currentPdfPath))
-                {
-                    fileName = Path.GetFileName(_currentPdfPath);
-                    if (fileName.Length > 30)
-                    {
-                        fileName = fileName.Substring(0, 27) + "...";
-                    }
-                }
-
-                // 页码与阅读进度在上方工具栏和进度条已有呈现，此处只保留文件名与页码
-                string pageInfo = $"第 {currentPage} 页 / 共 {totalPages} 页";
-                _statusLabelLeft.Text = string.IsNullOrEmpty(fileName) ? pageInfo : $"{fileName}  ·  {pageInfo}";
+                var parts = _labelPageCount.Text.Replace("/", "").Trim();
+                int.TryParse(parts, out totalPages);
             }
-            if (_statusLabelRight != null)
+            int currentPage = _currentPageIndex + 1;
+
+            string fileName = string.Empty;
+            if (!string.IsNullOrEmpty(_currentPdfPath))
+                fileName = Path.GetFileName(_currentPdfPath);
+
+            string mode = GetCurrentToolModeText();
+            string dualPage = _isDualPage ? "双页" : "单页";
+
+            int highlightCount = 0;
+            try
             {
-                string mode = GetCurrentToolModeText();
-                string dualPage = _isDualPage ? "双页" : "单页";
-
-                int highlightCount = 0;
-                try
+                if (!string.IsNullOrEmpty(_currentPdfPath) && _highlightService != null)
                 {
-                    if (!string.IsNullOrEmpty(_currentPdfPath) && _highlightService != null)
-                    {
-                        highlightCount = _highlightService.GetHighlights(_currentPdfPath)?.Count ?? 0;
-                    }
+                    highlightCount = _highlightService.GetHighlights(_currentPdfPath)?.Count ?? 0;
                 }
-                catch { }
-
-                string highlightInfo = highlightCount > 0 ? $"  ·  标注 {highlightCount}" : string.Empty;
-                // 缩放值已显示在工具栏，状态栏只保留工具与页模式，避免同一信息出现三处
-                _statusLabelRight.Text = $"{mode}  ·  {dualPage}{highlightInfo}";
             }
+            catch { }
+
+            string highlightInfo = highlightCount > 0 ? $" · 标注 {highlightCount}" : string.Empty;
+            string pageInfo = $"第 {currentPage} 页 / 共 {totalPages} 页";
+            string statusInfo = $"{mode} · {dualPage}{highlightInfo}";
+
+            // 缩放值在上方工具栏单独呈现，这里不重复
+            Text = string.IsNullOrEmpty(fileName)
+                ? $"{AppTitle} - {pageInfo} · {statusInfo}"
+                : $"{AppTitle} - {fileName} · {pageInfo} · {statusInfo}";
         }
 
         private string GetCurrentToolModeText()
@@ -3824,7 +3883,8 @@ namespace LearningAssistant.Forms.Pdf
             // 等新页渲染完成后的 DisplayImage 再统一刷新高亮层
             if (!documentChanged)
                 LoadHighlightsForCurrentPage();
-            Text = $"{AppTitle} - {Path.GetFileName(pdfPath)}";
+            // 标题统一由 UpdateStatusBar 生成：文件名 + 页码 + 状态
+            UpdateStatusBar();
 
             // 记录“目录 -> 上次打开的文件”，并在左侧文件树中突出显示当前文件，
             // 下次打开同一目录可直接定位到上次阅读的记录
@@ -7230,30 +7290,6 @@ namespace LearningAssistant.Forms.Pdf
             SetAnnotationToolMode(AnnotationToolMode.Magnifier);
         }
 
-        private void ButtonStrokeStyleDot_Click(object? sender, EventArgs e)
-        {
-            _navigationManager?.SetStrokeStyle("DotLine");
-            _buttonStrokeStyleDot.BackColor = Color.FromArgb(230, 244, 255);
-            _buttonStrokeStyleArrow.BackColor = Color.White;
-        }
-
-        private void ButtonStrokeStyleArrow_Click(object? sender, EventArgs e)
-        {
-            _navigationManager?.SetStrokeStyle("ArrowLine");
-            _buttonStrokeStyleArrow.BackColor = Color.FromArgb(230, 244, 255);
-            _buttonStrokeStyleDot.BackColor = Color.White;
-        }
-
-        private void ButtonFavoriteToolbar_Click(object? sender, EventArgs e)
-        {
-            _navigationManager?.ToggleFavoriteToolbar();
-        }
-
-        private void ButtonSelectMode_Click(object? sender, EventArgs e)
-        {
-            SetAnnotationToolMode(AnnotationToolMode.Select);
-        }
-
         private void ButtonEraserMode_Click(object? sender, EventArgs e)
         {
             SetAnnotationToolMode(AnnotationToolMode.Eraser);
@@ -7513,12 +7549,6 @@ namespace LearningAssistant.Forms.Pdf
 
                 button.BackColor = ToolbarButtonSurface(button);
                 button.ForeColor = isNightMode ? ToolbarIconNight : ToolbarIconDay;
-            }
-
-            // 折叠按钮文字颜色（较窄的竖条，用更柔和的灰）
-            if (_buttonCollapseNav != null)
-            {
-                _buttonCollapseNav.ForeColor = isNightMode ? ToolbarMutedNight : ToolbarMutedDay;
             }
 
             ApplyToolbarControlTheme();
@@ -9130,8 +9160,6 @@ namespace LearningAssistant.Forms.Pdf
                     return;
                 }
 
-                if (_buttonStudyAddHighlights != null) _buttonStudyAddHighlights.Enabled = false;
-
                 var requests = highlights.Select(h => new StudyEntryRequest
                 {
                     Text = h.Text,
@@ -9157,7 +9185,6 @@ namespace LearningAssistant.Forms.Pdf
             {
                 _logger?.LogError(ex, "本页高亮批量加入学习失败");
                 ShowToast($"加入学习失败: {ex.Message}");
-                if (_buttonStudyAddHighlights != null) _buttonStudyAddHighlights.Enabled = true;
             }
         }
 
