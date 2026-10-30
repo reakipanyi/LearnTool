@@ -264,6 +264,45 @@ namespace LearningAssistant.Services.Shadowing
             }
         }
 
+        /// <summary>
+        /// 按 ID 删除本页指定切片：删除切片与跟读 take 文件，并从清单中移除记录；
+        /// 仅用于用户显式清理未匹配（孤儿）切片，合成成品与其他段不受影响。
+        /// SaveSegmentsAsync 的合并策略会保留旧段，不能用于删除记录，故单列本方法。
+        /// </summary>
+        public async Task DeleteSegmentsAsync(
+            string pdfPath, int pageIndex, IReadOnlyCollection<string> segmentIds,
+            CancellationToken cancellationToken = default)
+        {
+            if (segmentIds == null || segmentIds.Count == 0)
+                return;
+
+            var gate = GetLock(pdfPath);
+            await gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                string path = GetSegmentsPath(pdfPath, pageIndex);
+                var manifest = JsonHelper.LoadFromFile<ShadowingSegmentManifest>(path);
+                if (manifest == null)
+                    return;
+
+                var ids = new HashSet<string>(segmentIds, StringComparer.Ordinal);
+                foreach (var segment in manifest.Segments.Where(s => ids.Contains(s.Id)))
+                {
+                    TryDeleteFile(ResolvePath(segment.SlicePath));
+                    foreach (var take in segment.Takes)
+                        TryDeleteFile(ResolvePath(take.Path));
+                }
+
+                manifest.Segments.RemoveAll(s => ids.Contains(s.Id));
+                manifest.SchemaVersion = 3;
+                JsonHelper.SaveToFile(path, manifest);
+            }
+            finally
+            {
+                gate.Release();
+            }
+        }
+
         /// <summary>取该 PDF 的目录锁；segments.json 与 progress.json 共用。</summary>
         public SemaphoreSlim GetLock(string pdfPath)
             => _locks.GetOrAdd($"{_rootDir}|{_userId}|{GetDocumentHash(pdfPath)}", _ => new SemaphoreSlim(1, 1));

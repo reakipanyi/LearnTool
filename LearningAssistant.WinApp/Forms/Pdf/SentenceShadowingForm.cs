@@ -1,4 +1,6 @@
+using System.ComponentModel;
 using System.Diagnostics;
+using System.Text;
 using LearningAssistant.Abstractions.Media;
 using LearningAssistant.Common.UI;
 using LearningAssistant.Models.Pdf;
@@ -49,6 +51,10 @@ namespace LearningAssistant.Forms.Pdf
         private readonly Button _btnTakeChoose = new();
         private readonly Button _btnTakeDelete = new();
         private readonly Button _btnCompose = new();
+        private readonly Button _btnRealignMissing = new();
+        private readonly Button _btnPruneOrphans = new();
+        private readonly ContextMenuStrip _rowMenu = new();
+        private int _rowMenuIndex = -1;
         private readonly WaveformThumb _waveform = new();
         private readonly ShadowingComposeService _composer = new();
         private ShadowingSegmentManifest? _segmentManifest;
@@ -696,6 +702,29 @@ namespace LearningAssistant.Forms.Pdf
             _btnCompose.Visible = false;
             footer.Controls.Add(_btnCompose);
 
+            // 对账修复入口：批量重对齐缺失句 / 清理未匹配切片，放页脚与「合成成品」同行；
+            // 默认隐藏，由 UpdateSourceBar 按对账结果控制显隐
+            void StyleFooterButton(Button button, string text, Point location, string tip)
+            {
+                button.FlatStyle = FlatStyle.Flat;
+                button.FlatAppearance.BorderSize = 0;
+                button.Font = new Font("Microsoft YaHei UI", 8.5F);
+                button.Size = new Size(96, 24);
+                button.Location = location;
+                button.Cursor = Cursors.Hand;
+                button.BackColor = palette.SurfaceAlt;
+                button.ForeColor = palette.Text;
+                button.Text = text;
+                button.Visible = false;
+                _buttonTip.SetToolTip(button, tip);
+                footer.Controls.Add(button);
+            }
+
+            StyleFooterButton(_btnRealignMissing, "重对齐缺失句", new Point(134, 8),
+                "从第一条缺失原声的句子开始批量重新对齐");
+            StyleFooterButton(_btnPruneOrphans, "清理未匹配", new Point(238, 8),
+                "删除与本页句子不匹配的旧切片及其录音；删除前会列出文件清单确认");
+
             if (actions.Controls.Contains(_labelStatus))
                 actions.Controls.Remove(_labelStatus);
             actions.RowCount = 4;
@@ -815,6 +844,14 @@ namespace LearningAssistant.Forms.Pdf
             _radioSourceText.Enabled = interactive;
             _btnClearSegments.Enabled = interactive && hasSegments;
 
+            // 对账修复入口：有缺失句时可批量重对齐；有漂移时可清理未匹配切片
+            bool hasMissing = _bindings.Any(b =>
+                b.Status is CueBindingStatus.Unbound or CueBindingStatus.MissingSlice);
+            _btnRealignMissing.Visible = canAlign && hasMissing;
+            _btnPruneOrphans.Visible = _bindingsDrift?.HasDrift == true;
+            _btnRealignMissing.Enabled = interactive;
+            _btnPruneOrphans.Enabled = interactive;
+
             _btnAlign.Text = _aligning ? "完成对齐" : "原声对齐";
             _sourceBar.Visible = hasSegments || canAlign;
 
@@ -849,7 +886,11 @@ namespace LearningAssistant.Forms.Pdf
             }
         }
 
-        private void StartAlignment()
+        /// <summary>
+        /// 开始原声对齐；修复入口传入 restartCueIndex/restartStartMs 时从指定 cue 继续，
+        /// 起点 = 前一条已绑定切片的 EndMs（无前序为 0），否则从第一句尚未对齐的位置继续。
+        /// </summary>
+        private void StartAlignment(int? restartCueIndex = null, int? restartStartMs = null)
         {
             if (!CanAlignAudio() || _alignmentContext == null)
             {
@@ -888,22 +929,33 @@ namespace LearningAssistant.Forms.Pdf
 
             _alignmentSession = new ShadowingAlignmentSession(_pageIndex, _alignmentCues, existing);
 
-            // 从第一句尚未对齐的位置继续；分页音频从头播放，整篇音频沿用阅读器当前位置
-            int startIndex = 0;
-            int startMs = Math.Max(0, _alignmentContext.StartMs);
-            for (int i = 0; i < _alignmentCues.Count; i++)
+            int startIndex;
+            int startMs;
+            if (restartCueIndex.HasValue)
             {
-                var previous = _alignmentSession.FindExisting(_alignmentCues[i]);
-                if (previous == null)
-                    break;
-                startIndex = i + 1;
-                startMs = Math.Max(startMs, previous.EndMs);
+                // 修复入口：从指定 cue 重新对齐；existingSegments 已全量传入，旧切片按 ID 复用
+                startIndex = Math.Clamp(restartCueIndex.Value, 0, Math.Max(0, _alignmentCues.Count - 1));
+                startMs = Math.Max(0, restartStartMs ?? 0);
             }
-
-            if (startIndex >= _alignmentCues.Count)
+            else
             {
+                // 从第一句尚未对齐的位置继续；分页音频从头播放，整篇音频沿用阅读器当前位置
                 startIndex = 0;
                 startMs = Math.Max(0, _alignmentContext.StartMs);
+                for (int i = 0; i < _alignmentCues.Count; i++)
+                {
+                    var previous = _alignmentSession.FindExisting(_alignmentCues[i]);
+                    if (previous == null)
+                        break;
+                    startIndex = i + 1;
+                    startMs = Math.Max(startMs, previous.EndMs);
+                }
+
+                if (startIndex >= _alignmentCues.Count)
+                {
+                    startIndex = 0;
+                    startMs = Math.Max(0, _alignmentContext.StartMs);
+                }
             }
 
             _alignmentSession.Start(startMs, startIndex);
@@ -929,6 +981,148 @@ namespace LearningAssistant.Forms.Pdf
             _alignmentPlayer.LoadSubtitle(_alignmentContext.SubtitlePath);
             _alignmentPlayer.Seek(TimeSpan.FromMilliseconds(startMs));
             FireAndForget(_alignmentPlayer.PlayAsync());
+        }
+
+        /// <summary>右键先选中鼠标下的行，再由菜单决定可用动作。</summary>
+        private void OnSentenceListMouseDown(object? sender, MouseEventArgs e)
+        {
+            if (e.Button != MouseButtons.Right)
+                return;
+
+            int index = _listSentences.IndexFromPoint(e.Location);
+            if (index < 0)
+                return;
+
+            _rowMenuIndex = index;
+            _listSentences.SelectedIndex = index;
+        }
+
+        private void OnRowMenuOpening(object? sender, CancelEventArgs e)
+        {
+            if (_alignmentContext == null || _wholeBook)
+            {
+                e.Cancel = true;
+                return;
+            }
+
+            // 仅 Unbound/MissingSlice 且当前可进入对齐时可用；对齐中禁止嵌套启动
+            _rowMenu.Items[0].Enabled = !_aligning
+                && CanAlignAudio()
+                && _rowMenuIndex >= 0
+                && _rowMenuIndex < _bindings.Count
+                && _bindings[_rowMenuIndex].Status is CueBindingStatus.Unbound or CueBindingStatus.MissingSlice;
+        }
+
+        /// <summary>行右键「重新对齐此句」：起点 = 前一条已绑定切片的 EndMs，无前序为 0。</summary>
+        private void RealignCueAt(int cueIndex)
+        {
+            if (_aligning || !CanAlignAudio() || cueIndex < 0 || cueIndex >= _alignmentCues.Count)
+                return;
+
+            int startMs = ShadowingCueReconciler.FindRestartStartMs(_bindings, cueIndex);
+            StartAlignment(cueIndex, startMs);
+        }
+
+        /// <summary>页脚「重新对齐缺失句」：从第一条 Unbound/MissingSlice 的 cue 开始批量对齐。</summary>
+        private void OnRealignMissingClicked(object? sender, EventArgs e)
+        {
+            if (_aligning || !CanAlignAudio())
+                return;
+
+            int first = -1;
+            for (int i = 0; i < _bindings.Count; i++)
+            {
+                if (_bindings[i].Status is CueBindingStatus.Unbound or CueBindingStatus.MissingSlice)
+                {
+                    first = i;
+                    break;
+                }
+            }
+
+            if (first < 0)
+            {
+                _labelStatus.Text = "没有缺失原声的句子。";
+                return;
+            }
+
+            int startMs = ShadowingCueReconciler.FindRestartStartMs(_bindings, first);
+            StartAlignment(first, startMs);
+        }
+
+        private async void OnPruneOrphansClicked(object? sender, EventArgs e)
+        {
+            try
+            {
+                await PruneOrphanSegmentsAsync();
+            }
+            catch (Exception ex)
+            {
+                Trace.TraceWarning($"[SentenceShadowing] 清理未匹配切片失败: {ex.Message}");
+                _labelStatus.Text = $"清理未匹配切片失败：{ex.Message}";
+            }
+        }
+
+        /// <summary>
+        /// 页脚「清理未匹配切片」（仅 HasDrift 时显示）：只清当前页 Orphans，
+        /// 删除切片文件与清单记录并同步清理其 take；删除前列出文件清单供确认（不弹窗原则的唯一例外）。
+        /// </summary>
+        private async Task PruneOrphanSegmentsAsync()
+        {
+            var drift = _bindingsDrift;
+            if (drift == null || drift.Orphans.Count == 0)
+            {
+                _labelStatus.Text = "没有可清理的未匹配切片。";
+                return;
+            }
+
+            var files = new List<string>();
+            foreach (var segment in drift.Orphans)
+            {
+                string slice = _segmentStore.ResolvePath(segment.SlicePath);
+                if (!string.IsNullOrWhiteSpace(slice) && File.Exists(slice))
+                    files.Add(slice);
+                foreach (var take in segment.Takes)
+                {
+                    string takePath = _segmentStore.ResolvePath(take.Path);
+                    if (!string.IsNullOrWhiteSpace(takePath) && File.Exists(takePath))
+                        files.Add(takePath);
+                }
+            }
+
+            var message = new StringBuilder();
+            message.AppendLine($"将删除本页 {drift.Orphans.Count} 条未匹配切片记录，");
+            if (files.Count > 0)
+            {
+                message.AppendLine($"及以下 {files.Count} 个文件：").AppendLine();
+                foreach (string file in files.Take(20))
+                    message.AppendLine(file);
+                if (files.Count > 20)
+                    message.AppendLine($"……另有 {files.Count - 20} 个文件");
+            }
+            else
+            {
+                message.AppendLine("切片文件已不存在，仅删除记录。");
+            }
+            message.AppendLine().AppendLine("确认清理？");
+
+            if (MessageBox.Show(this, message.ToString(), "清理未匹配切片",
+                    MessageBoxButtons.OKCancel, MessageBoxIcon.Warning) != DialogResult.OK)
+                return;
+
+            var orphanIds = drift.Orphans.Select(s => s.Id).ToList();
+            await _segmentStore.DeleteSegmentsAsync(_pdfPath, _pageIndex, orphanIds).ConfigureAwait(true);
+
+            // 重新加载清单并对账刷新；清理只删 Orphans，已绑定切片与进度不受影响；
+            // 仍有切片时保持当前来源不变，全部清完才回退文字跟读
+            var manifest = _segmentStore.LoadSegments(_pdfPath, _pageIndex);
+            _segmentManifest = manifest;
+            _segments = manifest?.Segments.OrderBy(s => s.StartMs).ToList()
+                        ?? new List<ShadowingSegment>();
+            if (_segments.Count == 0)
+                _segmentMode = false;
+            RecomputeBindings();
+            ApplyActiveSource();
+            _labelStatus.Text = $"已清理 {orphanIds.Count} 条未匹配切片。";
         }
 
         private void SetAlignmentCurrentIndex(int index)
@@ -1346,6 +1540,12 @@ namespace LearningAssistant.Forms.Pdf
             _listSentences.SelectedIndexChanged += OnSentenceSelected;
             _listSentences.DoubleClick += OnSentenceDoubleClick;
             _listSentences.DrawItem += OnSentenceDrawItem;
+            _listSentences.MouseDown += OnSentenceListMouseDown;
+
+            // 行右键「重新对齐此句」：仅 Unbound/MissingSlice 且可对齐时可用
+            _rowMenu.Items.Add("重新对齐此句", null, (_, _) => RealignCueAt(_rowMenuIndex));
+            _rowMenu.Opening += OnRowMenuOpening;
+            _listSentences.ContextMenuStrip = _rowMenu;
 
             btnPrev.Click += (_, _) => MoveSentence(-1);
             _btnPlay.Click += (_, _) => StartPlayback();
@@ -1358,6 +1558,8 @@ namespace LearningAssistant.Forms.Pdf
             _btnTakeChoose.Click += async (_, _) => await ChooseCurrentTakeAsync();
             _btnTakeDelete.Click += async (_, _) => await DeleteCurrentTakeAsync();
             _btnCompose.Click += async (_, _) => await ComposePageAsync();
+            _btnRealignMissing.Click += OnRealignMissingClicked;
+            _btnPruneOrphans.Click += OnPruneOrphansClicked;
             _comboMode.SelectedIndexChanged += OnModeChanged;
 
             _radioSourceSegments.CheckedChanged += OnSourceRadioChanged;
