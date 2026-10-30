@@ -18,8 +18,11 @@ namespace LearningAssistant.Models.Shadowing
         /// <summary>匹配到的高亮 ID；为空表示只使用页面文字。</summary>
         public string? HighlightId { get; init; }
 
-        /// <summary>稳定锚点：匹配高亮时含高亮锚点，否则为页面分句锚点。</summary>
+        /// <summary>稳定锚点（V2）：匹配高亮时含高亮锚点，否则为页面文字锚点。</summary>
         public string AnchorKey { get; init; } = string.Empty;
+
+        /// <summary>V1 兼容锚点（不持久化）：读取历史切片时双读使用；新打点不写。</summary>
+        public string? LegacyAnchorKey { get; init; }
 
         /// <summary>highlight / auto-highlight / page-text。</summary>
         public string TextSource { get; init; } = "page-text";

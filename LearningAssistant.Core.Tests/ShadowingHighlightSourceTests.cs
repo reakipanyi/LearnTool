@@ -123,9 +123,11 @@ public class ShadowingHighlightSourceTests
         Assert.Equal(sentences.Count, cues.Count);
         Assert.Equal("manual", cues[0].HighlightId);
         Assert.Equal("highlight", cues[0].TextSource);
-        Assert.Contains("hl:2:", cues[0].AnchorKey);
+        Assert.Contains("hl2:2:", cues[0].AnchorKey);
+        Assert.Contains("hl:2:", cues[0].LegacyAnchorKey);
         Assert.Null(cues[1].HighlightId);
-        Assert.StartsWith("txt:2:", cues[1].AnchorKey);
+        Assert.StartsWith("txt2:2:", cues[1].AnchorKey);
+        Assert.StartsWith("txt:2:", cues[1].LegacyAnchorKey);
         Assert.Equal(sentences[1].Id, cues[1].SentenceId);
     }
 
@@ -146,9 +148,10 @@ public class ShadowingHighlightSourceTests
         var cue = Assert.Single(cues);
         Assert.Equal("manual", cue.HighlightId);
         Assert.Equal("highlight", cue.TextSource);
+        Assert.StartsWith("hl2:3:", cue.AnchorKey);
         Assert.StartsWith(
             ShadowingHighlightSource.BuildAnchorKey(manual, 0) + "|",
-            cue.AnchorKey);
+            cue.LegacyAnchorKey);
     }
 
     [Fact]
@@ -160,7 +163,8 @@ public class ShadowingHighlightSourceTests
 
         var cue = Assert.Single(cues);
         Assert.Equal("page-text", cue.TextSource);
-        Assert.Equal($"txt:9:{sentences[0].Id}", cue.AnchorKey);
+        Assert.StartsWith("txt2:9:", cue.AnchorKey);
+        Assert.Equal($"txt:9:{sentences[0].Id}", cue.LegacyAnchorKey);
     }
 
     private static PdfHighlight Highlight(string id, int page, float y, string? text, float x = 0.1f)

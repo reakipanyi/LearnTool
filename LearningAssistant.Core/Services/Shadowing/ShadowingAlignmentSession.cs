@@ -137,7 +137,7 @@ namespace LearningAssistant.Services.Shadowing
         }
 
         /// <summary>
-        /// 按锚点、高亮 ID 或文案顺序找回旧切片，复用其 ID 与 take。
+        /// 按 V2 锚点、V1 兼容锚点、高亮 ID 顺序找回旧切片，复用其 ID 与 take。
         /// 旧版匿名切片没有锚点，不会被自动复用。
         /// </summary>
         public ShadowingSegment? FindExisting(ShadowingCue cue)
@@ -145,27 +145,35 @@ namespace LearningAssistant.Services.Shadowing
             if (cue == null)
                 return null;
 
-            if (!string.IsNullOrWhiteSpace(cue.AnchorKey))
+            // 与对账器 P1–P3 完全一致的口径（V2 锚点 → V1 兼容锚点 → HighlightId+Part），
+            // 不做文本兜底：无锚点的极旧数据在打点期不自动复用，统一由对账上报后走「重新对齐」
+            ShadowingSegment? best = null;
+            int bestPriority = int.MaxValue;
+            foreach (var segment in _existingSegments)
             {
-                var byAnchor = _existingSegments.FirstOrDefault(segment =>
-                    string.Equals(segment.HighlightAnchor, cue.AnchorKey, StringComparison.Ordinal));
-                if (byAnchor != null)
-                    return byAnchor;
+                int priority = ShadowingCueReconciler.MatchPriority(cue, segment);
+                if (priority == 0)
+                    continue;
+
+                if (best == null
+                    || priority < bestPriority
+                    || (priority == bestPriority && ComparePrimary(segment, best) < 0))
+                {
+                    best = segment;
+                    bestPriority = priority;
+                }
             }
 
-            if (!string.IsNullOrWhiteSpace(cue.HighlightId))
-            {
-                var byHighlight = _existingSegments.FirstOrDefault(segment =>
-                    string.Equals(segment.HighlightId, cue.HighlightId, StringComparison.Ordinal)
-                    && segment.CuePartIndex == cue.PartIndex);
-                if (byHighlight != null)
-                    return byHighlight;
-            }
+            return best;
+        }
 
-            // 页面文字没有高亮时，用句子 ID 生成的锚点通常已经命中；这里再兜底一次文案匹配
-            return _existingSegments.FirstOrDefault(segment =>
-                segment.CuePartIndex == cue.PartIndex
-                && string.Equals(segment.Text, cue.Text, StringComparison.Ordinal));
+        // 与对账器主候选排序一致：SlicePath 非空 > 有 Takes > Id 字典序
+        private static int ComparePrimary(ShadowingSegment a, ShadowingSegment b)
+        {
+            int scoreA = (string.IsNullOrWhiteSpace(a.SlicePath) ? 0 : 2) + (a.Takes?.Count > 0 ? 1 : 0);
+            int scoreB = (string.IsNullOrWhiteSpace(b.SlicePath) ? 0 : 2) + (b.Takes?.Count > 0 ? 1 : 0);
+            int cmp = scoreB.CompareTo(scoreA);
+            return cmp != 0 ? cmp : string.CompareOrdinal(a.Id, b.Id);
         }
     }
 }
