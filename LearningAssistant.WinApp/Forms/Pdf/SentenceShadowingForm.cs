@@ -93,6 +93,9 @@ namespace LearningAssistant.Forms.Pdf
             public int PageIndex { get; init; }
             public string Text { get; init; } = string.Empty;
             public ShadowingAudioState State { get; set; } = ShadowingAudioState.Pending;
+            /// <summary>切片模式的对账徽标状态；null 表示无对账（文字模式/无对齐上下文/整本）。</summary>
+            public CueBindingStatus? BindingStatus { get; init; }
+            public CueUnboundReason? UnboundReason { get; init; }
         }
 
         /// <summary>是否为整本高亮跟读模式。</summary>
@@ -300,16 +303,38 @@ namespace LearningAssistant.Forms.Pdf
             _bindingsDrift = result;
         }
 
+        /// <summary>当前来源的行列表：行恒等于 cue（I1）；无对齐上下文时回退页面分句。</summary>
         private IReadOnlyList<ShadowingSentence> ActiveSentences()
-            => _segmentMode ? BuildSegmentSentences() : _textSentences;
+        {
+            if (_segmentMode)
+                return BuildSegmentSentences();
+            return _alignmentCues.Count > 0 ? BuildCueSentences() : _textSentences;
+        }
 
-        /// <summary>切片模式下的预设音频路径（null 表示该段缺切片，需回退 TTS）。</summary>
-        private IReadOnlyList<string?> BuildSegmentPresets()
-            => _segments.Select(s =>
+        /// <summary>文字模式行同样由 cue 生成：Id = cue.AnchorKey（录音/评分键），Text = cue.Text。</summary>
+        private List<ShadowingSentence> BuildCueSentences()
+            => _alignmentCues.Select((cue, index) => new ShadowingSentence
             {
-                string path = _segmentStore.ResolvePath(s.SlicePath);
-                return File.Exists(path) ? path : null;
+                Id = cue.AnchorKey,
+                Index = index,
+                Text = cue.Text
             }).ToList();
+
+        /// <summary>切片模式下的预设音频路径：按 cue 顺序取绑定切片，未绑定/缺文件为 null（回退 TTS）。</summary>
+        private IReadOnlyList<string?> BuildSegmentPresets()
+        {
+            string? Resolve(ShadowingSegment? segment)
+            {
+                if (segment == null)
+                    return null;
+                string path = _segmentStore.ResolvePath(segment.SlicePath);
+                return File.Exists(path) ? path : null;
+            }
+
+            return _bindings.Count > 0
+                ? _bindings.Select(b => Resolve(b.Segment)).ToList()
+                : _segments.Select(s => Resolve(s)).ToList();
+        }
 
         /// <summary>按当前来源重建练习服务、列表与录音/评分缓存。</summary>
         private void ApplyActiveSource(bool play = false)
@@ -401,8 +426,20 @@ namespace LearningAssistant.Forms.Pdf
             }
         }
 
+        /// <summary>切片模式行同样按 cue 生成（经绑定表）；无 cue 时回退旧行为（行=切片）。</summary>
         private List<ShadowingSentence> BuildSegmentSentences()
-            => _segments.Select((segment, index) => new ShadowingSentence
+        {
+            if (_bindings.Count > 0)
+            {
+                return _bindings.Select((binding, index) => new ShadowingSentence
+                {
+                    Id = binding.Cue.AnchorKey,
+                    Index = index,
+                    Text = binding.Cue.Text
+                }).ToList();
+            }
+
+            return _segments.Select((segment, index) => new ShadowingSentence
             {
                 Id = segment.Id,
                 Index = index,
@@ -410,6 +447,7 @@ namespace LearningAssistant.Forms.Pdf
                     ? $"第 {index + 1} 段 · {ShadowingMarkSession.FormatTimestamp(segment.StartMs)}"
                     : segment.Text!
             }).ToList();
+        }
 
         /// <summary>恢复该页上次练到的切片与播放模式。</summary>
         private int ResolveInitialIndex()
@@ -433,10 +471,22 @@ namespace LearningAssistant.Forms.Pdf
 
                 if (!string.IsNullOrWhiteSpace(page.LastSegmentId))
                 {
-                    for (int i = 0; i < _segments.Count; i++)
+                    // 行按 cue 排序，进度经绑定表反查；无 cue 时回退按 _segments 下标
+                    if (_bindings.Count > 0)
                     {
-                        if (string.Equals(_segments[i].Id, page.LastSegmentId, StringComparison.Ordinal))
-                            return i;
+                        for (int i = 0; i < _bindings.Count; i++)
+                        {
+                            if (string.Equals(_bindings[i].Segment?.Id, page.LastSegmentId, StringComparison.Ordinal))
+                                return i;
+                        }
+                    }
+                    else
+                    {
+                        for (int i = 0; i < _segments.Count; i++)
+                        {
+                            if (string.Equals(_segments[i].Id, page.LastSegmentId, StringComparison.Ordinal))
+                                return i;
+                        }
                     }
                 }
             }
@@ -523,8 +573,27 @@ namespace LearningAssistant.Forms.Pdf
         {
             if (!_segmentMode || _practice == null || _currentIndex < 0)
                 return null;
-            string id = _practice.Sentences[_currentIndex].Sentence.Id;
-            return _segments.FirstOrDefault(s => string.Equals(s.Id, id, StringComparison.Ordinal));
+            return SegmentForRow(_currentIndex);
+        }
+
+        /// <summary>行下标 → 绑定切片（行 Id 已是 cue.AnchorKey，按 Id 反查 _segments 会落空）；无 cue 时回退按下标取 _segments。</summary>
+        private ShadowingSegment? SegmentForRow(int rowIndex)
+        {
+            if (rowIndex < 0)
+                return null;
+            if (_bindings.Count > 0)
+                return rowIndex < _bindings.Count ? _bindings[rowIndex].Segment : null;
+            return rowIndex < _segments.Count ? _segments[rowIndex] : null;
+        }
+
+        /// <summary>行录音/评分缓存键：切片模式用切片 ID（takes 与切片同生死），文字模式用行 ID（锚点）。</summary>
+        private string? RecordingKeyForRow(int rowIndex)
+        {
+            if (rowIndex < 0 || _practice == null || rowIndex >= _practice.Sentences.Count)
+                return null;
+            if (_segmentMode)
+                return SegmentForRow(rowIndex)?.Id;
+            return _practice.Sentences[rowIndex].Sentence.Id;
         }
 
         /// <summary>把该段当前 take 的路径与分数同步到列表字典，供行徽标与回放使用。</summary>
@@ -1112,9 +1181,11 @@ namespace LearningAssistant.Forms.Pdf
                 // 保存后按 cue 顺序重建绑定表与切片列表（I4）：顺序只由 cue 决定，不再按 StartMs 排序
                 _bindings = reconciled.Bindings;
                 _bindingsDrift = reconciled;
+                // _segments 保持全量（含孤立切片），否则下次保存清单会静默丢记录；清理只能由用户显式触发
                 _segments = _bindings
                     .Where(b => b.Segment != null)
                     .Select(b => b.Segment!)
+                    .Concat(reconciled.Orphans)
                     .ToList();
                 _segmentMode = _segments.Count > 0;
                 ExitAlignmentMode();
@@ -1347,16 +1418,45 @@ namespace LearningAssistant.Forms.Pdf
 
             if (row == null) return;
 
-            Color dotColor = row.State switch
+            var dotBounds = new Rectangle(bounds.X + 12, bounds.Y + 19, 10, 10);
+            if (row.BindingStatus is { } bindingStatus)
             {
-                ShadowingAudioState.Synthesizing => PdfSidebarTheme.Brand,
-                ShadowingAudioState.Ready => PdfSidebarTheme.Success,
-                ShadowingAudioState.Failed => PdfSidebarTheme.Danger,
-                _ => palette.Muted
-            };
+                // 对账徽标：原声=品牌色实心，缺切片=橙色描边，已跳过=灰色实心，未对齐=淡灰虚线
+                switch (bindingStatus)
+                {
+                    case CueBindingStatus.Matched:
+                    case CueBindingStatus.Ambiguous:
+                        using (var brush = new SolidBrush(PdfSidebarTheme.Brand))
+                            e.Graphics.FillEllipse(brush, dotBounds);
+                        break;
+                    case CueBindingStatus.MissingSlice:
+                        using (var pen = new Pen(Color.FromArgb(245, 158, 11), 1.5f))
+                            e.Graphics.DrawEllipse(pen, dotBounds);
+                        break;
+                    case CueBindingStatus.Unbound when row.UnboundReason == CueUnboundReason.Skipped:
+                        using (var brush = new SolidBrush(palette.Muted))
+                            e.Graphics.FillEllipse(brush, dotBounds);
+                        break;
+                    default:
+                        using (var pen = new Pen(palette.Border, 1.2f)
+                               { DashStyle = System.Drawing.Drawing2D.DashStyle.Dash })
+                            e.Graphics.DrawEllipse(pen, dotBounds);
+                        break;
+                }
+            }
+            else
+            {
+                Color dotColor = row.State switch
+                {
+                    ShadowingAudioState.Synthesizing => PdfSidebarTheme.Brand,
+                    ShadowingAudioState.Ready => PdfSidebarTheme.Success,
+                    ShadowingAudioState.Failed => PdfSidebarTheme.Danger,
+                    _ => palette.Muted
+                };
 
-            using (var dot = new SolidBrush(dotColor))
-                e.Graphics.FillEllipse(dot, bounds.X + 12, bounds.Y + 19, 10, 10);
+                using (var dot = new SolidBrush(dotColor))
+                    e.Graphics.FillEllipse(dot, dotBounds);
+            }
 
             var indexFont = new Font("Consolas", 10.5F, FontStyle.Bold);
             TextRenderer.DrawText(e.Graphics, $"{row.Index + 1:00}", indexFont,
@@ -1379,20 +1479,49 @@ namespace LearningAssistant.Forms.Pdf
             };
             if (_segmentMode)
             {
-                stateText = row.State switch
+                if (row.BindingStatus is { } rowBinding)
                 {
-                    ShadowingAudioState.Ready => "原声切片",
-                    ShadowingAudioState.Failed => "缺切片",
-                    ShadowingAudioState.Synthesizing => "回退合成中",
-                    _ => "待读"
-                };
-                if (_practice != null && row.Index < _practice.Sentences.Count)
+                    // 有对账：徽标文字区分 原声 / 缺切片 / 已跳过 / 未对齐
+                    stateText = rowBinding switch
+                    {
+                        CueBindingStatus.Matched or CueBindingStatus.Ambiguous => "原声切片",
+                        CueBindingStatus.MissingSlice => "缺切片",
+                        CueBindingStatus.Unbound when row.UnboundReason == CueUnboundReason.Skipped => "已跳过",
+                        _ => "未对齐"
+                    };
+                    if (_practice != null && row.Index < _practice.Sentences.Count
+                        && _practice.Sentences[row.Index].IsTtsFallback
+                        && rowBinding is CueBindingStatus.MissingSlice or CueBindingStatus.Unbound)
+                    {
+                        stateText += " · TTS";
+                    }
+                    var boundSegment = SegmentForRow(row.Index);
+                    if (boundSegment is { Takes.Count: > 0 })
+                        stateText += $" · {boundSegment.Takes.Count} 次";
+                }
+                else
                 {
-                    var state = _practice.Sentences[row.Index];
-                    if (state.IsTtsFallback)
-                        stateText = "TTS 回退";
-                    else if (row.Index < _segments.Count && _segments[row.Index].Takes.Count > 0)
-                        stateText += $" · {_segments[row.Index].Takes.Count} 次";
+                    stateText = row.State switch
+                    {
+                        ShadowingAudioState.Ready => "原声切片",
+                        ShadowingAudioState.Failed => "缺切片",
+                        ShadowingAudioState.Synthesizing => "回退合成中",
+                        _ => "待读"
+                    };
+                    if (_practice != null && row.Index < _practice.Sentences.Count)
+                    {
+                        var state = _practice.Sentences[row.Index];
+                        if (state.IsTtsFallback)
+                        {
+                            stateText = "TTS 回退";
+                        }
+                        else
+                        {
+                            var segment = SegmentForRow(row.Index);
+                            if (segment is { Takes.Count: > 0 })
+                                stateText += $" · {segment.Takes.Count} 次";
+                        }
+                    }
                 }
             }
             if (_wholeBook)
@@ -1404,8 +1533,8 @@ namespace LearningAssistant.Forms.Pdf
 
             if (_practice != null && row.Index < _practice.Sentences.Count)
             {
-                string id = _practice.Sentences[row.Index].Sentence.Id;
-                if (_sentenceScores.TryGetValue(id, out int score))
+                string? id = RecordingKeyForRow(row.Index);
+                if (id != null && _sentenceScores.TryGetValue(id, out int score))
                 {
                     var badge = new Rectangle(bounds.Right - 58, bounds.Y + 10, 48, 22);
                     using var badgePath = GdiHelper.CreateRoundedRectPath(badge, 11);
@@ -1433,10 +1562,29 @@ namespace LearningAssistant.Forms.Pdf
                 for (int i = 0; i < sentences.Count; i++)
                 {
                     var state = ShadowingAudioState.Pending;
-                    if (_segmentMode && i < _segments.Count)
+                    CueBindingStatus? bindingStatus = null;
+                    CueUnboundReason? unboundReason = null;
+                    if (_segmentMode)
                     {
-                        string slice = _segmentStore.ResolvePath(_segments[i].SlicePath);
-                        state = File.Exists(slice) ? ShadowingAudioState.Ready : ShadowingAudioState.Failed;
+                        if (i < _bindings.Count)
+                        {
+                            // 徽标由对账状态决定：命中=原声，缺文件=缺切片，未绑定=待读
+                            var binding = _bindings[i];
+                            bindingStatus = binding.Status;
+                            unboundReason = binding.UnboundReason;
+                            state = binding.Status switch
+                            {
+                                CueBindingStatus.Matched or CueBindingStatus.Ambiguous => ShadowingAudioState.Ready,
+                                CueBindingStatus.MissingSlice => ShadowingAudioState.Failed,
+                                _ => ShadowingAudioState.Pending
+                            };
+                        }
+                        else if (_bindings.Count == 0 && i < _segments.Count)
+                        {
+                            // 无 cue（无对齐上下文）回退：按下标判断切片文件
+                            string slice = _segmentStore.ResolvePath(_segments[i].SlicePath);
+                            state = File.Exists(slice) ? ShadowingAudioState.Ready : ShadowingAudioState.Failed;
+                        }
                     }
 
                     _listSentences.Items.Add(new SentenceRow
@@ -1446,7 +1594,9 @@ namespace LearningAssistant.Forms.Pdf
                             ? _sentencePageIndexes[i]
                             : _pageIndex,
                         Text = sentences[i].Text,
-                        State = state
+                        State = state,
+                        BindingStatus = bindingStatus,
+                        UnboundReason = unboundReason
                     });
                 }
             }
@@ -1465,7 +1615,7 @@ namespace LearningAssistant.Forms.Pdf
                 : _wholeBook
                     ? $"整本 · 共 {sentences.Count} 条高亮"
                     : _segmentMode
-                        ? $"第 {_pageIndex + 1} 页 · 共 {sentences.Count} 段原声"
+                        ? $"第 {_pageIndex + 1} 页 · 共 {sentences.Count} 句（原声跟读）"
                         : $"第 {_pageIndex + 1} 页 · 共 {sentences.Count} 句";
 
             if (sentences.Count == 0)
@@ -1529,6 +1679,8 @@ namespace LearningAssistant.Forms.Pdf
 
         /// <summary>
         /// 载入该页上次保存的句子录音路径，丢弃已不存在或已失效的句子。
+        /// 历史键兼容（5.8）：先按行 Id（cue.AnchorKey）匹配，未命中回退 sentence.Id（惰性，不写回）；
+        /// 切片模式的 take 缓存键保持 segment.Id 不动（SyncSegmentTake），不在此迁移。
         /// </summary>
         private void LoadSentenceRecordings(IReadOnlyList<ShadowingSentence> sentences)
         {
@@ -1538,14 +1690,24 @@ namespace LearningAssistant.Forms.Pdf
             try
             {
                 var validIds = new HashSet<string>(sentences.Select(s => s.Id), StringComparer.Ordinal);
+                var anchorByLegacyId = BuildLegacyRecordingKeyMap();
                 foreach (int pageIndex in RecordingPages())
                 {
                     var saved = _store.LoadSentenceRecordings(_pdfPath, pageIndex);
                     foreach (var pair in saved)
                     {
-                        if (!validIds.Contains(pair.Key) || !File.Exists(pair.Value))
+                        if (!File.Exists(pair.Value))
                             continue;
-                        _sentenceRecordings[pair.Key] = pair.Value;
+                        if (validIds.Contains(pair.Key))
+                        {
+                            _sentenceRecordings[pair.Key] = pair.Value;
+                        }
+                        else if (anchorByLegacyId.TryGetValue(pair.Key, out string? anchor)
+                                 && validIds.Contains(anchor)
+                                 && !_sentenceRecordings.ContainsKey(anchor))
+                        {
+                            _sentenceRecordings[anchor] = pair.Value;
+                        }
                     }
                 }
             }
@@ -1553,6 +1715,21 @@ namespace LearningAssistant.Forms.Pdf
             {
                 Trace.TraceWarning($"[SentenceShadowing] 读取跟读录音失败: {ex.Message}");
             }
+        }
+
+        /// <summary>旧录音/评分键（sentence.Id）→ 新键（cue.AnchorKey）的惰性回退映射；无 cue 时为空。</summary>
+        private Dictionary<string, string> BuildLegacyRecordingKeyMap()
+        {
+            var map = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (var cue in _alignmentCues)
+            {
+                if (!string.IsNullOrWhiteSpace(cue.SentenceId)
+                    && !string.Equals(cue.SentenceId, cue.AnchorKey, StringComparison.Ordinal))
+                {
+                    map.TryAdd(cue.SentenceId, cue.AnchorKey);
+                }
+            }
+            return map;
         }
 
         /// <summary>
@@ -1566,14 +1743,24 @@ namespace LearningAssistant.Forms.Pdf
             try
             {
                 var validIds = new HashSet<string>(sentences.Select(s => s.Id), StringComparer.Ordinal);
+                var anchorByLegacyId = BuildLegacyRecordingKeyMap();
                 foreach (int pageIndex in RecordingPages())
                 {
                     var saved = _store.LoadSentenceScores(_pdfPath, pageIndex);
                     foreach (var pair in saved)
                     {
-                        if (!validIds.Contains(pair.Key) || pair.Value < 0 || pair.Value > 100)
+                        if (pair.Value < 0 || pair.Value > 100)
                             continue;
-                        _sentenceScores[pair.Key] = pair.Value;
+                        if (validIds.Contains(pair.Key))
+                        {
+                            _sentenceScores[pair.Key] = pair.Value;
+                        }
+                        else if (anchorByLegacyId.TryGetValue(pair.Key, out string? anchor)
+                                 && validIds.Contains(anchor)
+                                 && !_sentenceScores.ContainsKey(anchor))
+                        {
+                            _sentenceScores[anchor] = pair.Value;
+                        }
                     }
                 }
             }
@@ -1662,11 +1849,9 @@ namespace LearningAssistant.Forms.Pdf
 
         private void UpdateReplayButtonState()
         {
-            bool available = _practice != null
-                             && _currentIndex >= 0
-                             && _currentIndex < _practice.Sentences.Count
-                             && _sentenceRecordings.TryGetValue(
-                                 _practice.Sentences[_currentIndex].Sentence.Id, out var path)
+            string? key = RecordingKeyForRow(_currentIndex);
+            bool available = key != null
+                             && _sentenceRecordings.TryGetValue(key, out var path)
                              && File.Exists(path);
             _btnReplayRecording.Enabled = available;
             UpdateTakeButtons();
@@ -1686,7 +1871,7 @@ namespace LearningAssistant.Forms.Pdf
             _btnTakePreview.Enabled = hasTake;
             _btnTakeDelete.Enabled = hasTake;
             _btnTakeChoose.Enabled = hasTake && CurrentTake(segment!)!.ChosenManual == false;
-            _btnCompose.Enabled = _segments.Any(s => CurrentTake(s) != null);
+            _btnCompose.Enabled = BoundSegmentsInCueOrder().Any(s => CurrentTake(s) != null);
         }
 
         private void PreviewCurrentTake()
@@ -1773,8 +1958,17 @@ namespace LearningAssistant.Forms.Pdf
             }
         }
 
+        /// <summary>合成用句间静音：跳过句不留空洞，紧邻拼接后句间仅 0.12s 间隔（不提供开关）。</summary>
+        private const int ComposeGapMs = 120;
+
+        /// <summary>按 cue 顺序返回已绑定的切片（孤立切片不参与合成）；无 cue 时回退为 _segments 原序。</summary>
+        private IEnumerable<ShadowingSegment> BoundSegmentsInCueOrder()
+            => _bindings.Count > 0
+                ? _bindings.Where(b => b.Segment != null).Select(b => b.Segment!)
+                : _segments;
+
         /// <summary>
-        /// 合成本页成品：按段序拼接所有“采用”的 take，段间 400ms 静音；
+        /// 合成本页成品：按 cue 顺序紧邻拼接所有“采用”的 take（跳过句不留空洞），句间 120ms 静音；
         /// 清单记录 segmentRefs/takeRefs，源 take 删除后仍可追溯。
         /// </summary>
         private async Task ComposePageAsync()
@@ -1783,7 +1977,7 @@ namespace LearningAssistant.Forms.Pdf
                 return;
 
             var items = new List<ShadowingComposeItem>();
-            foreach (var segment in _segments)
+            foreach (var segment in BoundSegmentsInCueOrder())
             {
                 var take = CurrentTake(segment);
                 if (take == null)
@@ -1805,7 +1999,7 @@ namespace LearningAssistant.Forms.Pdf
             {
                 string relative = _segmentStore.AllocateComposedRelativePath(_pageIndex, DateTime.Now);
                 string output = _segmentStore.ResolvePath(relative);
-                var result = await _composer.ComposeAsync(output, items);
+                var result = await _composer.ComposeAsync(output, items, ComposeGapMs);
 
                 if (!result.Success)
                 {
@@ -1840,7 +2034,7 @@ namespace LearningAssistant.Forms.Pdf
             }
             finally
             {
-                _btnCompose.Enabled = _segments.Any(s => CurrentTake(s) != null);
+                _btnCompose.Enabled = BoundSegmentsInCueOrder().Any(s => CurrentTake(s) != null);
             }
         }
 
@@ -1892,8 +2086,8 @@ namespace LearningAssistant.Forms.Pdf
                 return;
             }
 
-            string id = _practice.Sentences[_currentIndex].Sentence.Id;
-            if (_sentenceScores.TryGetValue(id, out int score))
+            string? id = RecordingKeyForRow(_currentIndex);
+            if (id != null && _sentenceScores.TryGetValue(id, out int score))
                 _labelScore.Text = $"参考分：{score} / 100";
             else
                 _labelScore.Text = _scorer?.IsAvailable == true
@@ -1906,8 +2100,8 @@ namespace LearningAssistant.Forms.Pdf
             if (_practice == null || _currentIndex < 0 || _currentIndex >= _practice.Sentences.Count)
                 return;
 
-            var sentence = _practice.Sentences[_currentIndex].Sentence;
-            if (!_sentenceRecordings.TryGetValue(sentence.Id, out var path) || !File.Exists(path))
+            string? key = RecordingKeyForRow(_currentIndex);
+            if (key == null || !_sentenceRecordings.TryGetValue(key, out var path) || !File.Exists(path))
             {
                 _labelStatus.Text = "当前句还没有录音，可点击「🎤 录音」开始跟读。";
                 return;
@@ -2391,11 +2585,10 @@ namespace LearningAssistant.Forms.Pdf
             if (_practice == null)
                 return;
 
-            var sentence = _practice.Sentences[index].Sentence;
-            var segment = _segments.FirstOrDefault(s => string.Equals(s.Id, sentence.Id, StringComparison.Ordinal));
+            var segment = SegmentForRow(index);
             if (segment == null)
             {
-                _labelStatus.Text = "找不到该时间戳对应的原声切片。";
+                _labelStatus.Text = "该句没有绑定的原声切片，录音未保存；可切换到文字跟读。";
                 return;
             }
 
