@@ -38,6 +38,8 @@ namespace LearningAssistant.Forms.Pdf
                 ? HumanizeAnchors(_response.Content)
                 : (_response.ErrorMessage ?? "未知错误");
 
+            UpdateMetaLine();
+
             if (_addToEditor != null && _response.Success)
             {
                 var editorButton = CreateSecondaryButton("添加到编辑器");
@@ -65,6 +67,38 @@ namespace LearningAssistant.Forms.Pdf
         }
 
         private void ButtonClose_Click(object? sender, EventArgs e) => Close();
+
+        /// <summary>
+        /// 结果元信息：模型、本次覆盖页数与未覆盖提示，让用户知道答案基于多少内容生成。
+        /// </summary>
+        private void UpdateMetaLine()
+        {
+            if (!_response.Success)
+            {
+                labelMeta.Text = string.Empty;
+                return;
+            }
+
+            var parts = new List<string>();
+            if (!string.IsNullOrWhiteSpace(_response.ModelId))
+                parts.Add($"模型 {_response.ModelId}");
+            if (_response.TotalPages > 0)
+                parts.Add($"覆盖 {_response.CoveredPages}/{_response.TotalPages} 页");
+
+            if (!string.IsNullOrWhiteSpace(_response.CoverageWarning))
+            {
+                parts.Add(_response.CoverageWarning);
+                labelMeta.ForeColor = Color.FromArgb(180, 95, 0);
+            }
+
+            if (!string.IsNullOrWhiteSpace(_response.CitationWarning))
+            {
+                parts.Add(_response.CitationWarning);
+                labelMeta.ForeColor = Color.FromArgb(180, 95, 0);
+            }
+
+            labelMeta.Text = string.Join(" · ", parts);
+        }
 
         private void PdfAiAnswerDialog_KeyDown(object? sender, KeyEventArgs e)
         {

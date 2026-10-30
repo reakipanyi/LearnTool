@@ -210,6 +210,53 @@ public class PdfTextBlockBuilderTests
         Assert.InRange(block.Y + block.Height, 0f, 1f);
     }
 
+    [Fact]
+    public void Build_LowercaseContinuationAfterPeriod_StillMerges()
+    {
+        // 上一行以缩写/小数点结尾（如 etc.），下一行小写开头说明句子未结束
+        var lines = new[]
+        {
+            Line("The result is shown in etc.", 0.1f, 0.10f, 0.5f, 0.02f),
+            Line("the value increases over time.", 0.1f, 0.125f, 0.5f, 0.02f)
+        };
+
+        var blocks = PdfTextBlockBuilder.Build(lines);
+
+        var block = Assert.Single(blocks);
+        Assert.Contains("etc. the value", block.Text);
+    }
+
+    [Fact]
+    public void Build_LowercaseContinuationMisaligned_StillMerges()
+    {
+        // 续行左边缘与上一块不齐（轻微缩进/提取误差），小写开头仍应合并
+        var lines = new[]
+        {
+            Line("This is a long paragraph line that wraps", 0.1f, 0.10f, 0.6f, 0.02f),
+            Line("onto the next line with a slight indent.", 0.2f, 0.125f, 0.5f, 0.02f)
+        };
+
+        var blocks = PdfTextBlockBuilder.Build(lines);
+
+        var block = Assert.Single(blocks);
+        Assert.Contains("wraps onto the next line", block.Text);
+    }
+
+    [Fact]
+    public void Build_UppercaseAfterSentenceEnd_StillSplits()
+    {
+        // 句末 + 大写开头：仍是新句子/新段落，不受小写续行规则影响
+        var lines = new[]
+        {
+            Line("First sentence ends here.", 0.1f, 0.10f, 0.5f, 0.02f),
+            Line("Second sentence starts now.", 0.1f, 0.125f, 0.5f, 0.02f)
+        };
+
+        var blocks = PdfTextBlockBuilder.Build(lines);
+
+        Assert.Equal(2, blocks.Count);
+    }
+
     private static PdfTextLine Line(string text, float x, float y, float width, float height)
     {
         return new PdfTextLine

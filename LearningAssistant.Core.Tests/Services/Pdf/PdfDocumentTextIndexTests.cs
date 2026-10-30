@@ -167,6 +167,7 @@ public class PdfDocumentTextIndexTests
         public string? Result { get; set; }
         public bool IsAvailable => true;
         public string? InitErrorMessage => null;
+        public string CurrentLanguage => "eng";
         public Task<string?> RecognizeTextAsync(byte[] image) => Task.FromResult(Result);
         public Task<string?> RecognizeTextAsync(byte[] image, RectInt region) => Task.FromResult(Result);
         public Task<string?> RecognizeTextWithAutoLanguageAsync(byte[] image) => Task.FromResult(Result);

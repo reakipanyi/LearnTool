@@ -56,6 +56,19 @@ namespace LearningAssistant.Services.Pdf
         }
 
         /// <inheritdoc />
+        public long TotalBytes
+        {
+            get
+            {
+                lock (_gate)
+                {
+                    EnsureLoaded();
+                    return _totalBytes;
+                }
+            }
+        }
+
+        /// <inheritdoc />
         public string BuildKey(
             string fingerprint,
             IEnumerable<int> pageIndexes,
@@ -68,7 +81,46 @@ namespace LearningAssistant.Services.Pdf
             var pages = string.Join(",", pageIndexes.Where(p => p > 0).Distinct().OrderBy(p => p));
             var raw = $"{fingerprint}|{pages}|{feature}|{language}|{promptVersion}|{model}|{extra}";
             var hash = SHA256.HashData(Encoding.UTF8.GetBytes(raw));
-            return Convert.ToHexString(hash)[..40].ToLowerInvariant();
+            // 前 8 位为文档指纹标签，使“清理当前文档缓存”可以按前缀定位
+            return $"{BuildFingerprintTag(fingerprint)}-{Convert.ToHexString(hash)[..40].ToLowerInvariant()}";
+        }
+
+        /// <summary>文档指纹标签：SHA256 前 8 位，稳定且不含路径特殊字符</summary>
+        private static string BuildFingerprintTag(string fingerprint)
+        {
+            var source = fingerprint ?? string.Empty;
+            return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(source)))[..8].ToLowerInvariant();
+        }
+
+        /// <inheritdoc />
+        public int ClearByFingerprint(string fingerprint)
+        {
+            lock (_gate)
+            {
+                EnsureLoaded();
+
+                var prefix = BuildFingerprintTag(fingerprint) + "-";
+                var targets = _entries.Keys.Where(k => k.StartsWith(prefix, StringComparison.Ordinal)).ToList();
+                foreach (var key in targets)
+                    RemoveEntry(key);
+
+                _logger?.LogInformation("清理文档 AI 缓存 {Count} 条", targets.Count);
+                return targets.Count;
+            }
+        }
+
+        /// <inheritdoc />
+        public void ClearAll()
+        {
+            lock (_gate)
+            {
+                EnsureLoaded();
+
+                foreach (var key in _entries.Keys.ToList())
+                    RemoveEntry(key);
+
+                _logger?.LogInformation("已清空全部 PDF AI 缓存");
+            }
         }
 
         /// <inheritdoc />

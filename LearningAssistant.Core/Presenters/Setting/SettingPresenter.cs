@@ -1,6 +1,7 @@
 using LearningAssistant.Abstractions;
 using LearningAssistant.Common;
 using LearningAssistant.Models.Config;
+using LearningAssistant.Services.AI;
 using LearningAssistant.Services.Persistence;
 using LearningAssistant.Services.TTS;
 using LearningAssistant.Views;
@@ -133,6 +134,9 @@ namespace LearningAssistant.Presenters
                 _persistenceService.SaveConfig(_appConfig);
                 _persistenceService.PersistCache();
 
+                // AI 服务是启动时按当时配置创建的单例，保存后必须重建，否则新 Key/模型/地址要重启才生效
+                NotifyAiServiceSettingsChanged();
+
                 if (!string.Equals(oldVoice, _appConfig.TtsConfig.Voice, StringComparison.OrdinalIgnoreCase) ||
                     !string.Equals(oldProvider, _appConfig.TtsConfig.Provider, StringComparison.OrdinalIgnoreCase))
                 {
@@ -161,6 +165,23 @@ namespace LearningAssistant.Presenters
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "Failed to notify TTS service of settings change");
+            }
+        }
+
+        /// <summary>
+        /// 通知 AI 服务按最新配置重建，使保存后的 Key / 模型 / 地址立即生效。
+        /// </summary>
+        private void NotifyAiServiceSettingsChanged()
+        {
+            try
+            {
+                var aiService = _serviceProvider.GetService<IAIService>();
+                aiService?.Reload();
+                _logger.LogInformation("Notified AI service to reload settings");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to notify AI service of settings change");
             }
         }
 

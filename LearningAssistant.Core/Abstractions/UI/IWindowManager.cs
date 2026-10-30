@@ -31,5 +31,6 @@ namespace LearningAssistant.Abstractions
         void OpenFlexGameWindow();
         void OpenAttentionGameWindow();
         void OpenPlanGameWindow();
+        void OpenWrongAnswerWindow();
     }
 }

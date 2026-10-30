@@ -10,6 +10,7 @@ using LearningAssistant.Models.Learning;
 using LearningAssistant.Models.Learning.Status;
 using LearningAssistant.Models.Pdf;
 using LearningAssistant.Models.Practice;
+using LearningAssistant.Models.Quiz;
 using LearningAssistant.Presenters;
 using LearningAssistant.Services;
 using LearningAssistant.Services.AI;
@@ -17,6 +18,7 @@ using LearningAssistant.Services.Learning;
 using LearningAssistant.Services.Media;
 using LearningAssistant.Services.Pdf;
 using LearningAssistant.Services.Practice;
+using LearningAssistant.Services.Quiz;
 using LearningAssistant.Models.Shadowing;
 using LearningAssistant.Services.Shadowing;
 using LearningAssistant.Views;
@@ -48,6 +50,8 @@ namespace LearningAssistant.Forms.Pdf
         private readonly Services.Learning.INoteService? _noteService;
         private readonly Services.Learning.IUserSessionService? _userSessionService;
         private readonly Services.Learning.IStudyEntryService? _studyEntryService;
+        private readonly IQuizEngineService? _quizEngineService;
+        private readonly IPdfAiCacheService? _pdfAiCacheService;
         private readonly AppConfig? _appConfig;
 
         // 本次会话是否已确认把整份文档文本发送给 AI 服务，避免每次操作重复弹窗
@@ -466,7 +470,7 @@ namespace LearningAssistant.Forms.Pdf
             _logger = Microsoft.Extensions.Logging.Abstractions.NullLogger<PdfReaderForm>.Instance;
         }
 
-        public PdfReaderForm(ILogger<PdfReaderForm> logger, IAIPanelPopupService? aiPanelPopupService = null, Services.Learning.IPendingContentService? pendingContentService = null, IHighlightService? highlightService = null, IAnnotationService? annotationService = null, IEventBus? eventBus = null, IAudioRecorderService? audioRecorderService = null, IPdfAiService? pdfAiService = null, IPdfDocumentTextIndex? documentTextIndex = null, Services.Learning.ISpacedRepetitionService? spacedRepetitionService = null, Services.Learning.INoteService? noteService = null, Services.Learning.IUserSessionService? userSessionService = null, Services.Learning.IStudyEntryService? studyEntryService = null, AppConfig? appConfig = null, IPdfAutoLayoutService? autoLayoutService = null)
+        public PdfReaderForm(ILogger<PdfReaderForm> logger, IAIPanelPopupService? aiPanelPopupService = null, Services.Learning.IPendingContentService? pendingContentService = null, IHighlightService? highlightService = null, IAnnotationService? annotationService = null, IEventBus? eventBus = null, IAudioRecorderService? audioRecorderService = null, IPdfAiService? pdfAiService = null, IPdfDocumentTextIndex? documentTextIndex = null, Services.Learning.ISpacedRepetitionService? spacedRepetitionService = null, Services.Learning.INoteService? noteService = null, Services.Learning.IUserSessionService? userSessionService = null, Services.Learning.IStudyEntryService? studyEntryService = null, AppConfig? appConfig = null, IPdfAutoLayoutService? autoLayoutService = null, IQuizEngineService? quizEngineService = null, IPdfAiCacheService? pdfAiCacheService = null)
         {
             InitializeComponent();
             WindowState = FormWindowState.Maximized;
@@ -484,6 +488,8 @@ namespace LearningAssistant.Forms.Pdf
             _noteService = noteService;
             _userSessionService = userSessionService;
             _studyEntryService = studyEntryService;
+            _quizEngineService = quizEngineService;
+            _pdfAiCacheService = pdfAiCacheService;
             _appConfig = appConfig;
             KeyPreview = true;
             Load += PdfReaderFormV2_Load;
@@ -520,6 +526,8 @@ namespace LearningAssistant.Forms.Pdf
             }
 
             _closeConfirmed = true;
+            // 窗口关闭后回包没有接收方，先取消仍在途的 AI 请求
+            _pdfAiRequestCts?.Cancel();
         }
 
         private void InitializeManagers()
@@ -3859,6 +3867,8 @@ namespace LearningAssistant.Forms.Pdf
             if (documentChanged)
             {
                 RestoreSidebarTabSelection();
+                // 会话历史按文档隔离，换文档后不能继续显示上一本的问答
+                _aiSidebar?.ResetForDocument();
                 // 面板原文/译文可能来自上一本文档的高亮或 OCR，先清空，
                 // 等 SetCurrentPageIndex 再从新文档的页缓存回显
                 SyncTranslationPanelToCurrentPage(restoreCachedEntry: false);
@@ -5202,8 +5212,11 @@ namespace LearningAssistant.Forms.Pdf
         {
             if (_wholeDocumentAiConfirmed) return true;
 
+            // 发送前给出具体规模，避免用户在不了解外发内容量时误确认
+            var preview = BuildAiUploadPreview();
             var result = MessageBox.Show(this,
                 $"{operation}会把整份文档的文本（含 OCR 结果）发送给 AI 服务。\n\n" +
+                $"{preview}\n\n" +
                 "如果文档包含敏感信息，建议改用“当前页”或“选中内容”范围。\n\n是否继续？",
                 "上传整份文档内容",
                 MessageBoxButtons.YesNo,
@@ -5214,6 +5227,165 @@ namespace LearningAssistant.Forms.Pdf
 
             _wholeDocumentAiConfirmed = true;
             return true;
+        }
+
+        /// <summary>
+        /// 汇总即将外发给 AI 的内容规模：可读页数、OCR 页数、无文本页数、字符总量与本次预算，
+        /// 供隐私确认弹窗展示；索引尚未建立时按未知处理。
+        /// </summary>
+        private string BuildAiUploadPreview()
+        {
+            var totalPages = _presenter?.PageCount ?? 0;
+            var index = string.IsNullOrWhiteSpace(_currentPdfPath)
+                ? null
+                : _documentTextIndex?.TryLoadCached(_currentPdfPath);
+
+            var pages = index?.Pages ?? new List<PdfTextIndexPage>();
+            var usablePages = pages.Count(p => p.CharacterCount > 0);
+            var ocrPages = pages.Count(p => p.Source == PdfTextSource.Ocr);
+            var emptyPages = Math.Max(0, totalPages - usablePages);
+            var totalChars = pages.Sum(p => p.CharacterCount);
+
+            // 与 PdfAiService 的裁剪口径一致：单页上限 × 页数，再受单次请求总预算约束
+            var aiOptions = new PdfAiOptions();
+            var budgetChars = Math.Min(totalChars, Math.Min(totalPages * aiOptions.MaxCharsPerPage, aiOptions.MaxTotalChars));
+
+            var provider = _appConfig?.AiConfig.Provider;
+            var model = string.IsNullOrWhiteSpace(provider)
+                ? string.Empty
+                : _appConfig!.AiConfig.ResolveEndpoint(provider!).Model;
+            var target = string.IsNullOrWhiteSpace(provider)
+                ? "未配置"
+                : string.IsNullOrWhiteSpace(model) ? provider : $"{provider}（{model}）";
+
+            var pageLine = totalPages > 0
+                ? $"将发送：{usablePages}/{totalPages} 页可读文本（其中 OCR 识别 {ocrPages} 页，无文本 {emptyPages} 页）"
+                : "将发送：文档文本（页数与字符数暂不可用）";
+
+            return $"{pageLine}\n" +
+                   $"字符规模：全文 {totalChars:N0} 字，本次预算约 {budgetChars:N0} 字\n" +
+                   $"目标服务：{target}";
+        }
+
+        /// <summary>
+        /// AI 结果缓存管理：显示条目数与磁盘占用，支持按当前文档或全局清理。
+        /// 缓存按文档指纹隔离，清理后相同内容会重新调用模型。
+        /// </summary>
+        private void ShowAiCacheManagerDialog()
+        {
+            if (_pdfAiCacheService == null)
+            {
+                MessageBox.Show(this, "AI 缓存服务不可用。", "AI 缓存",
+                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+            var cacheService = _pdfAiCacheService;
+
+            using var dialog = new Form
+            {
+                Text = "AI 缓存管理",
+                FormBorderStyle = FormBorderStyle.FixedDialog,
+                StartPosition = FormStartPosition.CenterParent,
+                ClientSize = new Size(420, 214),
+                MaximizeBox = false,
+                MinimizeBox = false,
+                ShowInTaskbar = false,
+                Font = Font
+            };
+
+            var info = new Label
+            {
+                Location = new Point(16, 16),
+                Size = new Size(388, 76),
+                AutoSize = false
+            };
+            var status = new Label
+            {
+                Text = string.Empty,
+                AutoEllipsis = true,
+                ForeColor = Color.DimGray,
+                Location = new Point(16, 96),
+                Size = new Size(388, 24)
+            };
+
+            var currentFingerprint = string.IsNullOrWhiteSpace(_currentPdfPath)
+                ? null
+                : _documentTextIndex?.TryLoadCached(_currentPdfPath)?.Fingerprint;
+
+            void RefreshInfo()
+            {
+                var sizeText = cacheService.TotalBytes < 1024 * 1024
+                    ? $"{cacheService.TotalBytes / 1024.0:F1} KB"
+                    : $"{cacheService.TotalBytes / (1024.0 * 1024.0):F1} MB";
+                var documentLine = string.IsNullOrWhiteSpace(currentFingerprint)
+                    ? "当前文档：尚未建立文本索引，暂不能按文档清理"
+                    : $"当前文档：{Path.GetFileName(_currentPdfPath)}";
+                info.Text = $"缓存条目：{cacheService.Count} 条\n缓存占用：{sizeText}\n{documentLine}";
+            }
+
+            var clearDocumentButton = new Button
+            {
+                Text = "清理当前文档",
+                Location = new Point(16, 132),
+                Size = new Size(124, 32),
+                Enabled = !string.IsNullOrWhiteSpace(currentFingerprint)
+            };
+            clearDocumentButton.Click += (_, _) =>
+            {
+                if (string.IsNullOrWhiteSpace(currentFingerprint)) return;
+                try
+                {
+                    var removed = cacheService.ClearByFingerprint(currentFingerprint);
+                    status.Text = removed > 0
+                        ? $"已清理当前文档 {removed} 条缓存"
+                        : "当前文档没有可清理的缓存";
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "清理当前文档 AI 缓存失败");
+                    status.Text = "清理失败，请稍后重试";
+                }
+                RefreshInfo();
+            };
+
+            var clearAllButton = new Button
+            {
+                Text = "清理全部缓存",
+                Location = new Point(150, 132),
+                Size = new Size(124, 32)
+            };
+            clearAllButton.Click += (_, _) =>
+            {
+                if (MessageBox.Show(dialog,
+                        "将删除全部文档的 AI 缓存，下次请求会重新调用模型。是否继续？",
+                        "清理全部缓存", MessageBoxButtons.YesNo, MessageBoxIcon.Warning,
+                        MessageBoxDefaultButton.Button2) != DialogResult.Yes)
+                    return;
+                try
+                {
+                    cacheService.ClearAll();
+                    status.Text = "已清空全部 AI 缓存";
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "清空 AI 缓存失败");
+                    status.Text = "清理失败，请稍后重试";
+                }
+                RefreshInfo();
+            };
+
+            var closeButton = new Button
+            {
+                Text = "关闭",
+                Location = new Point(318, 132),
+                Size = new Size(86, 32),
+                DialogResult = DialogResult.Cancel
+            };
+
+            RefreshInfo();
+            dialog.Controls.AddRange(new Control[] { info, status, clearDocumentButton, clearAllButton, closeButton });
+            dialog.CancelButton = closeButton;
+            dialog.ShowDialog(this);
         }
 
         /// <summary>站内问答：按作用域调用 PDF AI 编排并返回可引用的页码</summary>
@@ -5286,7 +5458,8 @@ namespace LearningAssistant.Forms.Pdf
             UseWaitCursor = true;
             try
             {
-                response = await _pdfAiService.SummarizePagesAsync(_currentPdfPath, _currentPageIndex, _currentPageIndex)
+                response = await _pdfAiService
+                    .SummarizePagesAsync(_currentPdfPath, _currentPageIndex, _currentPageIndex, BeginPdfAiRequest())
                     .ConfigureAwait(true);
             }
             finally
@@ -5329,7 +5502,8 @@ namespace LearningAssistant.Forms.Pdf
                     _currentPageIndex,
                     0,
                     0,
-                    selection).ConfigureAwait(true);
+                    selection,
+                    BeginPdfAiRequest()).ConfigureAwait(true);
             }
             finally
             {
@@ -5372,7 +5546,7 @@ namespace LearningAssistant.Forms.Pdf
             try
             {
                 response = await _pdfAiService.AskDocumentWithRetrievalAsync(
-                    _currentPdfPath, question.Trim()).ConfigureAwait(true);
+                    _currentPdfPath, question.Trim(), BeginPdfAiRequest()).ConfigureAwait(true);
             }
             finally
             {
@@ -5385,24 +5559,40 @@ namespace LearningAssistant.Forms.Pdf
         /// <summary>生成整份文档的 AI 大纲，按章节与页码展示，可加入待处理内容</summary>
         private async Task GenerateDocumentOutlineAsync()
         {
+            var response = await RequestDocumentOutlineAsync().ConfigureAwait(true);
+            if (response == null) return;
+
+            if (response.Success && !string.IsNullOrWhiteSpace(response.Content))
+            {
+                var outline = FormatOutline(response.Content, _presenter?.PageCount ?? 0);
+                if (!string.IsNullOrWhiteSpace(outline))
+                    response = PdfAiResponse.Ok(outline, response.ReferencedPages);
+            }
+
+            ShowAiResponseDialog("文档 AI 大纲", response, allowSave: false, allowAddToEditor: true);
+        }
+
+        /// <summary>请求整篇文档大纲：隐私确认 → 准备索引 → 调用 AI，返回原始结构化内容</summary>
+        private async Task<PdfAiResponse?> RequestDocumentOutlineAsync()
+        {
             if (_pdfAiService == null)
             {
                 MessageBox.Show(this, "AI 服务不可用，请先完成 AI 配置", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                return;
+                return null;
             }
             if (_presenter == null || _presenter.PageCount <= 0 || string.IsNullOrWhiteSpace(_currentPdfPath))
             {
                 MessageBox.Show(this, "当前没有打开的 PDF 文档", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                return;
+                return null;
             }
 
-            if (!EnsureWholeDocumentAiConsent("AI 大纲生成")) return;
+            if (!EnsureWholeDocumentAiConsent("AI 大纲生成")) return null;
 
             if (await EnsurePdfTextIndexAsync(showProgress: true).ConfigureAwait(true) == null)
             {
                 MessageBox.Show(this, "未能建立文档文本索引，请重试或先完成 OCR", "提示",
                     MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                return;
+                return null;
             }
 
             int pageCount = _presenter.PageCount;
@@ -5411,7 +5601,7 @@ namespace LearningAssistant.Forms.Pdf
             try
             {
                 response = await _pdfAiService
-                    .GenerateOutlineAsync(_currentPdfPath, 0, pageCount - 1)
+                    .GenerateOutlineAsync(_currentPdfPath, 0, pageCount - 1, BeginPdfAiRequest())
                     .ConfigureAwait(true);
             }
             finally
@@ -5419,14 +5609,40 @@ namespace LearningAssistant.Forms.Pdf
                 UseWaitCursor = false;
             }
 
-            if (response.Success && !string.IsNullOrWhiteSpace(response.Content))
+            return response;
+        }
+
+        /// <summary>大纲树形视图：解析章节结构后用树展示，并支持导出 Markdown / OPML / 思维导图 PNG</summary>
+        private async Task ShowOutlineTreeAsync()
+        {
+            var response = await RequestDocumentOutlineAsync().ConfigureAwait(true);
+            if (response == null) return;
+
+            int pageCount = _presenter?.PageCount ?? 0;
+            var model = response.Success && !string.IsNullOrWhiteSpace(response.Content)
+                ? PdfOutlineModel.Parse(response.Content, pageCount)
+                : null;
+
+            if (model == null)
             {
-                var outline = FormatOutline(response.Content, pageCount);
-                if (!string.IsNullOrWhiteSpace(outline))
-                    response = PdfAiResponse.Ok(outline, response.ReferencedPages);
+                // 结构异常时仍给出可读文本，避免入口比弹窗版本更差
+                if (response.Success && !string.IsNullOrWhiteSpace(response.Content))
+                {
+                    var outline = FormatOutline(response.Content, pageCount);
+                    if (!string.IsNullOrWhiteSpace(outline))
+                        response = PdfAiResponse.Ok(outline, response.ReferencedPages);
+                }
+                ShowAiResponseDialog("文档 AI 大纲", response, allowSave: false, allowAddToEditor: true);
+                return;
             }
 
-            ShowAiResponseDialog("文档 AI 大纲", response, allowSave: false, allowAddToEditor: true);
+            var documentName = string.IsNullOrWhiteSpace(_currentPdfPath)
+                ? "文档"
+                : Path.GetFileNameWithoutExtension(_currentPdfPath);
+
+            using var dialog = new PdfOutlineTreeForm(model, documentName,
+                page => _ = NavigateToAiPageAsync(page));
+            dialog.ShowDialog(this);
         }
 
         /// <summary>把 AI 大纲 JSON 转成带页码的 Markdown 文本；格式异常时原样返回</summary>
@@ -5539,7 +5755,8 @@ namespace LearningAssistant.Forms.Pdf
             try
             {
                 response = await _pdfAiService
-                    .GenerateFlashcardsAsync(_currentPdfPath, options.StartPageIndex, options.EndPageIndex)
+                    .GenerateFlashcardsAsync(_currentPdfPath, options.StartPageIndex, options.EndPageIndex,
+                        BeginPdfAiRequest())
                     .ConfigureAwait(true);
             }
             finally
@@ -5573,12 +5790,18 @@ namespace LearningAssistant.Forms.Pdf
                 "AI 闪卡");
         }
 
-        /// <summary>解析 AI 返回的闪卡 JSON，过滤缺少正面或背面的条目</summary>
+        /// <summary>
+        /// 解析 AI 返回的闪卡 JSON，过滤缺少正面或背面的条目；
+        /// 按“归一化正面 + 页码”去重，单块最多保留 20 张，避免同一概念重复入队与输出截断
+        /// </summary>
         private static List<PdfAiFlashcardCard> ParseFlashcards(string content, int pageCount)
         {
+            const int MaxCardsPerParse = 20;
+
             var cards = new List<PdfAiFlashcardCard>();
             if (string.IsNullOrWhiteSpace(content)) return cards;
 
+            var seen = new HashSet<string>(StringComparer.Ordinal);
             var json = StripCodeFence(content);
             try
             {
@@ -5602,12 +5825,17 @@ namespace LearningAssistant.Forms.Pdf
                             ? Math.Clamp(parsedPage, 0, Math.Max(0, pageCount))
                             : 0;
 
+                    // 去重键：正面归一化（忽略大小写/空白/标点）+ 页码
+                    if (!seen.Add($"{NormalizeFlashcardFront(front)}|{pageNumber}")) continue;
+
                     cards.Add(new PdfAiFlashcardCard
                     {
                         Front = front,
                         Back = back,
                         PageNumber = pageNumber
                     });
+
+                    if (cards.Count >= MaxCardsPerParse) break;
                 }
             }
             catch (JsonException)
@@ -5616,6 +5844,18 @@ namespace LearningAssistant.Forms.Pdf
             }
 
             return cards;
+        }
+
+        /// <summary>归一化闪卡正面：小写、去掉空白与标点符号，仅用于去重比较</summary>
+        private static string NormalizeFlashcardFront(string front)
+        {
+            var builder = new StringBuilder(front.Length);
+            foreach (var ch in front.ToLowerInvariant())
+            {
+                if (char.IsWhiteSpace(ch) || char.IsPunctuation(ch) || char.IsSymbol(ch)) continue;
+                builder.Append(ch);
+            }
+            return builder.ToString();
         }
 
         /// <summary>
@@ -5643,6 +5883,13 @@ namespace LearningAssistant.Forms.Pdf
                     item.Category = "PDF闪卡";
                     if (!string.IsNullOrWhiteSpace(documentName))
                         item.Subject = documentName;
+                    // 回链原文：复习时可据此跳回生成该闪卡的 PDF 页面
+                    item.SourceType = "PdfAiFlashcard";
+                    item.SourceRefJson = JsonSerializer.Serialize(new
+                    {
+                        pdfPath = _currentPdfPath,
+                        pageIndex = card.PageNumber > 0 ? card.PageNumber - 1 : _currentPageIndex
+                    });
                     item.UpdatedAt = DateTime.Now;
                     _spacedRepetitionService.UpdateItem(item);
 
@@ -5677,6 +5924,239 @@ namespace LearningAssistant.Forms.Pdf
             }
 
             return imported;
+        }
+
+        /// <summary>
+        /// 用选中内容或当前页生成测验题，确认后写入复习队列；每道题保留来源 PDF 与页码
+        /// </summary>
+        private async Task GenerateQuizAsync()
+        {
+            if (_quizEngineService == null)
+            {
+                MessageBox.Show(this, "测验服务不可用，请先完成 AI 配置", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+            if (_presenter == null || _presenter.PageCount <= 0 || string.IsNullOrWhiteSpace(_currentPdfPath))
+            {
+                MessageBox.Show(this, "当前没有打开的 PDF 文档", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+            if (_spacedRepetitionService == null)
+            {
+                MessageBox.Show(this, "复习服务不可用，无法保存测验题", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            var selection = GetSelectedText();
+            string content;
+            if (!string.IsNullOrWhiteSpace(selection))
+            {
+                content = selection;
+            }
+            else
+            {
+                var index = await EnsurePdfTextIndexAsync(showProgress: true).ConfigureAwait(true);
+                if (index == null)
+                {
+                    MessageBox.Show(this, "未能建立文档文本索引，请重试或先完成 OCR", "提示",
+                        MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+
+                content = index.GetPage(_currentPageIndex)?.Text ?? string.Empty;
+            }
+
+            if (string.IsNullOrWhiteSpace(content))
+            {
+                MessageBox.Show(this, "本页没有可用文本，请先完成 OCR 或选中一段内容", "AI 测验",
+                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            // 单次出题只喂入有限文本，避免长页把上下文挤占掉
+            if (content.Length > 4000) content = content[..4000];
+
+            var options = PdfAiRequestProfiles.Get(PdfAiRequestProfiles.Quiz);
+            List<QuizQuestion> questions;
+            UseWaitCursor = true;
+            try
+            {
+                questions = await _quizEngineService
+                    .GenerateQuestionsAsync(content, DetectQuizLanguage(content), 5, QuestionType.SingleChoice,
+                        options, BeginPdfAiRequest())
+                    .ConfigureAwait(true);
+            }
+            finally
+            {
+                UseWaitCursor = false;
+            }
+
+            if (questions.Count == 0)
+            {
+                MessageBox.Show(this, "AI 未返回有效题目，请调整内容范围后重试", "AI 测验",
+                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            var selectedQuestions = ShowQuizPreviewDialog(questions);
+            if (selectedQuestions == null || selectedQuestions.Count == 0) return;
+
+            int imported = ImportQuizQuestionsToReview(selectedQuestions);
+            ShowMessage(imported > 0
+                ? $"已把 {imported} 道题加入复习队列"
+                : "未能加入复习队列，请检查复习服务",
+                "AI 测验");
+        }
+
+        /// <summary>测验题预览：勾选要保存的题目；取消或全不选时返回 null</summary>
+        private List<QuizQuestion>? ShowQuizPreviewDialog(IReadOnlyList<QuizQuestion> questions)
+        {
+            using var dialog = new Form
+            {
+                Text = $"AI 测验预览（{questions.Count} 题）",
+                FormBorderStyle = FormBorderStyle.Sizable,
+                StartPosition = FormStartPosition.CenterParent,
+                ClientSize = new Size(640, 460),
+                MinimumSize = new Size(480, 320),
+                MinimizeBox = false,
+                ShowInTaskbar = false,
+                Font = Font
+            };
+
+            var hint = new Label
+            {
+                Text = "勾选的题目会加入复习队列；选中一行可查看答案",
+                AutoSize = true,
+                Location = new Point(14, 10)
+            };
+            var list = new CheckedListBox
+            {
+                CheckOnClick = true,
+                HorizontalScrollbar = true,
+                Location = new Point(14, 34),
+                Size = new Size(612, 368),
+                Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom
+            };
+            foreach (var question in questions)
+                list.Items.Add(question.Content, true);
+
+            var detail = new Label
+            {
+                Text = string.Empty,
+                AutoEllipsis = true,
+                Location = new Point(14, 410),
+                Size = new Size(396, 36),
+                Anchor = AnchorStyles.Left | AnchorStyles.Bottom,
+                ForeColor = Color.DimGray
+            };
+            list.SelectedIndexChanged += (_, _) =>
+            {
+                var index = list.SelectedIndex;
+                detail.Text = index >= 0 && index < questions.Count
+                    ? $"答案：{BuildQuizAnswerText(questions[index])}"
+                    : string.Empty;
+            };
+
+            var okButton = new Button
+            {
+                Text = "加入复习", Size = new Size(96, 30), Location = new Point(430, 412),
+                Anchor = AnchorStyles.Bottom | AnchorStyles.Right
+            };
+            var cancelButton = new Button
+            {
+                Text = "取消", Size = new Size(88, 30), Location = new Point(538, 412),
+                Anchor = AnchorStyles.Bottom | AnchorStyles.Right,
+                DialogResult = DialogResult.Cancel
+            };
+            okButton.Click += (_, _) =>
+            {
+                if (list.CheckedIndices.Count == 0)
+                {
+                    MessageBox.Show(dialog, "请至少勾选一道题。", "AI 测验",
+                        MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+                dialog.DialogResult = DialogResult.OK;
+            };
+
+            dialog.Controls.AddRange(new Control[] { hint, list, detail, okButton, cancelButton });
+            dialog.AcceptButton = okButton;
+            dialog.CancelButton = cancelButton;
+
+            if (dialog.ShowDialog(this) != DialogResult.OK) return null;
+
+            return list.CheckedIndices
+                .Cast<int>()
+                .Where(i => i >= 0 && i < questions.Count)
+                .Select(i => questions[i])
+                .ToList();
+        }
+
+        /// <summary>把测验题写入复习队列，记录来源 PDF/页码，复习时可回原文</summary>
+        private int ImportQuizQuestionsToReview(IReadOnlyList<QuizQuestion> questions)
+        {
+            if (_spacedRepetitionService == null || questions == null || questions.Count == 0) return 0;
+
+            var userId = _userSessionService?.CurrentUserId;
+            if (string.IsNullOrWhiteSpace(userId))
+                userId = Constants.DefaultUserId;
+
+            var documentName = string.IsNullOrWhiteSpace(_currentPdfPath)
+                ? string.Empty
+                : Path.GetFileNameWithoutExtension(_currentPdfPath);
+
+            int imported = 0;
+            foreach (var question in questions)
+            {
+                try
+                {
+                    var item = _spacedRepetitionService.CreateNewItem(userId, question.Content, BuildQuizAnswerText(question));
+                    item.Category = "PDF测验";
+                    if (!string.IsNullOrWhiteSpace(documentName))
+                        item.Subject = documentName;
+                    item.SourceType = "PdfAiQuiz";
+                    item.SourceRefJson = JsonSerializer.Serialize(new
+                    {
+                        pdfPath = _currentPdfPath,
+                        pageIndex = _currentPageIndex
+                    });
+                    item.UpdatedAt = DateTime.Now;
+                    _spacedRepetitionService.UpdateItem(item);
+
+                    imported++;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "测验题加入复习队列失败: {Content}", question.Content);
+                }
+            }
+
+            return imported;
+        }
+
+        /// <summary>答案文本：优先带选项字母，便于复习时对照原文选项</summary>
+        private static string BuildQuizAnswerText(QuizQuestion question)
+        {
+            var answers = question.CorrectOptionIndices
+                .Where(i => i >= 0 && i < question.Options.Count)
+                .Select(i => $"{(char)('A' + i)}. {question.Options[i]}")
+                .ToList();
+
+            if (answers.Count > 0) return string.Join("；", answers);
+
+            var fallback = question.GetCorrectOptionsText();
+            return string.IsNullOrWhiteSpace(fallback) ? "（题目未给出答案）" : fallback;
+        }
+
+        /// <summary>按中文字符占比粗略判断出题语言</summary>
+        private static string DetectQuizLanguage(string content)
+        {
+            int cjk = 0;
+            foreach (var ch in content)
+            {
+                if (ch >= '\u4e00' && ch <= '\u9fff') cjk++;
+            }
+            return cjk * 4 >= content.Length ? "中文" : "英文";
         }
 
         /// <summary>解释选中内容：带当前页上下文并走缓存，可添加到编辑器或保存为标注</summary>
@@ -5754,7 +6234,8 @@ namespace LearningAssistant.Forms.Pdf
             try
             {
                 response = await _pdfAiService.GenerateStudyNotesAsync(
-                    _currentPdfPath, options.StartPageIndex, options.EndPageIndex).ConfigureAwait(true);
+                    _currentPdfPath, options.StartPageIndex, options.EndPageIndex, BeginPdfAiRequest())
+                    .ConfigureAwait(true);
             }
             finally
             {
@@ -5895,7 +6376,9 @@ namespace LearningAssistant.Forms.Pdf
             UseWaitCursor = true;
             try
             {
-                response = await _pdfAiService.SummarizeAnnotationsAsync(pdfPath, items).ConfigureAwait(true);
+                response = await _pdfAiService
+                    .SummarizeAnnotationsAsync(pdfPath, items, BeginPdfAiRequest())
+                    .ConfigureAwait(true);
             }
             finally
             {
@@ -5986,7 +6469,9 @@ namespace LearningAssistant.Forms.Pdf
             UseWaitCursor = true;
             try
             {
-                result = await _pdfAiService.ClusterAnnotationsAsync(pdfPath, items).ConfigureAwait(true);
+                result = await _pdfAiService
+                    .ClusterAnnotationsAsync(pdfPath, items, BeginPdfAiRequest())
+                    .ConfigureAwait(true);
             }
             finally
             {
@@ -6110,6 +6595,112 @@ namespace LearningAssistant.Forms.Pdf
             _pictureBoxPdf?.Invalidate();
 
             return Task.CompletedTask;
+        }
+
+        #endregion
+
+        #region AI 侧栏（P0-6）与请求取消（P0-2）
+
+        private PdfAiSidebarPanel? _aiSidebar;
+        private TabPage? _tabPageAi;
+        // 模态 AI 入口共用的取消源：关闭窗口或发起新请求时取消上一次，避免回包落到已关闭的窗口
+        private CancellationTokenSource? _pdfAiRequestCts;
+
+        /// <summary>为一次 AI 请求准备取消令牌：取消并释放上一次未完成的请求</summary>
+        private CancellationToken BeginPdfAiRequest()
+        {
+            _pdfAiRequestCts?.Cancel();
+            _pdfAiRequestCts?.Dispose();
+            _pdfAiRequestCts = new CancellationTokenSource();
+            return _pdfAiRequestCts.Token;
+        }
+
+        /// <summary>
+        /// 在左侧页签挂载 AI 侧栏：首次创建，之后复用同一实例以保留当前文档的会话历史。
+        /// </summary>
+        private void BuildAiSidebarTab()
+        {
+            if (_tabControlLeft == null) return;
+
+            var panel = EnsureAiSidebar();
+            if (_tabPageAi != null && _tabControlLeft.TabPages.Contains(_tabPageAi))
+            {
+                if (!_tabPageAi.Controls.Contains(panel))
+                    _tabPageAi.Controls.Add(panel);
+                return;
+            }
+
+            if (panel.Parent != null)
+                panel.Parent.Controls.Remove(panel);
+
+            _tabPageAi = new TabPage
+            {
+                Name = "_tabPageAi",
+                Text = "✨",
+                Padding = new Padding(3),
+                UseVisualStyleBackColor = true
+            };
+            _tabPageAi.Controls.Add(panel);
+            _tabControlLeft.TabPages.Add(_tabPageAi);
+            UpdateSidebarTabItemSize();
+        }
+
+        /// <summary>创建 AI 侧栏并接上阅读器上下文：当前文档、当前页、选区与跳页/标注能力</summary>
+        private PdfAiSidebarPanel EnsureAiSidebar()
+        {
+            if (_aiSidebar != null) return _aiSidebar;
+
+            _aiSidebar = new PdfAiSidebarPanel
+            {
+                Dock = DockStyle.Fill,
+                PdfAiService = _pdfAiService,
+                PdfPathProvider = () => _currentPdfPath,
+                CurrentPageProvider = () => _currentPageIndex,
+                PageCountProvider = () => _presenter?.PageCount ?? 0,
+                SelectedTextProvider = () => GetSelectedText(),
+                ConfirmWholeDocument = EnsureWholeDocumentAiConsent,
+                NavigateToPage = pageNumber => _ = NavigateToAiPageAsync(pageNumber),
+                SaveAnswerAsAnnotation = answer => _ = SaveAiAnswerAsAnnotationAsync(answer)
+            };
+
+            return _aiSidebar;
+        }
+
+        /// <summary>打开 AI 侧栏；带预设问题时直接发起一次问答，并可指定作用域</summary>
+        private void OpenAiSidebar(string? presetQuestion = null, PdfAiScope? scope = null)
+        {
+            if (_pdfAiService == null)
+            {
+                MessageBox.Show(this, "AI 服务不可用，请先完成 AI 配置", "提示",
+                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            BuildAiSidebarTab();
+            if (_tabControlLeft != null && _tabPageAi != null)
+                _tabControlLeft.SelectedTab = _tabPageAi;
+
+            if (_aiSidebar == null) return;
+
+            if (!string.IsNullOrWhiteSpace(presetQuestion))
+                _aiSidebar.AskWithPreset(presetQuestion, scope);
+            else
+                _aiSidebar.FocusInput();
+        }
+
+        /// <summary>侧栏“保存为标注”：复用已有的标注写入逻辑，并带上答案中的引用页码</summary>
+        private Task SaveAiAnswerAsAnnotationAsync(string answer)
+        {
+            var content = answer ?? string.Empty;
+            var pages = System.Text.RegularExpressions.Regex
+                .Matches(content, @"\[\[p(\d+)\]\]")
+                .Select(match => int.TryParse(match.Groups[1].Value, out var page) ? page : 0)
+                .Where(page => page > 0)
+                .Distinct()
+                .OrderBy(page => page)
+                .ToList();
+
+            return SaveAiSummaryAsAnnotationAsync(PdfAiResponse.Ok(content, pages, false));
         }
 
         #endregion
@@ -7604,18 +8195,27 @@ namespace LearningAssistant.Forms.Pdf
         {
             var menu = new ContextMenuStrip();
 
-            menu.Items.Add("打开 AI 面板", null, (_, _) => RaiseAiQuestionAsked());
-            menu.Items.Add("总结当前页", null, async (_, _) => await SummarizeCurrentPageAsync());
-            menu.Items.Add("总结选中内容", null, async (_, _) => await SummarizeSelectionAsync());
+            // 侧栏是统一入口：可流式、可追问、可停止，旧弹窗入口保留兼容
+            menu.Items.Add("AI 侧栏（流式/追问）", null, (_, _) => OpenAiSidebar());
+            menu.Items.Add("旧版 AI 面板（兼容）", null, (_, _) => RaiseAiQuestionAsked());
+            // 问答类动作统一落到侧栏，作用域随动作预设，避免同一问题出现多套入口
+            menu.Items.Add("总结当前页", null, (_, _) =>
+                OpenAiSidebar("请用要点总结当前页的主要内容。", PdfAiScope.CurrentPage));
+            menu.Items.Add("总结选中内容", null, (_, _) =>
+                OpenAiSidebar("请用要点总结选中的内容。", PdfAiScope.Selection));
             menu.Items.Add("解释选中内容", null, async (_, _) => await ExplainSelectionAsync());
             menu.Items.Add("全文检索问答", null, async (_, _) => await AskDocumentByRetrievalAsync());
             menu.Items.Add("生成文档大纲…", null, async (_, _) => await GenerateDocumentOutlineAsync());
+            menu.Items.Add("大纲树形视图…", null, async (_, _) => await ShowOutlineTreeAsync());
             menu.Items.Add("生成闪卡…", null, async (_, _) => await GenerateFlashcardsAsync());
+            menu.Items.Add("生成测验（本页/选中）", null, async (_, _) => await GenerateQuizAsync());
             menu.Items.Add(new ToolStripSeparator());
             menu.Items.Add("导出 AI 学习笔记…", null, async (_, _) => await ExportAiStudyNotesAsync());
             menu.Items.Add("整理本页标注", null, async (_, _) => await SummarizeAnnotationsAsync(wholeDocument: false));
             menu.Items.Add("整理全书标注", null, async (_, _) => await SummarizeAnnotationsAsync(wholeDocument: true));
             menu.Items.Add("导出标注复习清单…", null, async (_, _) => await ExportAnnotationReviewListAsync());
+            menu.Items.Add(new ToolStripSeparator());
+            menu.Items.Add("AI 缓存管理…", null, (_, _) => ShowAiCacheManagerDialog());
 
             if (sender is Control anchor)
             {
@@ -8802,6 +9402,8 @@ namespace LearningAssistant.Forms.Pdf
             BuildHighlightSidebar();
             BuildAudioDrawer();
             BuildStudySidebar();
+            // AI 侧栏是 P0 的主入口：工具栏/菜单/命令面板统一打开这一页签
+            BuildAiSidebarTab();
 
             // 夜间状态按窗口记录，避免新建窗口覆盖其他阅读窗口的主题
             PdfSidebarTheme.SetWindowDark(this, _nightModeManager?.IsNightMode ?? false);
@@ -10653,6 +11255,18 @@ namespace LearningAssistant.Forms.Pdf
             commands.Add(new PdfCommandPaletteItem("导出学习笔记", "导出当前文档的 AI 学习笔记", async () => await ExportAiStudyNotesAsync()));
             commands.Add(new PdfCommandPaletteItem("批量识别导出", "识别整本 PDF 并导出文本", BatchOcrExport_Click));
             commands.Add(new PdfCommandPaletteItem("切换夜间模式", "在浅色与夜间配色之间切换", () => _nightModeManager?.ToggleNightMode()));
+            // AI 动作统一补齐到命令面板：问答类进入同一侧栏，能力类走既有流程
+            commands.Add(new PdfCommandPaletteItem("AI 问答侧栏", "打开右侧 AI 侧栏，可流式追问", () => OpenAiSidebar()));
+            commands.Add(new PdfCommandPaletteItem("总结当前页", "在 AI 侧栏总结当前页", () =>
+                OpenAiSidebar("请用要点总结当前页的主要内容。", PdfAiScope.CurrentPage)));
+            commands.Add(new PdfCommandPaletteItem("解释选中内容", "在 AI 侧栏解释选中的文字", () =>
+                OpenAiSidebar("请解释选中内容的含义和作用。", PdfAiScope.Selection)));
+            commands.Add(new PdfCommandPaletteItem("全文检索问答", "按关键词召回相关页后回答", async () => await AskDocumentByRetrievalAsync()));
+            commands.Add(new PdfCommandPaletteItem("生成文档大纲", "按章节生成可跳转大纲", async () => await GenerateDocumentOutlineAsync()));
+            commands.Add(new PdfCommandPaletteItem("大纲树形视图", "树形查看大纲并导出思维导图", async () => await ShowOutlineTreeAsync()));
+            commands.Add(new PdfCommandPaletteItem("生成闪卡", "从当前页生成闪卡并加入复习", async () => await GenerateFlashcardsAsync()));
+            commands.Add(new PdfCommandPaletteItem("生成测验", "用本页/选中内容生成测验", async () => await GenerateQuizAsync()));
+            commands.Add(new PdfCommandPaletteItem("AI 缓存管理", "查看并清理 AI 结果缓存", ShowAiCacheManagerDialog));
 
             using var dialog = new PdfCommandPaletteDialog(commands);
             dialog.ShowDialog(this);
@@ -10685,6 +11299,7 @@ namespace LearningAssistant.Forms.Pdf
             {
                 "_tabPageFiles" => "目录：文件、页面与缩略图",
                 "_tabPageStudy" => "学习：AI 工具与学习整理",
+                "_tabPageAi" => "AI：可流式追问的阅读助手",
                 _ => page.Text
             };
         }
@@ -10697,6 +11312,7 @@ namespace LearningAssistant.Forms.Pdf
             {
                 "_tabPageFiles" => "目录",
                 "_tabPageStudy" => "学习",
+                "_tabPageAi" => "AI",
                 _ => page.Text
             };
         }

@@ -10,11 +10,15 @@ namespace LearningAssistant.Services.Pdf
 {
     /// <summary>
     /// 文档文本索引实现：文本层优先，扫描页渲染后 OCR，按文件指纹缓存到磁盘。
+    /// 共享构建任务与调用者取消隔离：任一调用者取消只停止自己的等待，不中断正在跑的构建。
     /// </summary>
     public sealed class PdfDocumentTextIndex : IPdfDocumentTextIndex
     {
         /// <summary>OCR 渲染宽度（与批量导出保持一致）</summary>
         private const int OcrRenderWidth = 1600;
+
+        /// <summary>断点续建时每处理多少页落一次部分索引</summary>
+        private const int PartialSavePageInterval = 20;
 
         private static readonly JsonSerializerOptions JsonOptions = new()
         {
@@ -26,7 +30,7 @@ namespace LearningAssistant.Services.Pdf
         private readonly Func<string, IPdfService>? _renderServiceFactory;
         private readonly ILogger<PdfDocumentTextIndex>? _logger;
         private readonly string _indexRootPath;
-        private readonly ConcurrentDictionary<string, Task<PdfTextIndexDocument>> _inflightBuilds = new();
+        private readonly ConcurrentDictionary<string, BuildSession> _inflightBuilds = new();
 
         public PdfDocumentTextIndex(
             IPdfService pdfService,
@@ -40,6 +44,22 @@ namespace LearningAssistant.Services.Pdf
             _renderServiceFactory = renderServiceFactory;
             _logger = logger;
             _indexRootPath = indexRootPath ?? Path.Combine(AppPaths.CurrentUserDir, "pdf_text_index");
+        }
+
+        /// <summary>
+        /// 索引构建器身份（OCR 引擎 / 引擎版本 / 当前语言）。任一变化时旧索引与旧 AI 缓存都应失效，
+        /// 避免换语言或升级识别引擎后继续复用旧文本。
+        /// </summary>
+        private string BuilderIdentity
+        {
+            get
+            {
+                if (_ocrService == null || !_ocrService.IsAvailable) return "no-ocr";
+
+                var engineName = _ocrService.GetType().Name;
+                var engineVersion = _ocrService.GetType().Assembly.GetName().Version?.ToString() ?? "0";
+                return $"{engineName}|{engineVersion}|lang:{_ocrService.CurrentLanguage}";
+            }
         }
 
         /// <inheritdoc />
@@ -74,7 +94,8 @@ namespace LearningAssistant.Services.Pdf
                     !string.Equals(document.DocumentPath, fullPath, StringComparison.OrdinalIgnoreCase) ||
                     !string.Equals(document.Fingerprint, fingerprint, StringComparison.Ordinal) ||
                     document.PageCount <= 0 ||
-                    document.Pages.Count != document.PageCount)
+                    document.Pages.Count != document.PageCount ||
+                    !string.Equals(document.BuilderIdentity, BuilderIdentity, StringComparison.Ordinal))
                 {
                     DeleteFileQuietly(cachePath);
                     return null;
@@ -117,8 +138,8 @@ namespace LearningAssistant.Services.Pdf
             }
 
             var key = $"{ComputePathHash(fullPath)}|{fingerprint}|{(forceRebuild ? "1" : "0")}";
-            var task = _inflightBuilds.GetOrAdd(key, _ => BuildAndSaveAsync(fullPath, fingerprint, progress, cancellationToken));
-            return AwaitAndReleaseAsync(key, task);
+            var session = AcquireSession(key, fullPath, fingerprint);
+            return WaitSessionAsync(session, progress, cancellationToken);
         }
 
         /// <inheritdoc />
@@ -143,41 +164,93 @@ namespace LearningAssistant.Services.Pdf
             }
         }
 
-        private async Task<PdfTextIndexDocument> AwaitAndReleaseAsync(string key, Task<PdfTextIndexDocument> task)
+        /// <summary>
+        /// 取得（或创建）共享构建会话。构建任务使用内部令牌，不受任何调用者的取消影响。
+        /// </summary>
+        private BuildSession AcquireSession(string key, string fullPath, string fingerprint)
         {
+            while (true)
+            {
+                if (_inflightBuilds.TryGetValue(key, out var existing))
+                    return existing;
+
+                var session = new BuildSession(key);
+                if (!_inflightBuilds.TryAdd(key, session))
+                    continue;
+
+                session.Task = BuildAndSaveAsync(fullPath, fingerprint, session, session.Cancellation.Token);
+                // 任务结束后移除会话，后续调用重新判断缓存命中
+                _ = session.Task.ContinueWith(_ =>
+                {
+                    _inflightBuilds.TryRemove(new KeyValuePair<string, BuildSession>(key, session));
+                }, TaskScheduler.Default);
+                return session;
+            }
+        }
+
+        /// <summary>
+        /// 等待共享构建：调用者的取消令牌只停止等待，不取消正在运行的构建任务。
+        /// </summary>
+        private async Task<PdfTextIndexDocument> WaitSessionAsync(
+            BuildSession session,
+            IProgress<PdfTextIndexProgress>? progress,
+            CancellationToken cancellationToken)
+        {
+            session.Subscribe(progress);
             try
             {
-                return await task.ConfigureAwait(false);
+                // 先补报一次当前进度，避免第二个调用者的进度条一直空白
+                session.ReplayLatest(progress);
+
+                return await session.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
             }
             finally
             {
-                // 仅移除已完成的同一任务，避免误删后续新建的构建任务
-                if (task.IsCompleted)
-                {
-                    _inflightBuilds.TryRemove(new KeyValuePair<string, Task<PdfTextIndexDocument>>(key, task));
-                }
+                session.Unsubscribe(progress);
             }
         }
 
         private async Task<PdfTextIndexDocument> BuildAndSaveAsync(
             string fullPath,
             string fingerprint,
-            IProgress<PdfTextIndexProgress>? progress,
+            BuildSession session,
             CancellationToken cancellationToken)
         {
             int pageCount = _pdfService.GetPageCount(fullPath);
             if (pageCount <= 0)
                 throw new InvalidOperationException("无法读取 PDF 页数，文本索引构建失败");
 
-            var pages = new List<PdfTextIndexPage>(pageCount);
+            var partialPath = BuildPartialPath(fullPath, fingerprint);
+
+            // 断点续建：优先加载同一指纹的部分索引，从第一个未处理页继续
+            var processed = TryLoadPartialPages(partialPath, fullPath, fingerprint, pageCount);
+            int resumedPages = processed.Count;
+
             bool ocrAvailable = _ocrService?.IsAvailable == true && _renderServiceFactory != null;
             IPdfService? renderService = null;
+
+            var pages = new Dictionary<int, PdfTextIndexPage>(processed);
+            int processedSinceSave = 0;
 
             try
             {
                 for (int pageIndex = 0; pageIndex < pageCount; pageIndex++)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
+
+                    // 已从部分索引恢复的页直接复用，不再重复 OCR
+                    if (pages.ContainsKey(pageIndex))
+                    {
+                        session.Report(new PdfTextIndexProgress
+                        {
+                            PageIndex = pageIndex,
+                            ProcessedPages = pageIndex + 1,
+                            TotalPages = pageCount,
+                            Source = pages[pageIndex].Source,
+                            Message = $"复用已建索引（{pageIndex + 1}/{pageCount}）"
+                        });
+                        continue;
+                    }
 
                     string? text = null;
                     var source = PdfTextSource.None;
@@ -204,16 +277,16 @@ namespace LearningAssistant.Services.Pdf
                     }
 
                     text = (text ?? string.Empty).Trim();
-                    pages.Add(new PdfTextIndexPage
+                    pages[pageIndex] = new PdfTextIndexPage
                     {
                         PageIndex = pageIndex,
                         Text = text,
                         Source = source,
                         DetectedLanguage = StringLanguageDetector.DetectLanguage(text).ToString(),
                         CharacterCount = text.Length
-                    });
+                    };
 
-                    progress?.Report(new PdfTextIndexProgress
+                    session.Report(new PdfTextIndexProgress
                     {
                         PageIndex = pageIndex,
                         ProcessedPages = pageIndex + 1,
@@ -221,6 +294,15 @@ namespace LearningAssistant.Services.Pdf
                         Source = source,
                         Message = $"正在建立文本索引（{pageIndex + 1}/{pageCount}）"
                     });
+
+                    // 每 N 页落一次部分索引，取消后重开可续建而不是从头再来
+                    processedSinceSave++;
+                    if (processedSinceSave >= PartialSavePageInterval)
+                    {
+                        processedSinceSave = 0;
+                        await SavePartialIndexAsync(fullPath, fingerprint, pageCount, pages, partialPath)
+                            .ConfigureAwait(false);
+                    }
                 }
             }
             finally
@@ -236,11 +318,62 @@ namespace LearningAssistant.Services.Pdf
                 Fingerprint = fingerprint,
                 PageCount = pageCount,
                 BuiltAtUtc = DateTime.UtcNow,
-                Pages = pages
+                BuilderIdentity = BuilderIdentity,
+                IsComplete = true,
+                Pages = Enumerable.Range(0, pageCount)
+                    .Select(i => pages.TryGetValue(i, out var page) ? page : new PdfTextIndexPage { PageIndex = i })
+                    .ToList()
             };
 
-            await SaveIndexAsync(document).ConfigureAwait(false);
+            await SaveDocumentAsync(document, BuildCachePath(fullPath, fingerprint)).ConfigureAwait(false);
+            // 构建完整后删除部分索引，避免下次误续建
+            DeleteFileQuietly(partialPath);
+
+            if (resumedPages > 0)
+                _logger?.LogInformation("PDF 文本索引续建完成: {PdfPath}，复用 {Resumed}/{Total} 页",
+                    fullPath, resumedPages, pageCount);
+
             return document;
+        }
+
+        private Dictionary<int, PdfTextIndexPage> TryLoadPartialPages(
+            string partialPath,
+            string fullPath,
+            string fingerprint,
+            int pageCount)
+        {
+            var result = new Dictionary<int, PdfTextIndexPage>();
+            try
+            {
+                if (!File.Exists(partialPath)) return result;
+
+                var json = File.ReadAllText(partialPath, Encoding.UTF8);
+                var document = JsonSerializer.Deserialize<PdfTextIndexDocument>(json, JsonOptions);
+                if (document == null ||
+                    document.Version != PdfDocumentTextIndexVersion.Current ||
+                    !string.Equals(document.DocumentPath, fullPath, StringComparison.OrdinalIgnoreCase) ||
+                    !string.Equals(document.Fingerprint, fingerprint, StringComparison.Ordinal) ||
+                    !string.Equals(document.BuilderIdentity, BuilderIdentity, StringComparison.Ordinal) ||
+                    document.PageCount != pageCount)
+                {
+                    DeleteFileQuietly(partialPath);
+                    return result;
+                }
+
+                foreach (var page in document.Pages)
+                {
+                    if (page.PageIndex >= 0 && page.PageIndex < pageCount)
+                        result[page.PageIndex] = page;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "读取部分索引失败，将从头构建: {PdfPath}", fullPath);
+                DeleteFileQuietly(partialPath);
+                result.Clear();
+            }
+
+            return result;
         }
 
         private IPdfService CreateRenderService(string pdfPath)
@@ -279,12 +412,32 @@ namespace LearningAssistant.Services.Pdf
             }
         }
 
-        private async Task SaveIndexAsync(PdfTextIndexDocument document)
+        private Task SavePartialIndexAsync(
+            string fullPath,
+            string fingerprint,
+            int pageCount,
+            Dictionary<int, PdfTextIndexPage> pages,
+            string partialPath)
+        {
+            var document = new PdfTextIndexDocument
+            {
+                DocumentPath = fullPath,
+                Fingerprint = fingerprint,
+                PageCount = pageCount,
+                BuiltAtUtc = DateTime.UtcNow,
+                BuilderIdentity = BuilderIdentity,
+                IsComplete = false,
+                Pages = pages.Values.OrderBy(p => p.PageIndex).ToList()
+            };
+
+            return SaveDocumentAsync(document, partialPath);
+        }
+
+        private async Task SaveDocumentAsync(PdfTextIndexDocument document, string cachePath)
         {
             try
             {
                 AppPaths.EnsureDirectoryExists(_indexRootPath);
-                var cachePath = BuildCachePath(document.DocumentPath, document.Fingerprint);
                 var tempPath = cachePath + ".tmp";
                 var json = JsonSerializer.Serialize(document, JsonOptions);
                 await File.WriteAllTextAsync(tempPath, json, new UTF8Encoding(false)).ConfigureAwait(false);
@@ -299,6 +452,9 @@ namespace LearningAssistant.Services.Pdf
 
         private string BuildCachePath(string fullPath, string fingerprint)
             => Path.Combine(_indexRootPath, $"{ComputePathHash(fullPath)}_{fingerprint}.json");
+
+        private string BuildPartialPath(string fullPath, string fingerprint)
+            => Path.Combine(_indexRootPath, $"{ComputePathHash(fullPath)}_{fingerprint}_partial.json");
 
         private static string ComputePathHash(string fullPath)
         {
@@ -315,6 +471,70 @@ namespace LearningAssistant.Services.Pdf
             catch (Exception ex)
             {
                 _logger?.LogDebug(ex, "删除索引缓存文件失败: {Path}", path);
+            }
+        }
+
+        /// <summary>
+        /// 共享构建会话：持有内部取消令牌、构建任务与订阅者列表，进度广播给所有等待者。
+        /// </summary>
+        private sealed class BuildSession
+        {
+            private readonly object _gate = new();
+            private readonly List<IProgress<PdfTextIndexProgress>> _subscribers = new();
+            private PdfTextIndexProgress? _latest;
+
+            public BuildSession(string key)
+            {
+                Key = key;
+            }
+
+            public string Key { get; }
+            public CancellationTokenSource Cancellation { get; } = new();
+            public Task<PdfTextIndexDocument> Task { get; set; }
+                = System.Threading.Tasks.Task.FromResult<PdfTextIndexDocument>(null!);
+
+            public void Subscribe(IProgress<PdfTextIndexProgress>? progress)
+            {
+                if (progress == null) return;
+                lock (_gate) _subscribers.Add(progress);
+            }
+
+            public void Unsubscribe(IProgress<PdfTextIndexProgress>? progress)
+            {
+                if (progress == null) return;
+                lock (_gate) _subscribers.Remove(progress);
+            }
+
+            /// <summary>新订阅者补报最近一次进度，避免进度界面一直空白</summary>
+            public void ReplayLatest(IProgress<PdfTextIndexProgress>? progress)
+            {
+                if (progress == null) return;
+
+                PdfTextIndexProgress? latest;
+                lock (_gate) latest = _latest;
+                if (latest != null) progress.Report(latest);
+            }
+
+            public void Report(PdfTextIndexProgress progress)
+            {
+                IProgress<PdfTextIndexProgress>[] subscribers;
+                lock (_gate)
+                {
+                    _latest = progress;
+                    subscribers = _subscribers.ToArray();
+                }
+
+                foreach (var subscriber in subscribers)
+                {
+                    try
+                    {
+                        subscriber.Report(progress);
+                    }
+                    catch (Exception)
+                    {
+                        // 订阅者（通常是已关闭的窗体）异常不影响构建
+                    }
+                }
             }
         }
     }

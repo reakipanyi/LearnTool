@@ -257,12 +257,16 @@ public static class PdfTextBlockBuilder
         if (row.X > current.X + current.Width + 0.02f)
             return false;
 
-        // 左边缘对齐或居中对齐才继续合并
+        // 小写字母开头基本是上一句未结束的换行续行（英文句中换行），
+        // 对齐与句末判断适当放宽，避免一句话被拆成两块
+        bool startsLowercase = row.Text.Length > 0 && char.IsLower(row.Text[0]);
+
+        // 左边缘对齐或居中对齐才继续合并（小写续行放宽此限制）
         float currentCenterX = current.X + current.Width / 2f;
         float leftTolerance = Math.Max(options.ParagraphAlignTolerance, referenceHeight * 0.6f);
         bool aligned = Math.Abs(row.X - current.X) <= leftTolerance ||
                        Math.Abs(row.CenterX - currentCenterX) <= 0.03f;
-        if (!aligned)
+        if (!aligned && !startsLowercase)
             return false;
 
         // 列表项、标题字号突变都独立成块
@@ -278,8 +282,9 @@ public static class PdfTextBlockBuilder
             return false;
         }
 
-        // 上一行已到句末，下一行视为新段落
-        return !EndsSentence(current.Text);
+        // 上一行已到句末，下一行视为新段落；
+        // 但下一行以小写字母开头，说明句末多为缩写/小数点等误判，仍属同一句
+        return startsLowercase || !EndsSentence(current.Text);
     }
 
     private static void MergeRow(PdfAutoTextBlock block, TextRow row)

@@ -265,6 +265,12 @@ namespace LearningAssistant.Managers
             ShowScopedForm<PlanGameForm>();
         }
 
+        public void OpenWrongAnswerWindow()
+        {
+            _logger.LogInformation("Opening wrong answer window");
+            ShowScopedForm<WrongAnswerForm>();
+        }
+
         public void OpenStatisticsWindow()
         {
             // 04 数据中心：统计入口统一指向学习数据中心（LearningManagementForm），

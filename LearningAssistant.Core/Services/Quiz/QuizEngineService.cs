@@ -45,7 +45,8 @@ namespace LearningAssistant.Services.Quiz
         /// 生成练习题（使用AI）
         /// </summary>
         public async Task<List<QuizQuestion>> GenerateQuestionsAsync(
-            string content, string language, int count, QuestionType type)
+            string content, string language, int count, QuestionType type,
+            AiChatOptions? options = null, CancellationToken cancellationToken = default)
         {
             if (string.IsNullOrWhiteSpace(content))
                 return new List<QuizQuestion>();
@@ -56,9 +57,9 @@ namespace LearningAssistant.Services.Quiz
             {
                 _logger?.LogDebug("开始生成测验题目: 类型={Type}, 数量={Count}", type, count);
 
-                // 调用AI生成题目
+                // 调用AI生成题目（带按次参数时由 Provider 使用更长的输出预算与超时）
                 var prompt = BuildQuestionPrompt(content, language, count, type);
-                var aiResponse = await _aiService.GenerateExerciseAsync(prompt, language);
+                var aiResponse = await _aiService.GenerateExerciseAsync(prompt, language, options, cancellationToken);
 
                 if (string.IsNullOrWhiteSpace(aiResponse))
                 {

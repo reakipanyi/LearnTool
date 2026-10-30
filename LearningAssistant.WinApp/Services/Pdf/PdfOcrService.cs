@@ -21,6 +21,11 @@ namespace LearningAssistant.Services.Pdf
 
         public string? InitErrorMessage => _ocrService.InitErrorMessage;
 
+        /// <summary>自动检测切换后以 _currentLanguage 为准，未显式设置时回落到引擎默认语言</summary>
+        public string CurrentLanguage => string.IsNullOrWhiteSpace(_currentLanguage)
+            ? _ocrService.CurrentLanguage
+            : _currentLanguage;
+
         public async Task<string?> RecognizeTextAsync(byte[] image)
         {
             if (!_ocrService.IsAvailable)

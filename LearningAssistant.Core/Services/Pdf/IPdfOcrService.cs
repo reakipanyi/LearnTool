@@ -18,6 +18,11 @@ namespace LearningAssistant.Services.Pdf
         string? InitErrorMessage { get; }
 
         /// <summary>
+        /// 当前生效的 OCR 语言（显式设置优先，其次底层引擎默认值）；用于索引缓存失效判断
+        /// </summary>
+        string CurrentLanguage { get; }
+
+        /// <summary>
         /// 识别图片中的文字
         /// </summary>
         /// <param name="image">图片byte[]</param>

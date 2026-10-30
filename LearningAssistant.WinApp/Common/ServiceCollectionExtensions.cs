@@ -65,7 +65,11 @@ namespace LearningAssistant.Common
             services.AddSingleton(appConfig.CloudStorageConfig);
 
             // 添加共享的 HttpClient
-            services.AddSingleton<HttpClient>(sp => new HttpClient { Timeout = TimeSpan.FromSeconds(appConfig.AiConfig.TimeoutSeconds) });
+            // 120 秒仅作兜底：PDF 等长请求按次传入更短的超时令牌，避免 30 秒默认值提前截断长文生成
+            services.AddSingleton<HttpClient>(sp => new HttpClient
+            {
+                Timeout = TimeSpan.FromSeconds(Math.Max(120, appConfig.AiConfig.TimeoutSeconds))
+            });
 
             return services;
         }

@@ -35,6 +35,12 @@ namespace LearningAssistant.Managers
         /// </summary>
         public event EventHandler? UndoActionRecorded;
 
+        /// <summary>
+        /// 摘录列表重建完成后触发，宿主据此同步条数、空状态提示等外围 UI，
+        /// 避免只有列表内容更新、空状态仍盖在上面要等翻页才消失。
+        /// </summary>
+        public event EventHandler? HighlightListChanged;
+
         public PdfReaderHighlightManager(ILogger logger, IPdfReaderFormAccess form, IHighlightService highlightService,
             IAnnotationService? annotationService = null, IEventBus? eventBus = null, IAppPaths? appPaths = null)
         {
@@ -1047,6 +1053,8 @@ namespace LearningAssistant.Managers
             {
                 listBox.EndUpdate();
             }
+
+            HighlightListChanged?.Invoke(this, EventArgs.Empty);
         }
 
         /// <summary>列表排序：页码优先，其次页面纵向位置，最后按创建时间兜底。</summary>

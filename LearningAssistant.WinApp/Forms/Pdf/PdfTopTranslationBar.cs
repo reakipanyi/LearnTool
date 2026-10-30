@@ -3,11 +3,15 @@ using LearningAssistant.Common.UI;
 namespace LearningAssistant.Forms.Pdf;
 
 /// <summary>
-/// 阅读器顶部悬浮译条：负责展示选区译文，也复用作“暂停跟读”的状态条。
+/// 阅读器悬浮译条：负责展示选区译文，也复用作“暂停跟读”的状态条。
+/// 固定在画布底部、状态条之上，只覆盖页脚区域，避免遮挡正文。
 /// 只做展示与输入转发，翻译与录音逻辑仍由 PdfReaderForm 负责。
 /// </summary>
 public sealed class PdfTopTranslationBar : Panel
 {
+    /// <summary>译条统一高度：48px，容纳放大后的原文/译文字号。</summary>
+    public const int BarHeight = 48;
+
     private enum BarMode
     {
         Hidden,
@@ -35,12 +39,17 @@ public sealed class PdfTopTranslationBar : Panel
     private int _shadowingDurationMs;
     private bool _hasTake;
 
+    // 拖动状态：按住译条空白处或文字区域可整体挪动位置
+    private bool _dragging;
+    private Point _dragStartScreen;
+    private Control? _dragCapture;
+
     public PdfTopTranslationBar()
     {
         DoubleBuffered = true;
         Visible = false;
-        Height = 58;
-        Padding = new Padding(12, 7, 10, 7);
+        Height = BarHeight;
+        Padding = new Padding(12, 4, 10, 4);
         BuildChildren();
         ApplyTheme();
         PdfSidebarTheme.ThemeChanged += OnThemeChanged;
@@ -60,6 +69,12 @@ public sealed class PdfTopTranslationBar : Panel
 
     /// <summary>用户关闭译条。</summary>
     public event EventHandler? CloseRequested;
+
+    /// <summary>用户开始拖动译条。</summary>
+    public event EventHandler? DragStarted;
+
+    /// <summary>用户拖动译条，参数为相对拖动起点的累计偏移。</summary>
+    public event EventHandler<Point>? DragMoved;
 
     /// <summary>当前是否处于跟读状态条模式。</summary>
     public bool IsShadowingMode => _mode == BarMode.Shadowing;
@@ -248,7 +263,7 @@ public sealed class PdfTopTranslationBar : Panel
     private void BuildChildren()
     {
         _badge.AutoSize = false;
-        _badge.Size = new Size(78, 20);
+        _badge.Size = new Size(64, 20);
         _badge.TextAlign = ContentAlignment.MiddleCenter;
         _badge.Font = _badgeFont;
         _badge.TabStop = false;
@@ -285,6 +300,15 @@ public sealed class PdfTopTranslationBar : Panel
             CloseRequested?.Invoke(this, EventArgs.Empty);
         };
 
+        AttachDragHandlers(this);
+        AttachDragHandlers(_badge);
+        AttachDragHandlers(_original);
+        AttachDragHandlers(_translation);
+        _tooltip.SetToolTip(this, "按住可拖动译条");
+        _tooltip.SetToolTip(_original, "按住可拖动译条");
+        _tooltip.SetToolTip(_translation, "按住可拖动译条");
+        _tooltip.SetToolTip(_badge, "按住可拖动译条");
+
         Controls.Add(_badge);
         Controls.Add(_original);
         Controls.Add(_translation);
@@ -306,6 +330,49 @@ public sealed class PdfTopTranslationBar : Panel
         button.TabStop = false;
         button.Cursor = Cursors.Hand;
         button.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+    }
+
+    private void AttachDragHandlers(Control control)
+    {
+        control.MouseDown += OnDragMouseDown;
+        control.MouseMove += OnDragMouseMove;
+        control.MouseUp += OnDragMouseUp;
+        // 除操作按钮外都给出可拖动的光标提示
+        control.Cursor = Cursors.SizeAll;
+    }
+
+    private void OnDragMouseDown(object? sender, MouseEventArgs e)
+    {
+        if (e.Button != MouseButtons.Left || sender is not Control source)
+            return;
+
+        _dragging = true;
+        _dragStartScreen = source.PointToScreen(e.Location);
+        _dragCapture = source;
+        source.Capture = true;
+        DragStarted?.Invoke(this, EventArgs.Empty);
+    }
+
+    private void OnDragMouseMove(object? sender, MouseEventArgs e)
+    {
+        if (!_dragging)
+            return;
+
+        var current = new Point(Cursor.Position.X, Cursor.Position.Y);
+        DragMoved?.Invoke(this, new Point(current.X - _dragStartScreen.X, current.Y - _dragStartScreen.Y));
+    }
+
+    private void OnDragMouseUp(object? sender, MouseEventArgs e)
+    {
+        if (!_dragging)
+            return;
+
+        _dragging = false;
+        if (_dragCapture != null)
+        {
+            _dragCapture.Capture = false;
+            _dragCapture = null;
+        }
     }
 
     private void ShowShadowingActions(bool canPlay, bool canClose)
@@ -389,19 +456,20 @@ public sealed class PdfTopTranslationBar : Panel
         var actionsWidth = actionSize * 5 + actionGap * 4;
         var textWidth = Math.Max(80, Width - left - actionsWidth - 24);
 
-        _badge.SetBounds(left, 10, 78, 20);
+        _badge.SetBounds(left, 14, 64, 20);
         var textLeft = _badge.Right + 8;
-        textWidth = Math.Max(80, Width - textLeft - actionsWidth - 18);
+        textWidth = Math.Max(80, Width - textLeft - actionsWidth - 22);
 
-        _original.SetBounds(textLeft, 7, textWidth, 18);
-        _translation.SetBounds(textLeft, 26, textWidth, 24);
+        _original.SetBounds(textLeft, 4, textWidth, 17);
+        _translation.SetBounds(textLeft, 22, textWidth, 21);
 
+        var actionTop = (Height - actionSize) / 2;
         var right = Width - 10 - actionSize;
-        _btnClose.SetBounds(right, 14, actionSize, actionSize);
-        _btnPlay.SetBounds(right - actionSize - actionGap, 14, actionSize, actionSize);
-        _btnCopy.SetBounds(right - (actionSize + actionGap) * 2, 14, actionSize, actionSize);
-        _btnSpeak.SetBounds(right - (actionSize + actionGap) * 3, 14, actionSize, actionSize);
-        _btnShadow.SetBounds(right - (actionSize + actionGap) * 4, 14, actionSize, actionSize);
+        _btnClose.SetBounds(right, actionTop, actionSize, actionSize);
+        _btnPlay.SetBounds(right - actionSize - actionGap, actionTop, actionSize, actionSize);
+        _btnCopy.SetBounds(right - (actionSize + actionGap) * 2, actionTop, actionSize, actionSize);
+        _btnSpeak.SetBounds(right - (actionSize + actionGap) * 3, actionTop, actionSize, actionSize);
+        _btnShadow.SetBounds(right - (actionSize + actionGap) * 4, actionTop, actionSize, actionSize);
     }
 
     private static string FormatDuration(TimeSpan elapsed)

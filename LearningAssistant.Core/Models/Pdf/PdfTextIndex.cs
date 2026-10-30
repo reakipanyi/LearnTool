@@ -53,6 +53,12 @@ namespace LearningAssistant.Models.Pdf
         /// <summary>构建时间（UTC）</summary>
         public DateTime BuiltAtUtc { get; set; }
 
+        /// <summary>索引构建器身份（OCR 引擎 + 语言策略），变化时旧索引失效</summary>
+        public string BuilderIdentity { get; set; } = string.Empty;
+
+        /// <summary>是否为完整索引；false 表示断点续建的部分索引</summary>
+        public bool IsComplete { get; set; } = true;
+
         /// <summary>页级文本</summary>
         public List<PdfTextIndexPage> Pages { get; set; } = new();
 
@@ -71,8 +77,8 @@ namespace LearningAssistant.Models.Pdf
     /// <summary>索引格式版本常量</summary>
     public static class PdfDocumentTextIndexVersion
     {
-        /// <summary>当前版本</summary>
-        public const int Current = 1;
+        /// <summary>当前版本（v2：加入构建器身份与断点续建，旧缓存自动失效）</summary>
+        public const int Current = 2;
     }
 
     /// <summary>文本索引构建进度</summary>

@@ -71,7 +71,8 @@ namespace LearningAssistant.Services.Pdf
             {
                 PdfAiScope.CurrentPage => Enumerable.Range(Math.Max(0, current - 1), Math.Min(pageCount, current + 2) - Math.Max(0, current - 1)),
                 PdfAiScope.SpecifiedPages => BuildRange(startPageIndex, endPageIndex, pageCount),
-                PdfAiScope.WholeDocument => Enumerable.Range(0, pageCount),
+                // 全文作用域当前页优先，避免预算被靠前的页全部占用，当前页反而进不了上下文
+                PdfAiScope.WholeDocument => BuildPriorityOrder(current, pageCount),
                 _ => new[] { current }
             };
 
@@ -143,6 +144,34 @@ namespace LearningAssistant.Services.Pdf
             int end = Math.Min(pageCount - 1, endPageIndex);
             if (end < start) return Array.Empty<int>();
             return Enumerable.Range(start, end - start + 1);
+        }
+
+        /// <summary>当前页优先，再向两侧扩展，最后按页序覆盖剩余页</summary>
+        private static IEnumerable<int> BuildPriorityOrder(int current, int pageCount)
+        {
+            yield return current;
+
+            for (int distance = 1; ; distance++)
+            {
+                bool produced = false;
+
+                int after = current + distance;
+                if (after < pageCount)
+                {
+                    yield return after;
+                    produced = true;
+                }
+
+                int before = current - distance;
+                if (before >= 0)
+                {
+                    yield return before;
+                    produced = true;
+                }
+
+                // 两侧都越界后结束：继续循环会无限 yield
+                if (!produced) yield break;
+            }
         }
     }
 }

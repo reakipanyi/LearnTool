@@ -18,6 +18,7 @@ partial class PdfAiAnswerDialog
         flowPages = new FlowLayoutPanel();
         buttonClose = new Button();
         labelTitle = new Label();
+        labelMeta = new Label();
         panelAnswer.SuspendLayout();
         panelBottom.SuspendLayout();
         SuspendLayout();
@@ -108,6 +109,18 @@ partial class PdfAiAnswerDialog
         labelTitle.TabIndex = 2;
         labelTitle.Text = "AI 问答";
         // 
+        // labelMeta
+        // 
+        labelMeta.Dock = DockStyle.Top;
+        labelMeta.Font = new Font("微软雅黑", 8.5F);
+        labelMeta.ForeColor = Color.FromArgb(120, 120, 120);
+        labelMeta.Location = new Point(0, 46);
+        labelMeta.Name = "labelMeta";
+        labelMeta.Padding = new Padding(14, 0, 14, 0);
+        labelMeta.Size = new Size(664, 22);
+        labelMeta.TabIndex = 3;
+        labelMeta.TextAlign = ContentAlignment.MiddleLeft;
+        // 
         // PdfAiAnswerDialog
         // 
         AutoScaleDimensions = new SizeF(7F, 17F);
@@ -116,6 +129,7 @@ partial class PdfAiAnswerDialog
         ClientSize = new Size(664, 560);
         Controls.Add(panelAnswer);
         Controls.Add(panelBottom);
+        Controls.Add(labelMeta);
         Controls.Add(labelTitle);
         Font = new Font("微软雅黑", 9F);
         FormBorderStyle = FormBorderStyle.Sizable;
@@ -142,4 +156,5 @@ partial class PdfAiAnswerDialog
     private FlowLayoutPanel flowPages;
     private Button buttonClose;
     private Label labelTitle;
+    private Label labelMeta;
 }

@@ -51,5 +51,23 @@ namespace LearningAssistant.Services.AI
         /// 提供商名称
         /// </summary>
         string ProviderName { get; }
+
+        /// <summary>
+        /// 实际请求的模型名（如 endpoint.Model），用于缓存键；默认与显示名一致。
+        /// </summary>
+        string ModelId => ModelName;
+
+        /// <summary>
+        /// 供应商标识，用于缓存键；默认与显示名一致。
+        /// </summary>
+        string ProviderId => ProviderName;
+
+        /// <summary>
+        /// 重新读取当前配置并重建内部服务（保存 AI 设置后调用，使其立即生效）。
+        /// 默认空实现，供不支持热更新的实现类直接继承。
+        /// </summary>
+        void Reload()
+        {
+        }
     }
 }

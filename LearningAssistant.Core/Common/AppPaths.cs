@@ -149,6 +149,11 @@ namespace LearningAssistant.Common
         public static string PdfAiCacheDir => Path.Combine(CurrentUserDir, "pdf_ai_cache");
 
         /// <summary>
+        /// PDF AI 调用用量目录（按文档指纹 + 日期记录当日调用次数，用于成本上限）
+        /// </summary>
+        public static string PdfAiUsageDir => Path.Combine(CurrentUserDir, "pdf_ai_usage");
+
+        /// <summary>
         /// PDF AI 摘要条目目录（按用户 + 文档哈希存页码/录音锚点）
         /// </summary>
         public static string PdfAiSummaryDir => Path.Combine(CurrentUserDir, "pdf_ai_summaries");
@@ -266,6 +271,7 @@ namespace LearningAssistant.Common
             EnsureDirectoryExists(ShadowingDir);
             EnsureDirectoryExists(PdfTextIndexDir);
             EnsureDirectoryExists(PdfAiCacheDir);
+            EnsureDirectoryExists(PdfAiUsageDir);
             EnsureDirectoryExists(PdfAiSummaryDir);
             EnsureDirectoryExists(PdfTranslationGlossaryDir);
             EnsureDirectoryExists(PdfSelectionTranslationDir);

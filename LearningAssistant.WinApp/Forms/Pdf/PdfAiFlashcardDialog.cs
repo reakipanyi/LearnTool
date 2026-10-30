@@ -58,11 +58,11 @@ namespace LearningAssistant.Forms.Pdf
     public sealed class PdfAiFlashcardCard
     {
         /// <summary>正面问题或概念</summary>
-        public string Front { get; init; } = string.Empty;
+        public string Front { get; set; } = string.Empty;
         /// <summary>背面答案或解释</summary>
-        public string Back { get; init; } = string.Empty;
+        public string Back { get; set; } = string.Empty;
         /// <summary>来源页码（从 1 开始，0 表示未标注）</summary>
-        public int PageNumber { get; init; }
+        public int PageNumber { get; set; }
     }
 
 }

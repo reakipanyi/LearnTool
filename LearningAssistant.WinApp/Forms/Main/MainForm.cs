@@ -466,7 +466,7 @@ namespace LearningAssistant.Forms.Main
                     OpenPomodoroWindow();
                     break;
                 case "wrongbook":
-                    buttonExportErrorBook?.PerformClick();
+                    _windowManager.OpenWrongAnswerWindow();
                     break;
                 case "browser":
                     ButtonWebView2Browser_Click(null, EventArgs.Empty);
@@ -651,7 +651,7 @@ namespace LearningAssistant.Forms.Main
                         _windowManager.OpenPdfReaderWindow();
                         break;
                     case "错题本":
-                        buttonExportErrorBook?.PerformClick();
+                        _windowManager.OpenWrongAnswerWindow();
                         break;
                     case "每日挑战":
                         ShowChallengeForm();
@@ -902,11 +902,9 @@ namespace LearningAssistant.Forms.Main
         private Button buttonSettings;
         private Button buttonOpenEditor;
         private Button buttonOpenPdfReader;
-        private Button buttonExportErrorBook;
         private GroupBox groupBoxProgress;
         private TextBox textBoxProgress;
         private Button buttonLearningManagement;
-        private Button buttonBrowser;
         private Button buttonWebView2Browser;
         private ToolStripStatusLabel toolStripStatusLabel;
         private StatusStrip statusStrip1;
@@ -940,7 +938,6 @@ namespace LearningAssistant.Forms.Main
             labelStreakDays = new Label();
             buttonLearningManagement = new Button();
             buttonWebView2Browser = new Button();
-            buttonBrowser = new Button();
             statusStrip1 = new StatusStrip();
             toolStripStatusLabel = new ToolStripStatusLabel();
             splitContainerMain = new SplitContainer();
@@ -1093,13 +1090,6 @@ namespace LearningAssistant.Forms.Main
             buttonWebView2Browser.Text = "🌐 浏览器";
             buttonWebView2Browser.UseVisualStyleBackColor = false;
             buttonWebView2Browser.Click += ButtonWebView2Browser_Click;
-            // 
-            // buttonBrowser
-            // 
-            buttonBrowser.Location = new Point(0, 0);
-            buttonBrowser.Name = "buttonBrowser";
-            buttonBrowser.Size = new Size(75, 23);
-            buttonBrowser.TabIndex = 0;
             // 
             // statusStrip1
             // 

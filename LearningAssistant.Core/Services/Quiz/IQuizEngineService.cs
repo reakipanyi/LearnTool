@@ -1,4 +1,5 @@
 using LearningAssistant.Models.Quiz;
+using LearningAssistant.Services.AI;
 
 namespace LearningAssistant.Services.Quiz
 {
@@ -15,7 +16,9 @@ namespace LearningAssistant.Services.Quiz
         /// <summary>
         /// 生成练习题（使用AI）
         /// </summary>
-        Task<List<QuizQuestion>> GenerateQuestionsAsync(string content, string language, int count, QuestionType type);
+        /// <param name="options">按次请求参数；为空时沿用旧接口的默认参数</param>
+        Task<List<QuizQuestion>> GenerateQuestionsAsync(string content, string language, int count, QuestionType type,
+            AiChatOptions? options = null, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// 提交答案

@@ -24,6 +24,14 @@ namespace LearningAssistant.Services.AI
         Task<string> GenerateExerciseAsync(string text, string language, CancellationToken cancellationToken = default);
 
         /// <summary>
+        /// 异步生成练习题（带按次请求参数）
+        /// 默认实现回退到旧方法，便于既有实现类无需改动即可满足接口。
+        /// </summary>
+        Task<string> GenerateExerciseAsync(string text, string language, AiChatOptions? options,
+            CancellationToken cancellationToken = default)
+            => GenerateExerciseAsync(text, language, cancellationToken);
+
+        /// <summary>
         /// 异步摘要文本
         /// </summary>
         /// <param name="text">要摘要的文本</param>

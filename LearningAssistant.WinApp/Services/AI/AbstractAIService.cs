@@ -38,6 +38,12 @@ namespace LearningAssistant.Services.AI
         public abstract string ModelName { get; }
         public abstract string ProviderName { get; }
 
+        /// <summary>实际请求的模型名（端点中的 Model），PDF AI 缓存键使用该值</summary>
+        public virtual string ModelId => _endpoint.Model;
+
+        /// <inheritdoc />
+        public virtual string ProviderId => ProviderName;
+
         public virtual async Task<string> GetExplanationAsync(string text, string language, string subType, CancellationToken cancellationToken = default)
         {
             if (string.IsNullOrWhiteSpace(text))

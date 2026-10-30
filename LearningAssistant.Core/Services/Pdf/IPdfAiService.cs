@@ -50,6 +50,22 @@ namespace LearningAssistant.Services.Pdf
             CancellationToken cancellationToken = default);
 
         /// <summary>
+        /// 按作用域流式问答：上下文准备完成后回调 <paramref name="onContextReady"/>，
+        /// 随后逐段返回答案。不经过磁盘缓存，保证“重新生成/追问”每次都取新结果。
+        /// 作用域内没有可用文本时抛出 <see cref="InvalidOperationException"/>。
+        /// </summary>
+        IAsyncEnumerable<string> AskScopedStreamAsync(
+            string pdfPath,
+            string question,
+            PdfAiScope scope,
+            int currentPageIndex,
+            int startPageIndex,
+            int endPageIndex,
+            string? selectedText,
+            Action<PdfAiStreamContext>? onContextReady,
+            CancellationToken cancellationToken = default);
+
+        /// <summary>
         /// 解释选中文本：结合所在页上下文，而不是裸文本调用。
         /// </summary>
         Task<PdfAiResponse> ExplainSelectionAsync(

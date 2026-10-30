@@ -17,7 +17,7 @@ namespace LearningAssistant.Services.Pdf
     }
 
     /// <summary>
-    /// 轻量关键词检索：按页码打分并扩展邻近页，供文档问答召回上下文。
+    /// 轻量关键词检索：按 BM25 打分并扩展邻近页，供文档问答召回上下文。
     /// 不引入向量库，只依赖已构建的文本索引。
     /// </summary>
     public static class PdfKeywordRetriever
@@ -28,8 +28,28 @@ namespace LearningAssistant.Services.Pdf
         /// <summary>单页单关键词命中次数上限，避免长页因重复词过度加权</summary>
         private const int MaxHitPerKeyword = 5;
 
+        /// <summary>BM25 词频饱和参数</summary>
+        private const double K1 = 1.2;
+
+        /// <summary>BM25 文档长度归一参数</summary>
+        private const double B = 0.75;
+
+        /// <summary>短语连续命中时每字追加的分数权重</summary>
+        private const double PhraseCharWeight = 0.2;
+
+        /// <summary>标题行命中关键词时追加的分数，避免结构信息被正文淹没</summary>
+        private const double HeadingHitBoost = 0.4;
+
+        /// <summary>结构加权总分上限，防止标题密集的目录页过度抢占召回</summary>
+        private const double MaxStructureBoost = 1.5;
+
         private static readonly Regex EnglishTokenRegex = new("[A-Za-z0-9_]{2,}", RegexOptions.Compiled);
         private static readonly Regex ChineseRunRegex = new(@"[\u4e00-\u9fff]+", RegexOptions.Compiled);
+        private static readonly Regex EnglishPhraseRegex = new(
+            @"\b[A-Za-z0-9_]{2,}(?:\s+[A-Za-z0-9_]{2,}){1,2}\b", RegexOptions.Compiled);
+        private static readonly Regex HeadingPrefixRegex = new(
+            @"^\s*(?:第[一二三四五六七八九十百千\d]+[章节篇部分]|[0-9]+(?:\.[0-9]+)*[、.．]|[（(][一二三四五六七八九十\d]+[)）]|[一二三四五六七八九十]+[、.．])",
+            RegexOptions.Compiled);
 
         /// <summary>常见疑问词/虚词，避免把问题本身当检索词</summary>
         private static readonly HashSet<string> StopWords = new(StringComparer.OrdinalIgnoreCase)
@@ -62,14 +82,28 @@ namespace LearningAssistant.Services.Pdf
             maxPages = Math.Max(1, maxPages);
             neighborRange = Math.Max(0, neighborRange);
 
-            var scored = new List<(int PageIndex, int Score)>();
+            // 只把有文本的页纳入统计，空页既不计长度也不参与打分
+            var textPages = new List<(int Index, string Text)>();
             for (int pageIndex = 0; pageIndex < document.PageCount; pageIndex++)
             {
                 var text = document.GetPage(pageIndex)?.Text;
-                if (string.IsNullOrWhiteSpace(text)) continue;
+                if (!string.IsNullOrWhiteSpace(text)) textPages.Add((pageIndex, text));
+            }
+            if (textPages.Count == 0)
+                return new PdfRetrievalResult { Keywords = keywords };
 
-                int score = ScorePage(text, keywords);
-                if (score > 0) scored.Add((pageIndex, score));
+            double averageLength = textPages.Average(p => (double)p.Text.Length);
+            var documentFrequency = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            foreach (var keyword in keywords)
+                documentFrequency[keyword] = Math.Max(1, textPages.Count(p => ContainsIgnoreCase(p.Text, keyword)));
+
+            var phrases = ExtractPhrases(question);
+
+            var scored = new List<(int PageIndex, double Score)>();
+            foreach (var page in textPages)
+            {
+                double score = ScorePage(page.Text, averageLength, textPages.Count, keywords, documentFrequency, phrases);
+                if (score > 0) scored.Add((page.Index, score));
             }
 
             if (scored.Count == 0)
@@ -143,19 +177,97 @@ namespace LearningAssistant.Services.Pdf
             if (seen.Add(keyword)) keywords.Add(keyword);
         }
 
-        private static int ScorePage(string text, IReadOnlyList<string> keywords)
+        /// <summary>从问题中提取短语（连续中文片段、英文词组），用于连续命中加权</summary>
+        private static IReadOnlyList<string> ExtractPhrases(string question)
         {
-            int score = 0;
+            var phrases = new List<string>();
+            if (string.IsNullOrWhiteSpace(question)) return phrases;
+
+            foreach (Match match in ChineseRunRegex.Matches(question))
+            {
+                if (match.Value.Length >= 3) phrases.Add(match.Value);
+            }
+
+            foreach (Match match in EnglishPhraseRegex.Matches(question))
+            {
+                phrases.Add(match.Value);
+            }
+
+            return phrases
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Take(4)
+                .ToList();
+        }
+
+        /// <summary>
+        /// BM25 打分：IDF 抑制常见词、词频饱和避免长页刷分、长度归一抵消页长差异；
+        /// 再叠加短语连续命中与标题行命中，提升答案页与章节页的排序。
+        /// </summary>
+        private static double ScorePage(
+            string text,
+            double averageLength,
+            int pageCount,
+            IReadOnlyList<string> keywords,
+            IReadOnlyDictionary<string, int> documentFrequency,
+            IReadOnlyList<string> phrases)
+        {
+            double score = 0;
+            double lengthFactor = 1 - B + B * (text.Length / Math.Max(1d, averageLength));
+
             foreach (var keyword in keywords)
             {
                 int hits = CountOccurrences(text, keyword);
                 if (hits <= 0) continue;
 
-                int weight = keyword.Length >= 4 ? 2 : 1;
-                score += Math.Min(hits, MaxHitPerKeyword) * weight;
+                int df = documentFrequency.TryGetValue(keyword, out var freq) ? freq : 1;
+                double idf = Math.Log(1 + (pageCount - df + 0.5) / (df + 0.5));
+                double tfWeight = hits * (K1 + 1) / (hits + K1 * lengthFactor);
+
+                // 较长关键词更具区分度：中文二元词权重低、英文单词与术语权重高
+                double specificity = keyword.Length >= 4 ? 1.3 : 1.0;
+                score += idf * tfWeight * specificity;
             }
-            return score;
+
+            // 短语连续命中：整句出现通常说明该页就是答案页
+            foreach (var phrase in phrases)
+            {
+                if (ContainsIgnoreCase(text, phrase))
+                    score += 1 + phrase.Length * PhraseCharWeight;
+            }
+
+            return score + StructureBoost(text, keywords);
         }
+
+        /// <summary>标题行命中关键词时追加分数，并对标题密集页设上限</summary>
+        private static double StructureBoost(string text, IReadOnlyList<string> keywords)
+        {
+            double boost = 0;
+            foreach (var line in text.Split('\n'))
+            {
+                var trimmed = line.Trim();
+                if (trimmed.Length == 0 || trimmed.Length > 40) continue;
+                if (!LooksLikeHeading(trimmed)) continue;
+
+                foreach (var keyword in keywords)
+                {
+                    if (!ContainsIgnoreCase(trimmed, keyword)) continue;
+                    boost += HeadingHitBoost;
+                    break;
+                }
+            }
+            return Math.Min(boost, MaxStructureBoost);
+        }
+
+        /// <summary>标题行特征：带章节/编号前缀，或短行且不以句末标点结束</summary>
+        private static bool LooksLikeHeading(string line)
+        {
+            if (HeadingPrefixRegex.IsMatch(line)) return true;
+            if (line.Length > 24) return false;
+            return line[^1] is not ('。' or '.' or '；' or ';' or '，' or ',');
+        }
+
+        private static bool ContainsIgnoreCase(string text, string keyword)
+            => text.IndexOf(keyword, StringComparison.OrdinalIgnoreCase) >= 0;
 
         private static int CountOccurrences(string text, string keyword)
         {

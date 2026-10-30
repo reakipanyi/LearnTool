@@ -41,6 +41,21 @@ namespace LearningAssistant.Services.AI
         }
 
         /// <summary>
+        /// 带按次请求参数生成练习题：Provider 支持时直连新接口，避开旧层固定 1000 token 与通用缓存
+        /// </summary>
+        public async Task<string> GenerateExerciseAsync(string text, string language, AiChatOptions? options,
+            CancellationToken cancellationToken = default)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+                return string.Empty;
+
+            if (options == null || _aiService is not IAiChatCompletionService chatService)
+                return await _aiService.GenerateExerciseAsync(text, language, cancellationToken);
+
+            return await chatService.CompleteAsync(text, options, cancellationToken);
+        }
+
+        /// <summary>
         /// 异步摘要文本 - 调用IAIService.SummarizeAsync
         /// </summary>
         public async Task<string> SummarizeTextAsync(string text, CancellationToken cancellationToken = default)

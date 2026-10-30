@@ -193,6 +193,7 @@ public sealed class PdfAutoLayoutServiceTests : IDisposable
 
         public bool IsAvailable => true;
         public string? InitErrorMessage => null;
+        public string CurrentLanguage => "eng";
 
         public Task<OcrLayoutResult?> RecognizeLayoutWithAutoLanguageAsync(byte[] image)
         {
