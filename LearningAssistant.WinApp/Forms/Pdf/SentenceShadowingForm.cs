@@ -61,6 +61,12 @@ namespace LearningAssistant.Forms.Pdf
         private NAudioMediaPlayer? _recordingPlayer;
         private readonly ShadowingAlignmentContext? _alignmentContext;
         private readonly IReadOnlyList<ShadowingCue> _alignmentCues;
+        /// <summary>加载/保存对账后的 cue↔切片绑定表；与 _alignmentCues 等长同序，无对齐上下文时为空。</summary>
+        private IReadOnlyList<CueBinding> _bindings = Array.Empty<CueBinding>();
+        /// <summary>最近一次对账结果（含 Orphans/Duplicates），供状态提示与修复入口使用。</summary>
+        private ReconcileResult? _bindingsDrift;
+        /// <summary>对齐句数与页面句数不一致时置真：不再清空 cues，保留可对齐句并提示核对。</summary>
+        private bool _cueCountMismatch;
         private readonly string? _initialSentenceText;
         private readonly AudioSliceService _audioSliceService = new();
         private readonly Button _btnAlign = new();
@@ -154,9 +160,14 @@ namespace LearningAssistant.Forms.Pdf
                 ? Array.Empty<ShadowingCue>()
                 : ShadowingHighlightSource.BuildPageCues(
                     _textSentences, _alignmentContext.Highlights, _pageIndex);
-            _alignmentCues = cues.Count == _textSentences.Count
-                ? cues
-                : Array.Empty<ShadowingCue>();
+            // 数量不等时不再清空 cues：保留可对齐句，记录差异并提示核对
+            _alignmentCues = cues;
+            _cueCountMismatch = _alignmentContext != null && cues.Count != _textSentences.Count;
+            if (_cueCountMismatch)
+            {
+                Trace.TraceWarning(
+                    $"[SentenceShadowing] 对齐句数({cues.Count})与页面句数({_textSentences.Count})不一致，仍按对齐句继续。");
+            }
 
             InitializeComponent();
 
@@ -251,11 +262,42 @@ namespace LearningAssistant.Forms.Pdf
                     _segmentManifest = manifest;
                     _segments = manifest.Segments.OrderBy(s => s.StartMs).ToList();
                 }
+
+                // 加载只读对账：不写盘、不删除孤立切片，只生成绑定表供列表与状态提示
+                RecomputeBindings();
             }
             catch (Exception ex)
             {
                 Trace.TraceWarning($"[SentenceShadowing] 读取原声切片失败: {ex.Message}");
             }
+        }
+
+        /// <summary>
+        /// 只读对账：以 cue 为唯一真源生成绑定表与漂移摘要；不写盘、不删除 Orphan。
+        /// alignedOnce 不能用 _segments.Count > 0 判定（只剩孤儿切片时会误判为“已跳过”），
+        /// 以 ShadowingProgress.Pages[page].LastSegmentId 为准；旧数据无进度记录时回退 segments.Count > 0。
+        /// </summary>
+        private void RecomputeBindings()
+        {
+            if (_alignmentCues.Count == 0)
+            {
+                _bindings = Array.Empty<CueBinding>();
+                _bindingsDrift = null;
+                return;
+            }
+
+            var progress = _segmentStore.LoadProgress(_pdfPath);
+            bool alignedOnce = !string.IsNullOrWhiteSpace(
+                    progress?.Pages.GetValueOrDefault(_pageIndex.ToString())?.LastSegmentId)
+                || (progress == null && _segments.Count > 0);
+
+            var result = ShadowingCueReconciler.Reconcile(
+                _alignmentCues,
+                _segments,
+                s => File.Exists(_segmentStore.ResolvePath(s.SlicePath)),
+                alignedOnce: alignedOnce);
+            _bindings = result.Bindings;
+            _bindingsDrift = result;
         }
 
         private IReadOnlyList<ShadowingSentence> ActiveSentences()
@@ -677,13 +719,12 @@ namespace LearningAssistant.Forms.Pdf
                 Math.Max(0, (header.ClientSize.Height - size.Height) / 2));
         }
 
-        /// <summary>本页有音频且分句可用时才允许进入原声对齐；整本模式暂不启用。</summary>
+        /// <summary>本页有音频且存在可对齐句时才允许进入原声对齐；整本模式暂不启用。</summary>
         private bool CanAlignAudio()
             => !_wholeBook
                && _alignmentContext != null
                && _subtitleParser != null
-               && _alignmentCues.Count == _textSentences.Count
-               && _textSentences.Count > 0
+               && _alignmentCues.Count > 0
                && !string.IsNullOrWhiteSpace(_alignmentContext.SourcePath);
 
         /// <summary>有切片或可做原声对齐时显示来源栏；两种来源都存在时才显示单选按钮。</summary>
@@ -1056,20 +1097,38 @@ namespace LearningAssistant.Forms.Pdf
                     }
                 }
 
+                // 保存前对账：使用即将写盘的同一份 manifest 快照，不另读文件；只上报，不阻断保存
+                var reconciled = ShadowingCueReconciler.Reconcile(
+                    _alignmentCues,
+                    manifest.Segments,
+                    s => File.Exists(_segmentStore.ResolvePath(s.SlicePath)),
+                    alignedOnce: true);
+
                 await _segmentStore
                     .SaveSegmentsAsync(_pdfPath, manifest, CancellationToken.None, preserveExistingTakes: true)
                     .ConfigureAwait(true);
 
                 _segmentManifest = manifest;
-                _segments = manifest.Segments.OrderBy(s => s.StartMs).ToList();
+                // 保存后按 cue 顺序重建绑定表与切片列表（I4）：顺序只由 cue 决定，不再按 StartMs 排序
+                _bindings = reconciled.Bindings;
+                _bindingsDrift = reconciled;
+                _segments = _bindings
+                    .Where(b => b.Segment != null)
+                    .Select(b => b.Segment!)
+                    .ToList();
                 _segmentMode = _segments.Count > 0;
                 ExitAlignmentMode();
                 ApplyActiveSource();
 
-                int successCount = created.Count - failed.Count;
-                _labelStatus.Text = failed.Count == 0
-                    ? $"原声对齐完成：新增/更新 {successCount} 句原生切片。"
-                    : $"原声对齐完成：{successCount}/{created.Count} 句有原声，失败 {failed.Count} 句已回退文字跟读。";
+                string status = $"原声对齐完成：{reconciled.MatchedCount} 句有原声";
+                if (reconciled.UnboundCount > 0)
+                    status += $"，{reconciled.UnboundCount} 句已跳过";
+                status += "。";
+                if (failed.Count > 0)
+                    status += $"；{failed.Count} 句切片生成失败，已回退文字跟读。";
+                if (reconciled.Orphans.Count > 0)
+                    status += $"；{reconciled.Orphans.Count} 条旧切片与本页句子不匹配，可清理。";
+                _labelStatus.Text = status;
             }
             catch (Exception ex)
             {
@@ -1416,7 +1475,33 @@ namespace LearningAssistant.Forms.Pdf
             else if (_wholeBook)
                 _labelStatus.Text = "已载入全书高亮，可逐条跟读或录音。";
             else if (_segmentMode)
-                _labelStatus.Text = "已载入原声切片，可逐段跟读或录音。";
+                _labelStatus.Text = BuildSegmentLoadPrompt() ?? "已载入原声切片，可逐段跟读或录音。";
+            else if (_cueCountMismatch)
+                _labelStatus.Text = $"本页高亮与句子数量不一致（{_alignmentCues.Count}/{_textSentences.Count}），对齐时请核对。";
+        }
+
+        /// <summary>
+        /// 加载后的对账提示：未对齐完或发现漂移（孤立切片）时在状态栏说明；
+        /// 不弹窗、不阻塞。无异常时返回 null，沿用默认文案。
+        /// </summary>
+        private string? BuildSegmentLoadPrompt()
+        {
+            if (_bindingsDrift == null || _bindings.Count == 0)
+                return null;
+
+            // 未对齐完：尚未开始/完成对齐的句子（区别于对齐后已跳过）
+            int notAligned = _bindings.Count(static b =>
+                b.Status == CueBindingStatus.Unbound && b.UnboundReason == CueUnboundReason.NotAlignedYet);
+            int orphans = _bindingsDrift.Orphans.Count;
+            if (notAligned == 0 && orphans == 0)
+                return null;
+
+            string prompt = string.Empty;
+            if (notAligned > 0)
+                prompt += $"本页尚未完成对齐，{notAligned} 句还没有原声。";
+            if (orphans > 0)
+                prompt += $"本页有 {orphans} 条切片未匹配当前句子，仍按句子顺序显示。";
+            return prompt;
         }
 
         private void PersistManifest(List<ShadowingSentence> sentences)
