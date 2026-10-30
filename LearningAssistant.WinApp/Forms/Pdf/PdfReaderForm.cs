@@ -70,6 +70,9 @@ namespace LearningAssistant.Forms.Pdf
         private PdfAudioTrackManager? _audioTrackManager;
         private PdfAudioPanel? _audioPanel;
         private PdfAudioPlayerBar? _audioPlayerBar;
+        // 音频档案异步加载完成后待自动播放的文档；双击目录 PDF 时即使开关关闭也会设置
+        private string? _pendingAudioPlayPath;
+        private bool _pendingAudioPlayFromDoubleClick;
         private Panel? _recordingHost;
         private bool _recordingServiceAvailable;
         // 阶段2：音频内容从顶层页签迁入右侧抽屉（配套音频 / 整页录音 / 翻译）
@@ -179,6 +182,16 @@ namespace LearningAssistant.Forms.Pdf
         // 文件树中当前打开文件的节点：加粗突出显示，失焦后选中底色仍保留
         private TreeNode? _currentFileTreeNode;
         private Font? _currentFileNodeFont;
+        // 目录树首帧缩略图：ImageList 尺寸与 PdfFileThumbnailService 输出一致
+        private const int FileThumbnailCellWidth = 44;
+        private const int FileThumbnailCellHeight = 58;
+        private const string FileTreeFolderKey = "Folder";
+        private const string FileTreeDocumentKey = "File";
+        private const string FileTreeThumbnailKeyPrefix = "pdfthumb:";
+        private ImageList? _fileThumbnailImageList;
+        private CancellationTokenSource? _fileThumbnailCts;
+        // 每次重建文件树递增，后台渲染结果只回填到对应代次的节点
+        private int _fileThumbnailGeneration;
         // 程序化设置 SelectedNode 时抑制 AfterSelect，避免重复加载同一文件
         private bool _suppressFileTreeSelection;
         // 右键菜单操作目标：路径与是否文件夹
@@ -242,6 +255,8 @@ namespace LearningAssistant.Forms.Pdf
         private static bool _sidebarHoverSwitch;
         private static bool _sidebarStateLoaded;
         private static Dictionary<string, string> _sidebarTabByDocument = new();
+        // 打开文档后是否自动播放配套音频（与目录页头的「自动播放」开关同步）
+        private static bool _autoPlayPdfAudio = true;
         // 工作台偏好：翻译是否开启、联动是否开启、双开分屏比例
         private static bool _workbenchTranslateVisible;
         private static bool _workbenchLinkEnabled;
@@ -622,7 +637,7 @@ namespace LearningAssistant.Forms.Pdf
                     _audioTrackManager = new PdfAudioTrackManager(_logger, matcher, scanner, store, subParser);
                     _audioTrackManager.PageSyncRequested += OnAudioPageSyncRequested;
                     // 音频档案加载/变更后按当前文档是否真的有音频来决定播放条显隐
-                    _audioTrackManager.ProfileLoaded += OnAudioAvailabilityChanged;
+                    _audioTrackManager.ProfileLoaded += OnAudioProfileLoaded;
                     _audioTrackManager.SettingsChanged += OnAudioAvailabilityChanged;
                     _audioTrackManager.TrackChanged += OnAudioTrackChangedForBar;
 
@@ -2877,6 +2892,9 @@ namespace LearningAssistant.Forms.Pdf
         private void PdfReaderFormV2_Load(object? sender, EventArgs e)
         {
             EnsureSidebarStateLoaded();
+            // 侧栏状态在 Load 时才读取，构造期先按默认值创建的开关需要同步一次
+            if (_readingSidebar != null)
+                _readingSidebar.AutoPlayAudioEnabled = _autoPlayPdfAudio;
             _tabControlLeft.SelectedIndexChanged += TabControlLeft_SelectedIndexChanged;
             RestoreSidebarTabSelection();
             // 「图标 + 名称」页签：自绘 + 宽度自适应 + 悬停提示
@@ -3818,6 +3836,68 @@ namespace LearningAssistant.Forms.Pdf
         private void OnAudioAvailabilityChanged(object? sender, EventArgs e)
             => UpdateAudioPlayerBarVisibility();
 
+        /// <summary>音频档案加载完成：先刷新播放条，再消费打开文档/双击留下的自动播放意图。</summary>
+        private void OnAudioProfileLoaded(object? sender, EventArgs e)
+        {
+            UpdateAudioPlayerBarVisibility();
+            TryPlayPendingAudio();
+        }
+
+        /// <summary>
+        /// 档案就绪后播放待处理文档的配套音频。
+        /// 双击触发的播放即使没有音频也给出提示；开关触发的自动播放保持静默。
+        /// </summary>
+        private void TryPlayPendingAudio()
+        {
+            if (string.IsNullOrEmpty(_pendingAudioPlayPath)) return;
+
+            if (InvokeRequired)
+            {
+                try { BeginInvoke(new Action(TryPlayPendingAudio)); }
+                catch (ObjectDisposedException) { } catch (InvalidOperationException) { }
+                return;
+            }
+
+            if (IsDisposed)
+            {
+                ClearPendingAudioPlay();
+                return;
+            }
+
+            // 已切换到其它文档时丢弃过期意图
+            if (string.IsNullOrEmpty(_currentPdfPath) ||
+                !string.Equals(_pendingAudioPlayPath, _currentPdfPath, StringComparison.OrdinalIgnoreCase))
+            {
+                ClearPendingAudioPlay();
+                return;
+            }
+
+            bool fromDoubleClick = _pendingAudioPlayFromDoubleClick;
+            ClearPendingAudioPlay();
+
+            if (_audioTrackManager == null)
+            {
+                if (fromDoubleClick) ShowToast("当前环境未启用配套音频");
+                return;
+            }
+
+            int trackCount = _audioTrackManager.Result?.Tracks.Count ?? 0;
+            if (trackCount == 0)
+            {
+                if (fromDoubleClick) ShowToast("该文档没有配套音频");
+                return;
+            }
+
+            if (!_audioTrackManager.Play() && fromDoubleClick)
+                ShowToast("音频播放失败");
+        }
+
+        private void ClearPendingAudioPlay()
+        {
+            _pendingAudioPlayPath = null;
+            _pendingAudioPlayFromDoubleClick = false;
+        }
+
         private void OnAudioTrackChangedForBar(object? sender, AudioTrack track)
             => UpdateAudioPlayerBarVisibility();
 
@@ -3866,6 +3946,15 @@ namespace LearningAssistant.Forms.Pdf
             HideAudioPlayerBarForDocumentSwitch();
             if (documentChanged)
             {
+                // 打开文档后按开关自动播放配套音频；双击目录 PDF 时即使开关关闭也保留该文档的播放意图
+                bool requestedByDoubleClick =
+                    string.Equals(_pendingAudioPlayPath, pdfPath, StringComparison.OrdinalIgnoreCase);
+                if (!requestedByDoubleClick)
+                    _pendingAudioPlayFromDoubleClick = false;
+                _pendingAudioPlayPath = string.IsNullOrEmpty(pdfPath)
+                    ? null
+                    : (_autoPlayPdfAudio || requestedByDoubleClick) ? pdfPath : null;
+
                 RestoreSidebarTabSelection();
                 // 会话历史按文档隔离，换文档后不能继续显示上一本的问答
                 _aiSidebar?.ResetForDocument();
@@ -3931,6 +4020,7 @@ namespace LearningAssistant.Forms.Pdf
         {
             // 旧节点即将随 Nodes.Clear() 销毁：先清除高亮引用并回收加粗字体
             ApplyCurrentFileNodeHighlight(null);
+            CancelFileTreeThumbnailTasks();
             _treeViewFiles.Nodes.Clear();
             string filter = _textBoxFilter?.Text?.Trim() ?? string.Empty;
 
@@ -3952,7 +4042,9 @@ namespace LearningAssistant.Forms.Pdf
                     {
                         var fileNode = new TreeNode(Path.GetFileName(recentFile))
                         {
-                            Tag = recentFile
+                            Tag = recentFile,
+                            ImageKey = FileTreeDocumentKey,
+                            SelectedImageKey = FileTreeDocumentKey
                         };
                         recentNode.Nodes.Add(fileNode);
                     }
@@ -3986,6 +4078,203 @@ namespace LearningAssistant.Forms.Pdf
 
             if (targetNode != null)
                 SelectTreeNodeProgrammatically(targetNode);
+
+            // 缓存命中同步上屏，缺失的首帧在后台渲染，不阻塞目录展开
+            ScheduleFileTreeThumbnails();
+        }
+
+        /// <summary>取消上一代目录树的缩略图渲染任务；重建列表时避免旧结果回填到新节点。</summary>
+        private void CancelFileTreeThumbnailTasks()
+        {
+            var cts = _fileThumbnailCts;
+            _fileThumbnailCts = null;
+            if (cts == null) return;
+
+            try { cts.Cancel(); } catch (ObjectDisposedException) { }
+            cts.Dispose();
+        }
+
+        /// <summary>按路径聚合目录树中的 PDF 节点，为每个 PDF 附加第一页缩略图。</summary>
+        private void ScheduleFileTreeThumbnails()
+        {
+            if (_fileThumbnailImageList == null) return;
+
+            int generation = ++_fileThumbnailGeneration;
+            var pathToNodes = new Dictionary<string, List<TreeNode>>(StringComparer.OrdinalIgnoreCase);
+            CollectPdfNodes(_treeViewFiles.Nodes, pathToNodes);
+            if (pathToNodes.Count == 0) return;
+
+            var pending = new List<(string PdfPath, string CachePath, List<TreeNode> Nodes)>();
+            foreach (var pair in pathToNodes)
+            {
+                string? cachePath = PdfFileThumbnailService.GetCachePath(pair.Key);
+                if (cachePath == null) continue;
+
+                string key = FileThumbnailKeyForCachePath(cachePath);
+                if (!_fileThumbnailImageList.Images.ContainsKey(key))
+                {
+                    var cached = PdfFileThumbnailService.LoadCachedThumbnail(cachePath);
+                    if (cached != null)
+                    {
+                        AddFileThumbnailImage(key, cached);
+                    }
+                }
+
+                if (_fileThumbnailImageList.Images.ContainsKey(key))
+                    ApplyFileThumbnailKey(pair.Value, key);
+                else
+                    pending.Add((pair.Key, cachePath, pair.Value));
+            }
+
+            if (pending.Count == 0) return;
+
+            // 后台结果通过 BeginInvoke 回填，先确保树控件句柄存在（首次加载可能早于窗体显示）
+            if (!_treeViewFiles.IsHandleCreated)
+            {
+                try { _ = _treeViewFiles.Handle; } catch { }
+            }
+
+            var cts = new CancellationTokenSource();
+            _fileThumbnailCts = cts;
+            var token = cts.Token;
+            // 渲染首帧是阻塞的 PDFium 调用，放到线程池执行，避免首次展开目录卡住 UI
+            _ = Task.Run(() => RenderFileTreeThumbnailsAsync(pending, generation, token, cts));
+        }
+
+        /// <summary>缩略图在 ImageList 中的键：缓存文件名（含文件指纹）即唯一键。</summary>
+        private static string FileThumbnailKeyForCachePath(string cachePath)
+            => FileTreeThumbnailKeyPrefix + Path.GetFileNameWithoutExtension(cachePath);
+
+        /// <summary>收集 Tag 为 PDF 路径的节点；文件夹节点与“最近打开”标题不参与。</summary>
+        private static void CollectPdfNodes(TreeNodeCollection nodes, Dictionary<string, List<TreeNode>> result)
+        {
+            foreach (TreeNode node in nodes)
+            {
+                if (node.Tag is string path &&
+                    !string.Equals(path, "__RECENT_HEADER__", StringComparison.Ordinal) &&
+                    !string.Equals(node.ImageKey, FileTreeFolderKey, StringComparison.Ordinal) &&
+                    IsPdfFilePath(path))
+                {
+                    if (!result.TryGetValue(path, out var list))
+                    {
+                        list = new List<TreeNode>();
+                        result[path] = list;
+                    }
+                    list.Add(node);
+                }
+
+                CollectPdfNodes(node.Nodes, result);
+            }
+        }
+
+        private static bool IsPdfFilePath(string path)
+            => !string.IsNullOrEmpty(path) && string.Equals(Path.GetExtension(path), ".pdf", StringComparison.OrdinalIgnoreCase);
+
+        /// <summary>后台逐个渲染缺失的缩略图，完成后回到 UI 线程写入 ImageList。</summary>
+        private async Task RenderFileTreeThumbnailsAsync(
+            List<(string PdfPath, string CachePath, List<TreeNode> Nodes)> pending,
+            int generation,
+            CancellationToken token,
+            CancellationTokenSource cts)
+        {
+            try
+            {
+                foreach (var item in pending)
+                {
+                    if (token.IsCancellationRequested) return;
+
+                    Bitmap? thumbnail = null;
+                    try
+                    {
+                        thumbnail = PdfFileThumbnailService.EnsureThumbnail(item.PdfPath);
+                    }
+                    catch
+                    {
+                        // 单个文件读取失败不影响其它预览图
+                    }
+
+                    if (thumbnail == null) continue;
+                    if (token.IsCancellationRequested || generation != _fileThumbnailGeneration)
+                    {
+                        thumbnail.Dispose();
+                        return;
+                    }
+
+                    string key = FileThumbnailKeyForCachePath(item.CachePath);
+                    if (!await TryApplyThumbnailAsync(item.Nodes, generation, key, thumbnail, token))
+                        thumbnail.Dispose();
+                }
+            }
+            finally
+            {
+                if (_fileThumbnailCts == cts) _fileThumbnailCts = null;
+                cts.Dispose();
+            }
+        }
+
+        /// <summary>把后台渲染结果交回 UI 线程；节点已随列表重建时返回 false。</summary>
+        private Task<bool> TryApplyThumbnailAsync(
+            List<TreeNode> nodes,
+            int generation,
+            string key,
+            Bitmap thumbnail,
+            CancellationToken token)
+        {
+            if (IsDisposed || !IsHandleCreated) return Task.FromResult(false);
+
+            var completion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            try
+            {
+                BeginInvoke(new Action(() =>
+                {
+                    if (IsDisposed || token.IsCancellationRequested || generation != _fileThumbnailGeneration)
+                    {
+                        completion.TrySetResult(false);
+                        return;
+                    }
+
+                    // 同一文件可能已被其它代次写入，复用已有图片并释放本次渲染结果
+                    if (_fileThumbnailImageList!.Images.ContainsKey(key))
+                        thumbnail.Dispose();
+                    else
+                        AddFileThumbnailImage(key, thumbnail);
+
+                    ApplyFileThumbnailKey(nodes, key);
+                    completion.TrySetResult(true);
+                }));
+            }
+            catch (ObjectDisposedException)
+            {
+                completion.TrySetResult(false);
+            }
+            catch (InvalidOperationException)
+            {
+                // 句柄已销毁（窗口关闭），后台任务安静退出
+                completion.TrySetResult(false);
+            }
+            return completion.Task;
+        }
+
+        private void AddFileThumbnailImage(string key, Bitmap bitmap)
+        {
+            if (_fileThumbnailImageList == null)
+            {
+                bitmap.Dispose();
+                return;
+            }
+
+            // ImageList 在首次绘制时才创建原生句柄，位图必须保持有效直到本控件释放
+            _fileThumbnailImageList.Images.Add(key, bitmap);
+        }
+
+        private void ApplyFileThumbnailKey(IEnumerable<TreeNode> nodes, string key)
+        {
+            foreach (var node in nodes)
+            {
+                if (node.TreeView == null) continue;
+                node.ImageKey = key;
+                node.SelectedImageKey = key;
+            }
         }
 
         /// <summary>
@@ -4121,8 +4410,8 @@ namespace LearningAssistant.Forms.Pdf
                             if (!folderNodes.TryGetValue(currentPath, out var folderNode))
                             {
                                 folderNode = targetNodes.Add(part);
-                                folderNode.ImageKey = "Folder";
-                                folderNode.SelectedImageKey = "Folder";
+                                folderNode.ImageKey = FileTreeFolderKey;
+                                folderNode.SelectedImageKey = FileTreeFolderKey;
                                 // 存储文件夹完整路径，供右键菜单重命名/删除使用
                                 folderNode.Tag = currentPath;
                                 folderNodes[currentPath] = folderNode;
@@ -4134,6 +4423,8 @@ namespace LearningAssistant.Forms.Pdf
 
                 var fileNode = targetNodes.Add(fileName);
                 fileNode.Tag = file;
+                fileNode.ImageKey = FileTreeDocumentKey;
+                fileNode.SelectedImageKey = FileTreeDocumentKey;
             }
         }
 
@@ -8906,7 +9197,7 @@ namespace LearningAssistant.Forms.Pdf
                 return;
 
             // 文件夹节点不触发 PDF 加载（其 Tag 为目录路径，非 PDF 文件）
-            if (e.Node != null && string.Equals(e.Node.ImageKey, "Folder", StringComparison.Ordinal))
+            if (e.Node != null && string.Equals(e.Node.ImageKey, FileTreeFolderKey, StringComparison.Ordinal))
                 return;
 
             FileSelected?.Invoke(this, EventArgs.Empty);
@@ -8930,8 +9221,81 @@ namespace LearningAssistant.Forms.Pdf
             _treeViewFiles.HideSelection = false;
             _treeViewFiles.FullRowSelect = true;
 
+            // 目录首帧缩略图：固定 44x58 单元格，文件夹/普通文件先用占位图标
+            InitializeFileTreeThumbnails();
+
             // 右键选中节点并弹出菜单
             _treeViewFiles.NodeMouseClick += TreeViewFiles_NodeMouseClick;
+            // 双击 PDF：立即播放该文档的配套音频
+            _treeViewFiles.NodeMouseDoubleClick += TreeViewFiles_NodeMouseDoubleClick;
+        }
+
+        /// <summary>为目录树建立缩略图 ImageList，并预置文件夹/普通文件占位图标。</summary>
+        private void InitializeFileTreeThumbnails()
+        {
+            if (_fileThumbnailImageList != null) return;
+
+            _fileThumbnailImageList = new ImageList
+            {
+                ImageSize = new Size(FileThumbnailCellWidth, FileThumbnailCellHeight),
+                ColorDepth = ColorDepth.Depth32Bit,
+                TransparentColor = Color.Transparent
+            };
+            _fileThumbnailImageList.Images.Add(FileTreeFolderKey, CreateFolderTreeIcon());
+            _fileThumbnailImageList.Images.Add(FileTreeDocumentKey, CreateDocumentTreeIcon());
+
+            _treeViewFiles.ImageList = _fileThumbnailImageList;
+            _treeViewFiles.ItemHeight = FileThumbnailCellHeight + 4;
+        }
+
+        /// <summary>文件夹占位图标：在 44x58 画布中央画一个简化的文件夹。</summary>
+        private static Bitmap CreateFolderTreeIcon()
+        {
+            var bitmap = new Bitmap(FileThumbnailCellWidth, FileThumbnailCellHeight);
+            using var graphics = Graphics.FromImage(bitmap);
+            graphics.Clear(Color.Transparent);
+
+            const int width = 30;
+            const int height = 22;
+            int x = (FileThumbnailCellWidth - width) / 2;
+            int y = (FileThumbnailCellHeight - height) / 2;
+
+            using var fill = new SolidBrush(Color.FromArgb(255, 201, 97));
+            using var border = new Pen(Color.FromArgb(214, 158, 60));
+            var tab = new Rectangle(x, y - 5, width / 2 + 2, 6);
+            graphics.FillRectangle(fill, tab);
+            graphics.DrawRectangle(border, tab);
+            var body = new Rectangle(x, y, width, height);
+            graphics.FillRectangle(fill, body);
+            graphics.DrawRectangle(border, body);
+            return bitmap;
+        }
+
+        /// <summary>普通文件占位图标：白纸 + 文本线，非 PDF 文件也有统一的视觉入口。</summary>
+        private static Bitmap CreateDocumentTreeIcon()
+        {
+            var bitmap = new Bitmap(FileThumbnailCellWidth, FileThumbnailCellHeight);
+            using var graphics = Graphics.FromImage(bitmap);
+            graphics.Clear(Color.Transparent);
+
+            const int width = 30;
+            const int height = 38;
+            int x = (FileThumbnailCellWidth - width) / 2;
+            int y = (FileThumbnailCellHeight - height) / 2;
+
+            using var paper = new SolidBrush(Color.White);
+            using var border = new Pen(Color.FromArgb(203, 213, 225));
+            var page = new Rectangle(x, y, width, height);
+            graphics.FillRectangle(paper, page);
+            graphics.DrawRectangle(border, page);
+
+            using var line = new Pen(Color.FromArgb(203, 213, 225));
+            for (int i = 0; i < 4; i++)
+            {
+                int lineY = y + 9 + i * 7;
+                graphics.DrawLine(line, x + 5, lineY, x + width - 5, lineY);
+            }
+            return bitmap;
         }
 
         /// <summary>
@@ -8956,14 +9320,49 @@ namespace LearningAssistant.Forms.Pdf
 
             _treeViewFiles.SelectedNode = e.Node;
             _contextMenuTargetPath = targetPath;
-            // 文件夹节点 ImageKey == "Folder"；文件节点无此 ImageKey
-            _contextMenuTargetIsFolder = string.Equals(e.Node.ImageKey, "Folder", StringComparison.Ordinal);
+            // 文件夹节点 ImageKey == FileTreeFolderKey；文件节点无此 ImageKey
+            _contextMenuTargetIsFolder = string.Equals(e.Node.ImageKey, FileTreeFolderKey, StringComparison.Ordinal);
 
             // 更新菜单文案
             _menuItemRename!.Text = _contextMenuTargetIsFolder ? "重命名文件夹" : "重命名文件";
             _menuItemDelete!.Text = _contextMenuTargetIsFolder ? "删除文件夹" : "删除文件";
 
             _contextMenuFiles.Show(_treeViewFiles, e.Location);
+        }
+
+        /// <summary>
+        /// 双击目录中的 PDF：立即播放该文档的配套音频。
+        /// 文档尚未打开/档案仍在加载时只登记待播放路径，等 ProfileLoaded 后再播。
+        /// </summary>
+        private void TreeViewFiles_NodeMouseDoubleClick(object? sender, TreeNodeMouseClickEventArgs e)
+        {
+            if (e.Button != MouseButtons.Left) return;
+            if (e.Node?.Tag is not string path || string.IsNullOrEmpty(path)) return;
+            if (string.Equals(e.Node.ImageKey, FileTreeFolderKey, StringComparison.Ordinal)) return;
+            if (!IsPdfFilePath(path) || !File.Exists(path)) return;
+
+            if (_audioTrackManager == null)
+            {
+                ShowToast("当前环境未启用配套音频");
+                return;
+            }
+
+            // 已打开同一文档：档案就绪时直接播放，未就绪则等加载完成
+            if (string.Equals(_currentPdfPath, path, StringComparison.OrdinalIgnoreCase))
+            {
+                if (_audioTrackManager.Result != null)
+                {
+                    if (_audioTrackManager.Result.Tracks.Count == 0)
+                        ShowToast("该文档没有配套音频");
+                    else
+                        _audioTrackManager.Play();
+                    return;
+                }
+            }
+
+            // 文档切换由选中事件异步完成，这里只登记播放意图
+            _pendingAudioPlayPath = path;
+            _pendingAudioPlayFromDoubleClick = true;
         }
 
         /// <summary>
@@ -10057,6 +10456,14 @@ namespace LearningAssistant.Forms.Pdf
                 }
             };
 
+            // 目录页头的「自动播放」开关：状态写回侧栏配置文件，下次启动沿用
+            _readingSidebar.AutoPlayAudioEnabled = _autoPlayPdfAudio;
+            _readingSidebar.AutoPlayAudioChanged += (_, _) =>
+            {
+                _autoPlayPdfAudio = _readingSidebar.AutoPlayAudioEnabled;
+                SaveSidebarState();
+            };
+
             // 页签图标；短名称与图标一起由自绘逻辑绘制
             _tabPageFiles.Text = "📖";
             _tabPageStudy.Text = "🤖";
@@ -10904,6 +11311,11 @@ namespace LearningAssistant.Forms.Pdf
                 _currentFileNodeFont = null;
                 _currentFileTreeNode = null;
 
+                // 目录树缩略图：先取消后台渲染，再释放 ImageList 中的位图
+                CancelFileTreeThumbnailTasks();
+                _fileThumbnailImageList?.Dispose();
+                _fileThumbnailImageList = null;
+
                 // 释放容器资源
                 components?.Dispose();
             }
@@ -11149,6 +11561,7 @@ namespace LearningAssistant.Forms.Pdf
 
                 _sidebarHoverSwitch = state.HoverSwitch;
                 _sidebarTabByDocument = state.Tabs ?? new Dictionary<string, string>();
+                _autoPlayPdfAudio = state.AutoPlayPdfAudio;
                 _workbenchTranslateVisible = state.WorkbenchTranslateVisible;
                 _workbenchLinkEnabled = state.WorkbenchLinkEnabled;
                 _workbenchSplitRatio = Math.Clamp(state.WorkbenchSplitRatio, 0.2, 0.8);
@@ -11169,6 +11582,7 @@ namespace LearningAssistant.Forms.Pdf
                 {
                     HoverSwitch = _sidebarHoverSwitch,
                     Tabs = _sidebarTabByDocument,
+                    AutoPlayPdfAudio = _autoPlayPdfAudio,
                     WorkbenchTranslateVisible = _workbenchTranslateVisible,
                     WorkbenchLinkEnabled = _workbenchLinkEnabled,
                     WorkbenchSplitRatio = _workbenchSplitRatio
@@ -11185,6 +11599,8 @@ namespace LearningAssistant.Forms.Pdf
         {
             public bool HoverSwitch { get; set; }
             public Dictionary<string, string>? Tabs { get; set; } = new();
+            // 旧配置文件没有该项时保持默认开启
+            public bool AutoPlayPdfAudio { get; set; } = true;
             public bool WorkbenchTranslateVisible { get; set; }
             public bool WorkbenchLinkEnabled { get; set; }
             public double WorkbenchSplitRatio { get; set; } = 0.55;
