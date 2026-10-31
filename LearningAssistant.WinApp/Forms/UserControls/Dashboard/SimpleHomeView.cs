@@ -49,7 +49,7 @@ namespace LearningAssistant.Forms.UserControls.Dashboard
             set
             {
                 _userName = string.IsNullOrWhiteSpace(value) ? "同学" : value;
-                _labelWelcome.Text = $"你好，{_userName}！";
+                UpdateGreeting();
             }
         }
 
@@ -65,6 +65,30 @@ namespace LearningAssistant.Forms.UserControls.Dashboard
             BackColor = Color.FromArgb(245, 245, 250);
             DoubleBuffered = true;
             InitializeComponents();
+            UpdateGreeting();
+        }
+
+        /// <summary>
+        /// 按时段生成问候语（07 方案 C1）。
+        /// </summary>
+        private void UpdateGreeting()
+        {
+            int hour = DateTime.Now.Hour;
+            string greeting = hour switch
+            {
+                < 6 => "夜深了",
+                < 12 => "上午好",
+                < 14 => "中午好",
+                < 18 => "下午好",
+                _ => "晚上好"
+            };
+            _labelWelcome.Text = $"{greeting}，{_userName}！";
+        }
+
+        protected override void OnVisibleChanged(EventArgs e)
+        {
+            base.OnVisibleChanged(e);
+            if (Visible) UpdateGreeting();
         }
 
         private void InitializeComponents()
@@ -93,11 +117,13 @@ namespace LearningAssistant.Forms.UserControls.Dashboard
             _panelStats.WrapContents = true;
             _panelStats.AutoScroll = false;
             _panelStats.BackColor = Color.Transparent;
+            _panelStats.TabIndex = 0;
 
             _panelActions.FlowDirection = FlowDirection.LeftToRight;
             _panelActions.WrapContents = true;
             _panelActions.AutoScroll = true;
             _panelActions.BackColor = Color.Transparent;
+            _panelActions.TabIndex = 1;
 
             Controls.Add(_labelWelcome);
             Controls.Add(_labelSubtitle);
@@ -141,6 +167,10 @@ namespace LearningAssistant.Forms.UserControls.Dashboard
             };
 
             int index = _statCards.Count;
+            // 键盘可达性：统计卡可 Tab 聚焦，回车/空格触发下钻（07 方案 C3）
+            card.TabIndex = index;
+            card.AccessibleName = label;
+            card.AccessibleRole = AccessibleRole.PushButton;
             card.CardClicked += (_, _) => StatCardClicked?.Invoke(this, index);
             _panelStats.Controls.Add(card);
             _statCards.Add(card);
@@ -171,6 +201,7 @@ namespace LearningAssistant.Forms.UserControls.Dashboard
             button.FlatAppearance.BorderSize = 0;
             button.FlatAppearance.MouseOverBackColor = Color.FromArgb(248, 249, 252);
             button.FlatAppearance.MouseDownBackColor = Color.FromArgb(240, 241, 246);
+            button.TabIndex = _actionButtons.Count;
             button.Click += (_, _) => QuickActionRequested?.Invoke(this, (string)button.Tag);
             _panelActions.Controls.Add(button);
             _actionButtons.Add(button);
@@ -209,6 +240,7 @@ namespace LearningAssistant.Forms.UserControls.Dashboard
             _buttonEmptyStart.Size = new Size(150, 42);
             _buttonEmptyStart.Cursor = Cursors.Hand;
             _buttonEmptyStart.FlatAppearance.BorderSize = 0;
+            _buttonEmptyStart.TabIndex = 0;
             _buttonEmptyStart.Click += (_, _) => QuickActionRequested?.Invoke(this, "learning");
 
             _buttonEmptyImport.Text = "📥 导入内容";
@@ -219,6 +251,7 @@ namespace LearningAssistant.Forms.UserControls.Dashboard
             _buttonEmptyImport.Size = new Size(150, 42);
             _buttonEmptyImport.Cursor = Cursors.Hand;
             _buttonEmptyImport.FlatAppearance.BorderSize = 0;
+            _buttonEmptyImport.TabIndex = 1;
             _buttonEmptyImport.Click += (_, _) => QuickActionRequested?.Invoke(this, "editor");
 
             _panelEmptyState.Controls.AddRange(new Control[]
@@ -265,6 +298,9 @@ namespace LearningAssistant.Forms.UserControls.Dashboard
             var levelCard = _statCards[3];
             levelCard.Value = $"Lv.{snapshot.Level}";
             levelCard.Trend = $"距下一级 {snapshot.XpToNextLevel}XP";
+            levelCard.Progress = snapshot.XpToNextLevel > 0
+                ? Math.Min(100.0, snapshot.TotalXp * 100.0 / snapshot.XpToNextLevel)
+                : 0;
 
             var challengeCard = _statCards[4];
             challengeCard.Value = $"{snapshot.CompletedChallenges}/{snapshot.TotalChallenges}";
@@ -284,6 +320,25 @@ namespace LearningAssistant.Forms.UserControls.Dashboard
 
             // 新用户整页引导：有任一学习数据后自动隐藏（07 方案 B2）
             _panelEmptyState.Visible = snapshot.IsBrandNew;
+
+            UpdateSubtitle(snapshot);
+        }
+
+        /// <summary>
+        /// 副标题随当前状态变化，提示下一步可执行动作（07 方案 C1）。
+        /// </summary>
+        private void UpdateSubtitle(HomeSnapshot snapshot)
+        {
+            if (snapshot.IsBrandNew)
+                _labelSubtitle.Text = "先完成一次学习，首页数据就会亮起来。";
+            else if (snapshot.DueReviewCount > 0)
+                _labelSubtitle.Text = $"有 {snapshot.DueReviewCount} 项内容待复习，建议先完成复习。";
+            else if (snapshot.GoalTarget > 0 && snapshot.GoalPercent >= 100)
+                _labelSubtitle.Text = "今日目标已完成，可以自由探索新内容。";
+            else if (snapshot.TodayStudyMinutes > 0)
+                _labelSubtitle.Text = $"今天已学习 {FormatStudyMinutes(snapshot.TodayStudyMinutes)}，继续保持。";
+            else
+                _labelSubtitle.Text = "请选择一个任务开始今天的学习。";
         }
 
         public void UpdateChallengeProgress(int completed, int total)

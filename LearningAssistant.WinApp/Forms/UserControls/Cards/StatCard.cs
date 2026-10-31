@@ -21,6 +21,7 @@ namespace LearningAssistant.Forms.UserControls.Cards
         private bool _isHovered;
         private int _iconSize = 32;
         private int _valueFontSize = 24;
+        private double _progress = -1;
         private TrendDirection _trendDirection = TrendDirection.None;
 
         /// <summary>
@@ -136,6 +137,23 @@ namespace LearningAssistant.Forms.UserControls.Cards
             set { _valueFontSize = value; Invalidate(); }
         }
 
+        /// <summary>
+        /// 卡片底部进度条（0-100）；小于 0 时不绘制（07 方案 C2）
+        /// </summary>
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        [Category("Appearance")]
+        public double Progress
+        {
+            get => _progress;
+            set
+            {
+                var clamped = value < 0 ? -1 : Math.Min(100, value);
+                if (Math.Abs(_progress - clamped) < 0.01) return;
+                _progress = clamped;
+                Invalidate();
+            }
+        }
+
         public event EventHandler? CardClicked;
 
         public StatCard()
@@ -145,13 +163,26 @@ namespace LearningAssistant.Forms.UserControls.Cards
                 ControlStyles.AllPaintingInWmPaint |
                 ControlStyles.OptimizedDoubleBuffer |
                 ControlStyles.ResizeRedraw |
-                ControlStyles.SupportsTransparentBackColor,
+                ControlStyles.SupportsTransparentBackColor |
+                ControlStyles.Selectable,
                 true);
 
             BackColor = Color.Transparent;
             Size = new Size(200, 110);
             Cursor = Cursors.Hand;
+            TabStop = true;
             DoubleBuffered = true;
+        }
+
+        protected override void OnKeyDown(KeyEventArgs e)
+        {
+            base.OnKeyDown(e);
+            // 支持键盘聚焦后回车/空格触发下钻（07 方案 C3）
+            if (e.KeyCode == Keys.Enter || e.KeyCode == Keys.Space)
+            {
+                CardClicked?.Invoke(this, EventArgs.Empty);
+                e.Handled = true;
+            }
         }
 
         protected override void OnMouseEnter(EventArgs e)
@@ -194,6 +225,13 @@ namespace LearningAssistant.Forms.UserControls.Cards
             using var cardBrush = new SolidBrush(_cardColor);
             using var cardPath = RoundedRect(cardRect, _cornerRadius);
             g.FillPath(cardBrush, cardPath);
+
+            // 键盘聚焦时用主色描边提示当前可操作卡片（07 方案 C3）
+            if (Focused)
+            {
+                using var focusPen = new Pen(_accentColor, 2);
+                g.DrawPath(focusPen, cardPath);
+            }
 
             int paddingLeft = 14;
             int paddingTop = 14;
@@ -284,6 +322,29 @@ namespace LearningAssistant.Forms.UserControls.Cards
                     Trimming = StringTrimming.EllipsisCharacter
                 };
                 g.DrawString(_label, labelFont, labelBrush, labelRect, labelFormat);
+            }
+
+            // 底部进度条：用于等级等有明确进度的指标（07 方案 C2）
+            if (_progress >= 0)
+            {
+                int barHeight = 4;
+                float barY = labelY + labelSize.Height + 8;
+                if (barY + barHeight <= Height - 10)
+                {
+                    var trackRect = new Rectangle(textX, (int)barY, Math.Max(barHeight, textMaxWidth), barHeight);
+                    using var trackBrush = new SolidBrush(Color.FromArgb(36, _accentColor));
+                    using var trackPath = RoundedRect(trackRect, barHeight / 2);
+                    g.FillPath(trackBrush, trackPath);
+
+                    int fillWidth = (int)Math.Round(textMaxWidth * _progress / 100.0);
+                    if (fillWidth > 0)
+                    {
+                        var fillRect = new Rectangle(textX, (int)barY, Math.Max(barHeight, fillWidth), barHeight);
+                        using var fillBrush = new SolidBrush(_accentColor);
+                        using var fillPath = RoundedRect(fillRect, barHeight / 2);
+                        g.FillPath(fillBrush, fillPath);
+                    }
+                }
             }
         }
 
