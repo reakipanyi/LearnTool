@@ -563,6 +563,13 @@ namespace LearningAssistant.Forms.Main
             };
             simpleHomeView.QuickActionRequested += (_, key) => OnNavigationItemClicked(null, key);
 
+            // 简洁版统计卡片下钻：与完整版一致，点击任一卡片打开学习数据中心（07 方案 B1）
+            simpleHomeView.StatCardClicked += (_, _) =>
+            {
+                try { _windowManager.OpenStatisticsWindow(); }
+                catch (Exception ex) { _logger?.LogError(ex, "打开统计中心失败"); }
+            };
+
             panelContent.Controls.Add(simpleHomeView);
             simpleHomeView.BringToFront();
 
