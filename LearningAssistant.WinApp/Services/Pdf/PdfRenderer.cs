@@ -2,6 +2,8 @@ using LearningAssistant.Abstractions;
 using LearningAssistant.Models.Pdf;
 using Microsoft.Extensions.Logging;
 using System.Collections.Concurrent;
+using System.Drawing.Imaging;
+using System.Runtime.InteropServices;
 using System.Threading;
 
 namespace LearningAssistant.Services.Pdf
@@ -39,6 +41,8 @@ namespace LearningAssistant.Services.Pdf
         private CancellationTokenSource? _thumbnailCts;
         private readonly SemaphoreSlim _renderSemaphore = new SemaphoreSlim(2, 5);
         private readonly SemaphoreSlim _preRenderSemaphore = new SemaphoreSlim(1, 1);
+        // 同 cacheKey 的在途渲染：预渲染与前台请求共享一次渲染，避免同页重复渲染
+        private readonly Dictionary<string, Task<bool>> _inflightRenders = new();
         private CancellationTokenSource? _preRenderCts;
         // 记录后台预渲染任务，Dispose 时先取消并等待退出，再释放信号量
         private readonly ConcurrentDictionary<long, Task> _backgroundTasks = new();
@@ -288,6 +292,38 @@ namespace LearningAssistant.Services.Pdf
                 return cachedCopy;
             }
 
+            // 同页在途渲染去重：同一 cacheKey 只渲染一次，其余请求等领头渲染完成后从缓存取副本；
+            // 渲染用渲染器生命周期 token（不随单次翻页取消），调用方 token 只控制等待
+            TaskCompletionSource<bool>? leaderTcs = null;
+            Task<bool>? sharedRender;
+            lock (_renderLock)
+            {
+                if (!_inflightRenders.TryGetValue(cacheKey, out sharedRender))
+                {
+                    leaderTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                    sharedRender = leaderTcs.Task;
+                    _inflightRenders[cacheKey] = sharedRender;
+                }
+            }
+
+            if (leaderTcs == null)
+            {
+                try
+                {
+                    await sharedRender.WaitAsync(cancellationToken).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    return null;
+                }
+
+                var followerCopy = TryGetCachedCopy(cacheKey);
+                if (followerCopy != null)
+                    return followerCopy;
+                // 领头渲染未写入缓存（渲染失败或超出缓存预算）：退回常规路径自行渲染
+            }
+
+            bool sharedRenderCompleted = leaderTcs == null;
             try
             {
                 // 排队阶段即可取消：快速翻页时旧请求不再占用渲染槽位
@@ -313,18 +349,22 @@ namespace LearningAssistant.Services.Pdf
                     return cachedAfterWait;
                 }
 
+                var renderToken = _cts?.Token ?? CancellationToken.None;
                 var bmp = await Task.Run(() => RenderPageToBitmap(pageIndex, renderW, renderH),
-                    cancellationToken).ConfigureAwait(false);
+                    renderToken).ConfigureAwait(false);
                 if (bmp == null) return null;
 
-                // 渲染期间已被取消：结果直接丢弃，不写入缓存，也不再触发预渲染
-                if (cancellationToken.IsCancellationRequested)
+                // 渲染器已释放（应用退出中）：结果直接丢弃，不写入缓存，也不再触发预渲染；
+                // 仅翻页取消不再中止渲染——完成的页写入缓存，对回翻/预渲染仍有效
+                if (renderToken.IsCancellationRequested)
                 {
                     bmp.Dispose();
                     return null;
                 }
 
                 AddCacheEntry(cacheKey, bmp);
+                CompleteSharedRender(cacheKey, leaderTcs, true);
+                sharedRenderCompleted = true;
 
                 if (!_inPreRender.Value && schedulePreRender)
                 {
@@ -335,8 +375,21 @@ namespace LearningAssistant.Services.Pdf
             }
             finally
             {
+                if (!sharedRenderCompleted)
+                    CompleteSharedRender(cacheKey, leaderTcs, false);
                 try { _renderSemaphore.Release(); } catch (ObjectDisposedException) { }
             }
+        }
+
+        // 领头渲染收尾：先出队在途表再唤醒跟随者（唤醒前缓存已写入，跟随者可直接命中）
+        private void CompleteSharedRender(string cacheKey, TaskCompletionSource<bool>? tcs, bool cached)
+        {
+            if (tcs == null) return;
+            lock (_renderLock)
+            {
+                _inflightRenders.Remove(cacheKey);
+            }
+            tcs.TrySetResult(cached);
         }
 
         /// <summary>
@@ -437,6 +490,18 @@ namespace LearningAssistant.Services.Pdf
             if (source == null)
                 return null;
 
+            // 快路径：32bpp/24bpp 走 LockBits 整图内存拷贝，避免 GDI+ DrawImage 的格式转换与混合开销；
+            // 一页 1600×2240×32bpp 约 14MB，翻页缓存命中时每次都拷贝，DrawImage 方式开销明显
+            var format = source.PixelFormat;
+            if (format == PixelFormat.Format32bppArgb || format == PixelFormat.Format32bppPArgb ||
+                format == PixelFormat.Format32bppRgb || format == PixelFormat.Format24bppRgb)
+            {
+                var fast = TryCopyWithLockBits(source, format);
+                if (fast != null)
+                    return fast;
+            }
+
+            // 其他像素格式回退 GDI+ 绘制拷贝
             var result = new Bitmap(source.Width, source.Height, source.PixelFormat);
             using (var g = Graphics.FromImage(result))
             {
@@ -444,6 +509,45 @@ namespace LearningAssistant.Services.Pdf
             }
             return result;
         }
+
+        private static Bitmap? TryCopyWithLockBits(Bitmap source, PixelFormat format)
+        {
+            var rect = new Rectangle(0, 0, source.Width, source.Height);
+            var result = new Bitmap(source.Width, source.Height, format);
+            BitmapData? srcData = null;
+            BitmapData? dstData = null;
+            try
+            {
+                srcData = source.LockBits(rect, ImageLockMode.ReadOnly, format);
+                dstData = result.LockBits(rect, ImageLockMode.WriteOnly, format);
+
+                int bytesPerPixel = format == PixelFormat.Format24bppRgb ? 3 : 4;
+                // stride 含行对齐填充，逐行仅拷贝有效字节
+                int rowBytes = source.Width * bytesPerPixel;
+                for (int y = 0; y < source.Height; y++)
+                {
+                    var srcRow = IntPtr.Add(srcData.Scan0, y * srcData.Stride);
+                    var dstRow = IntPtr.Add(dstData.Scan0, y * dstData.Stride);
+                    CopyMemory(dstRow, srcRow, (UIntPtr)rowBytes);
+                }
+
+                source.UnlockBits(srcData);
+                srcData = null;
+                result.UnlockBits(dstData);
+                dstData = null;
+                return result;
+            }
+            catch
+            {
+                if (srcData != null) { try { source.UnlockBits(srcData); } catch { } }
+                if (dstData != null) { try { result.UnlockBits(dstData); } catch { } }
+                result.Dispose();
+                return null;
+            }
+        }
+
+        [DllImport("kernel32.dll")]
+        private static extern void CopyMemory(IntPtr destination, IntPtr source, UIntPtr length);
 
         private Bitmap? RenderPageToBitmap(int pageIndex, int renderW, int renderH)
         {
