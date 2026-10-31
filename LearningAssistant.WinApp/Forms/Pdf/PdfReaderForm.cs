@@ -192,6 +192,11 @@ namespace LearningAssistant.Forms.Pdf
         private CancellationTokenSource? _fileThumbnailCts;
         // 每次重建文件树递增，后台渲染结果只回填到对应代次的节点
         private int _fileThumbnailGeneration;
+        // 按层加载缩略图的待渲染队列：展开哪一层就把该层入队，由单个后台任务顺序消费，
+        // 避免逐层展开时后一层的任务取消掉前一层尚未完成的渲染
+        private readonly Queue<(int Generation, string PdfPath, string CachePath, List<TreeNode> Nodes)> _fileThumbnailQueue = new();
+        private readonly object _fileThumbnailQueueLock = new();
+        private bool _fileThumbnailWorkerRunning;
         // 程序化设置 SelectedNode 时抑制 AfterSelect，避免重复加载同一文件
         private bool _suppressFileTreeSelection;
         // 右键菜单操作目标：路径与是否文件夹
@@ -4083,13 +4088,20 @@ namespace LearningAssistant.Forms.Pdf
             if (targetNode != null)
                 SelectTreeNodeProgrammatically(targetNode);
 
-            // 缓存命中同步上屏，缺失的首帧在后台渲染，不阻塞目录展开
-            ScheduleFileTreeThumbnails();
+            // 只加载根层可见文件的首帧缩略图；深层目录等展开时再按层加载
+            ScheduleFileTreeThumbnails(_treeViewFiles.Nodes);
         }
 
         /// <summary>取消上一代目录树的缩略图渲染任务；重建列表时避免旧结果回填到新节点。</summary>
         private void CancelFileTreeThumbnailTasks()
         {
+            // 重建即换代号：旧任务的结果不再回填
+            _fileThumbnailGeneration++;
+            lock (_fileThumbnailQueueLock)
+            {
+                _fileThumbnailQueue.Clear();
+            }
+
             var cts = _fileThumbnailCts;
             _fileThumbnailCts = null;
             if (cts == null) return;
@@ -4098,16 +4110,19 @@ namespace LearningAssistant.Forms.Pdf
             cts.Dispose();
         }
 
-        /// <summary>按路径聚合目录树中的 PDF 节点，为每个 PDF 附加第一页缩略图。</summary>
-        private void ScheduleFileTreeThumbnails()
+        /// <summary>
+        /// 为指定层（nodes 的直接子节点）中的 PDF 节点加载第一页缩略图。
+        /// 只在根层加载与节点展开时调用，避免打开大目录时为整棵树渲染首帧。
+        /// </summary>
+        private void ScheduleFileTreeThumbnails(TreeNodeCollection nodes)
         {
-            if (_fileThumbnailImageList == null) return;
+            if (_fileThumbnailImageList == null || nodes == null) return;
 
-            int generation = ++_fileThumbnailGeneration;
             var pathToNodes = new Dictionary<string, List<TreeNode>>(StringComparer.OrdinalIgnoreCase);
-            CollectPdfNodes(_treeViewFiles.Nodes, pathToNodes);
+            CollectLayerPdfNodes(nodes, pathToNodes);
             if (pathToNodes.Count == 0) return;
 
+            int generation = _fileThumbnailGeneration;
             var pending = new List<(string PdfPath, string CachePath, List<TreeNode> Nodes)>();
             foreach (var pair in pathToNodes)
             {
@@ -4138,19 +4153,30 @@ namespace LearningAssistant.Forms.Pdf
                 try { _ = _treeViewFiles.Handle; } catch { }
             }
 
-            var cts = new CancellationTokenSource();
+            CancellationTokenSource cts;
+            lock (_fileThumbnailQueueLock)
+            {
+                foreach (var item in pending)
+                    _fileThumbnailQueue.Enqueue((generation, item.PdfPath, item.CachePath, item.Nodes));
+
+                // 已有消费者在跑时只需入队，由它顺序消费，不再另起任务
+                if (_fileThumbnailWorkerRunning) return;
+                _fileThumbnailWorkerRunning = true;
+                cts = new CancellationTokenSource();
+            }
+
             _fileThumbnailCts = cts;
             var token = cts.Token;
-            // 渲染首帧是阻塞的 PDFium 调用，放到线程池执行，避免首次展开目录卡住 UI
-            _ = Task.Run(() => RenderFileTreeThumbnailsAsync(pending, generation, token, cts));
+            // 渲染首帧是阻塞的 PDFium 调用，放到线程池执行，避免展开目录卡住 UI
+            _ = Task.Run(() => RunFileTreeThumbnailWorkerAsync(token, cts));
         }
 
         /// <summary>缩略图在 ImageList 中的键：缓存文件名（含文件指纹）即唯一键。</summary>
         private static string FileThumbnailKeyForCachePath(string cachePath)
             => FileTreeThumbnailKeyPrefix + Path.GetFileNameWithoutExtension(cachePath);
 
-        /// <summary>收集 Tag 为 PDF 路径的节点；文件夹节点与“最近打开”标题不参与。</summary>
-        private static void CollectPdfNodes(TreeNodeCollection nodes, Dictionary<string, List<TreeNode>> result)
+        /// <summary>只收集本层（直接子节点）中 Tag 为 PDF 路径的节点，不递归子树。</summary>
+        private static void CollectLayerPdfNodes(TreeNodeCollection nodes, Dictionary<string, List<TreeNode>> result)
         {
             foreach (TreeNode node in nodes)
             {
@@ -4166,25 +4192,30 @@ namespace LearningAssistant.Forms.Pdf
                     }
                     list.Add(node);
                 }
-
-                CollectPdfNodes(node.Nodes, result);
             }
         }
 
         private static bool IsPdfFilePath(string path)
             => !string.IsNullOrEmpty(path) && string.Equals(Path.GetExtension(path), ".pdf", StringComparison.OrdinalIgnoreCase);
 
-        /// <summary>后台逐个渲染缺失的缩略图，完成后回到 UI 线程写入 ImageList。</summary>
-        private async Task RenderFileTreeThumbnailsAsync(
-            List<(string PdfPath, string CachePath, List<TreeNode> Nodes)> pending,
-            int generation,
-            CancellationToken token,
-            CancellationTokenSource cts)
+        /// <summary>后台顺序消费各层的缩略图渲染任务，完成后回到 UI 线程写入 ImageList。</summary>
+        private async Task RunFileTreeThumbnailWorkerAsync(CancellationToken token, CancellationTokenSource cts)
         {
             try
             {
-                foreach (var item in pending)
+                while (true)
                 {
+                    (int Generation, string PdfPath, string CachePath, List<TreeNode> Nodes) item;
+                    lock (_fileThumbnailQueueLock)
+                    {
+                        if (_fileThumbnailQueue.Count == 0)
+                        {
+                            _fileThumbnailWorkerRunning = false;
+                            return;
+                        }
+                        item = _fileThumbnailQueue.Dequeue();
+                    }
+
                     if (token.IsCancellationRequested) return;
 
                     Bitmap? thumbnail = null;
@@ -4198,19 +4229,26 @@ namespace LearningAssistant.Forms.Pdf
                     }
 
                     if (thumbnail == null) continue;
-                    if (token.IsCancellationRequested || generation != _fileThumbnailGeneration)
+                    if (token.IsCancellationRequested || item.Generation != _fileThumbnailGeneration)
                     {
                         thumbnail.Dispose();
                         return;
                     }
 
                     string key = FileThumbnailKeyForCachePath(item.CachePath);
-                    if (!await TryApplyThumbnailAsync(item.Nodes, generation, key, thumbnail, token))
+                    if (!await TryApplyThumbnailAsync(item.Nodes, item.Generation, key, thumbnail, token))
                         thumbnail.Dispose();
                 }
             }
             finally
             {
+                lock (_fileThumbnailQueueLock)
+                {
+                    // 被取消时剩余任务已作废，清空队列避免下次启动重放过期层
+                    if (token.IsCancellationRequested)
+                        _fileThumbnailQueue.Clear();
+                    _fileThumbnailWorkerRunning = false;
+                }
                 if (_fileThumbnailCts == cts) _fileThumbnailCts = null;
                 cts.Dispose();
             }
@@ -9232,6 +9270,8 @@ namespace LearningAssistant.Forms.Pdf
             _treeViewFiles.NodeMouseClick += TreeViewFiles_NodeMouseClick;
             // 双击 PDF：立即播放该文档的配套音频
             _treeViewFiles.NodeMouseDoubleClick += TreeViewFiles_NodeMouseDoubleClick;
+            // 展开哪一层就加载那一层的缩略图，避免打开大目录时一次性渲染整棵树
+            _treeViewFiles.AfterExpand += TreeViewFiles_AfterExpand;
         }
 
         /// <summary>为目录树建立缩略图 ImageList，并预置文件夹/普通文件占位图标。</summary>
@@ -9300,6 +9340,16 @@ namespace LearningAssistant.Forms.Pdf
                 graphics.DrawLine(line, x + 5, lineY, x + width - 5, lineY);
             }
             return bitmap;
+        }
+
+        /// <summary>
+        /// 展开某个文件夹时，只为该层（被展开节点的直接子节点）加载 PDF 首帧缩略图。
+        /// 打开大目录时不再一次性渲染整棵树，缩略图随展开逐层补齐。
+        /// </summary>
+        private void TreeViewFiles_AfterExpand(object? sender, TreeViewEventArgs e)
+        {
+            if (e.Node == null) return;
+            ScheduleFileTreeThumbnails(e.Node.Nodes);
         }
 
         /// <summary>
