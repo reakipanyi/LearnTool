@@ -129,5 +129,13 @@ namespace LearningAssistant.Services.Pdf
         /// 获取指定页面的标注数据（包含笔划和文字）
         /// </summary>
         PdfAnnotation? GetAnnotation(string pdfPath, int pageIndex);
+
+        /// <summary>
+        /// 一次性获取指定 PDF 文件所有页的标注数据（按页码升序），
+        /// 供高亮/摘录列表等需要全文件标注的场景使用，避免逐页访问磁盘。
+        /// </summary>
+        /// <param name="pdfPath">PDF文件路径</param>
+        /// <returns>有标注的页面的标注数据集合</returns>
+        IEnumerable<PdfAnnotation> GetAllAnnotations(string pdfPath);
     }
 }

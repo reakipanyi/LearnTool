@@ -9,6 +9,16 @@ namespace LearningAssistant.Services.Pdf
     {
         private readonly ILogger<FileAnnotationService>? _logger;
 
+        // 标注文件内存缓存（含负缓存：value 为 null 表示该页无标注文件）：
+        // 翻页时高亮列表会遍历所有页读取标注，无缓存时每页都要 File.Exists + 读盘 + 反序列化，
+        // 300 页文档单次翻页产生 600 次磁盘 IO，是翻页卡顿主因。
+        // 外层 key 为 pdfPath（忽略大小写），内层 key 为页码。
+        // 所有写入统一经过 SaveAnnotationData / ClearAnnotation，在其中同步更新缓存，保证读写一致。
+        private readonly Dictionary<string, Dictionary<int, PdfAnnotation?>> _annotationCache = new(StringComparer.OrdinalIgnoreCase);
+        // 已通过整目录扫描完成全量加载的文件：其缓存未命中的页可直接判定无标注，无需再探测磁盘
+        private readonly HashSet<string> _fullyLoadedPdfs = new(StringComparer.OrdinalIgnoreCase);
+        private readonly object _cacheLock = new();
+
         public FileAnnotationService(ILogger<FileAnnotationService>? logger = null)
         {
             _logger = logger;
@@ -155,6 +165,11 @@ namespace LearningAssistant.Services.Pdf
                 {
                     File.Delete(path);
                 }
+                lock (_cacheLock)
+                {
+                    // 文件已删除，缓存置为负缓存，避免下次读取再次访问磁盘
+                    GetOrCreatePageCache(pdfPath)[pageIndex] = null;
+                }
             }
             catch (Exception ex)
             {
@@ -201,7 +216,8 @@ namespace LearningAssistant.Services.Pdf
         public IEnumerable<AnnotationText> GetTexts(string pdfPath, int pageIndex)
         {
             var annotation = LoadAnnotationData(pdfPath, pageIndex);
-            return annotation?.Texts ?? Enumerable.Empty<AnnotationText>();
+            // 返回副本，避免调用方直接改动缓存中的列表而绕过 SaveAnnotationData
+            return annotation?.Texts.ToList() ?? Enumerable.Empty<AnnotationText>();
         }
 
         public void ClearRedo(string pdfPath, int pageIndex)
@@ -335,7 +351,8 @@ namespace LearningAssistant.Services.Pdf
         public IEnumerable<AnnotationStroke> GetStrokes(string pdfPath, int pageIndex)
         {
             var annotation = LoadAnnotationData(pdfPath, pageIndex);
-            return annotation?.Strokes ?? Enumerable.Empty<AnnotationStroke>();
+            // 返回副本，避免调用方直接改动缓存中的列表而绕过 SaveAnnotationData
+            return annotation?.Strokes.ToList() ?? Enumerable.Empty<AnnotationStroke>();
         }
 
         public void UpdateStrokeAt(string pdfPath, int pageIndex, int index, AnnotationStroke stroke)
@@ -363,10 +380,27 @@ namespace LearningAssistant.Services.Pdf
 
         private PdfAnnotation? LoadAnnotationData(string pdfPath, int pageIndex)
         {
+            lock (_cacheLock)
+            {
+                if (_annotationCache.TryGetValue(pdfPath, out var pages))
+                {
+                    if (pages.TryGetValue(pageIndex, out var cached))
+                        return cached;
+                    // 该文件已整目录扫描过，缓存没有即磁盘没有，避免重复 File.Exists 探测
+                    if (_fullyLoadedPdfs.Contains(pdfPath))
+                        return null;
+                }
+            }
+
             try
             {
                 var path = GetAnnotationPath(pdfPath, pageIndex);
-                return JsonHelper.LoadFromFile<PdfAnnotation>(path);
+                var annotation = JsonHelper.LoadFromFile<PdfAnnotation>(path);
+                lock (_cacheLock)
+                {
+                    GetOrCreatePageCache(pdfPath)[pageIndex] = annotation;
+                }
+                return annotation;
             }
             catch (Exception ex)
             {
@@ -375,12 +409,99 @@ namespace LearningAssistant.Services.Pdf
             }
         }
 
+        public IEnumerable<PdfAnnotation> GetAllAnnotations(string pdfPath)
+        {
+            lock (_cacheLock)
+            {
+                if (_fullyLoadedPdfs.Contains(pdfPath))
+                    return GetCachedAnnotations(pdfPath);
+            }
+
+            try
+            {
+                // 通过第 0 页的路径推导该文件的标注目录与文件名前缀（{fileName}_page{N}.json）
+                var samplePath = GetAnnotationPath(pdfPath, 0);
+                var dir = Path.GetDirectoryName(samplePath);
+                const string pageMarker = "_page";
+                var fileName = Path.GetFileName(samplePath);
+                var markerIndex = fileName.LastIndexOf(pageMarker, StringComparison.Ordinal);
+                if (dir == null || markerIndex <= 0)
+                    return Enumerable.Empty<PdfAnnotation>();
+                var prefix = fileName.Substring(0, markerIndex);
+
+                lock (_cacheLock)
+                {
+                    GetOrCreatePageCache(pdfPath);
+                }
+
+                if (Directory.Exists(dir))
+                {
+                    foreach (var file in Directory.EnumerateFiles(dir, prefix + pageMarker + "*.json"))
+                    {
+                        var name = Path.GetFileName(file);
+                        var pagePart = name.Substring(prefix.Length + pageMarker.Length,
+                            name.Length - prefix.Length - pageMarker.Length - ".json".Length);
+                        if (!int.TryParse(pagePart, out var pageIndex))
+                            continue;
+
+                        lock (_cacheLock)
+                        {
+                            // 缓存中已有（可能刚被写入），以缓存为准，不重复读盘
+                            if (_annotationCache[pdfPath].ContainsKey(pageIndex))
+                                continue;
+                        }
+
+                        var annotation = JsonHelper.LoadFromFile<PdfAnnotation>(file);
+                        lock (_cacheLock)
+                        {
+                            _annotationCache[pdfPath][pageIndex] = annotation;
+                        }
+                    }
+                }
+
+                lock (_cacheLock)
+                {
+                    _fullyLoadedPdfs.Add(pdfPath);
+                    return GetCachedAnnotations(pdfPath);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Failed to load all annotations for {PdfPath}", pdfPath);
+                return Enumerable.Empty<PdfAnnotation>();
+            }
+        }
+
+        // 调用方须已持有 _cacheLock
+        private Dictionary<int, PdfAnnotation?> GetOrCreatePageCache(string pdfPath)
+        {
+            if (!_annotationCache.TryGetValue(pdfPath, out var pages))
+            {
+                pages = new Dictionary<int, PdfAnnotation?>();
+                _annotationCache[pdfPath] = pages;
+            }
+            return pages;
+        }
+
+        // 调用方须已持有 _cacheLock
+        private List<PdfAnnotation> GetCachedAnnotations(string pdfPath)
+        {
+            if (!_annotationCache.TryGetValue(pdfPath, out var pages))
+                return new List<PdfAnnotation>();
+            return pages.Values.Where(a => a != null).Cast<PdfAnnotation>()
+                .OrderBy(a => a.PageIndex).ToList();
+        }
+
         private void SaveAnnotationData(string pdfPath, int pageIndex, PdfAnnotation annotation)
         {
             try
             {
                 var path = GetAnnotationPath(pdfPath, pageIndex);
                 JsonHelper.SaveToFile(path, annotation);
+                lock (_cacheLock)
+                {
+                    GetOrCreatePageCache(pdfPath)[pageIndex] = annotation;
+                }
             }
             catch (Exception ex)
             {

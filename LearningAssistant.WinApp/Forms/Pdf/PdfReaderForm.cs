@@ -518,6 +518,10 @@ namespace LearningAssistant.Forms.Pdf
 
         private void PdfReaderForm_FormClosing(object? sender, FormClosingEventArgs e)
         {
+            // 任何关闭路径都先落盘因防抖挂起的会话（页码等），避免最后几页翻页记录丢失；
+            // 无挂起写入时是无操作，不影响关闭确认流程
+            (Program.ServiceProvider?.GetService(typeof(IPdfFileManager)) as IPdfFileManager)?.FlushSessionSave();
+
             if (e.CloseReason != CloseReason.UserClosing || _closeConfirmed)
                 return;
 

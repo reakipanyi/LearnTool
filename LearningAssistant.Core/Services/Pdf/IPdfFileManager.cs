@@ -25,6 +25,11 @@ namespace LearningAssistant.Services.Pdf
         void SaveSession();
 
         /// <summary>
+        /// 立即落盘因防抖而挂起的会话保存（窗体关闭等场景调用），无挂起时为无操作
+        /// </summary>
+        void FlushSessionSave();
+
+        /// <summary>
         /// 加载会话状态
         /// </summary>
         /// <returns>元组(文件夹路径, 文件路径, 文件页码映射表)</returns>

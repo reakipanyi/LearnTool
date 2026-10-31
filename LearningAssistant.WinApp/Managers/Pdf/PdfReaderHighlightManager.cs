@@ -997,10 +997,13 @@ namespace LearningAssistant.Managers
 
                 if (_annotationService != null)
                 {
-                    for (int pageIndex = 0; pageIndex < (_form.Presenter?.PageCount ?? 0); pageIndex++)
+                    // 一次性取全文件标注（服务内部缓存，翻页反复调用不再产生逐页磁盘 IO），
+                    // 按页码升序遍历，与原逐页循环的输出顺序保持一致
+                    foreach (var annotation in _annotationService.GetAllAnnotations(_form.CurrentPdfPath))
                     {
-                        var strokes = _annotationService.GetStrokes(_form.CurrentPdfPath, pageIndex);
-                        foreach (var stroke in strokes)
+                        int pageIndex = annotation.PageIndex;
+
+                        foreach (var stroke in annotation.Strokes)
                         {
                             if (!addedIds.Add(stroke.Id)) continue;
 
@@ -1020,8 +1023,7 @@ namespace LearningAssistant.Managers
                             listBox.Items.Add(annotationItem);
                         }
 
-                        var texts = _annotationService.GetTexts(_form.CurrentPdfPath, pageIndex);
-                        foreach (var text in texts)
+                        foreach (var text in annotation.Texts)
                         {
                             if (!addedIds.Add(text.Id)) continue;
 

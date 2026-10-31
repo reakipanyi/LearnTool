@@ -31,6 +31,12 @@ namespace LearningAssistant.Services.Pdf
 
         private const string PdfSessionKey = "pdf_session";
 
+        // 会话保存防抖：翻页会频繁触发 SetCurrentPageIndex，若每次同步写 SQLite 会阻塞 UI 线程
+        private const int SessionSaveDebounceMs = 500;
+        private readonly object _sessionSaveLock = new();
+        private System.Threading.Timer? _sessionSaveTimer;
+        private bool _sessionSavePending;
+
         public PdfFileManager(
             ILogger<PdfFileManager> logger,
             IPdfService pdfService,
@@ -59,7 +65,7 @@ namespace LearningAssistant.Services.Pdf
         public void SetCurrentPageIndex(int pageIndex)
         {
             CurrentPageIndex = pageIndex;
-            SaveSession();
+            ScheduleSaveSession();
         }
 
         public bool IsImageMode => _isImageMode;
@@ -78,6 +84,55 @@ namespace LearningAssistant.Services.Pdf
         );
 
         public void SaveSession()
+        {
+            lock (_sessionSaveLock)
+            {
+                // 直接保存视为一次强制落盘：取消防抖计时器并清除挂起标记，
+                // 覆盖任何尚未执行的延迟写入（快照包含最新状态）
+                _sessionSaveTimer?.Change(Timeout.Infinite, Timeout.Infinite);
+                _sessionSavePending = false;
+                SaveSessionCore();
+            }
+        }
+
+        // 翻页触发的会话保存走防抖：连翻 N 页只落盘一次，且写库在后台线程执行，
+        // 避免 EF Core 同步写 SQLite 阻塞 UI 线程造成翻页卡顿
+        private void ScheduleSaveSession()
+        {
+            lock (_sessionSaveLock)
+            {
+                _sessionSavePending = true;
+                _sessionSaveTimer ??= new System.Threading.Timer(_ => OnSessionSaveTimer(), null, Timeout.Infinite, Timeout.Infinite);
+                _sessionSaveTimer.Change(SessionSaveDebounceMs, Timeout.Infinite);
+            }
+        }
+
+        private void OnSessionSaveTimer()
+        {
+            lock (_sessionSaveLock)
+            {
+                if (!_sessionSavePending) return;
+                _sessionSavePending = false;
+                SaveSessionCore();
+            }
+        }
+
+        /// <summary>
+        /// 立即落盘挂起的会话保存（切换文件、窗体关闭等场景调用），无挂起时为无操作。
+        /// </summary>
+        public void FlushSessionSave()
+        {
+            lock (_sessionSaveLock)
+            {
+                _sessionSaveTimer?.Change(Timeout.Infinite, Timeout.Infinite);
+                if (!_sessionSavePending) return;
+                _sessionSavePending = false;
+                SaveSessionCore();
+            }
+        }
+
+        // 调用方须已持有 _sessionSaveLock（lock 可重入）
+        private void SaveSessionCore()
         {
             try
             {
