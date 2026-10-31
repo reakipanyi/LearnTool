@@ -1,5 +1,6 @@
 using LearningAssistant.Common;
 using LearningAssistant.Common.Themes;
+using LearningAssistant.Models.Home;
 using System.ComponentModel;
 
 namespace LearningAssistant.Forms.UserControls.Dashboard
@@ -99,6 +100,7 @@ namespace LearningAssistant.Forms.UserControls.Dashboard
             AddStat("⭐", "总经验值");
             AddStat("🏆", "当前等级");
             AddStat("🎯", "今日挑战");
+            AddStat("🔁", "待复习");
             AddStat("📝", "笔记数");
 
             AddAction("learning", "📚", "开始学习");
@@ -197,19 +199,22 @@ namespace LearningAssistant.Forms.UserControls.Dashboard
             _actionButtons.Add(button);
         }
 
-        public void UpdateStats(int todayStudyMinutes, int streakDays, int totalXP,
-            int currentLevel, int xpToNextLevel, int completedChallenges, int totalChallenges,
-            int noteCount = 0, int todayNewNotes = 0)
+        /// <summary>
+        /// 用首页聚合快照刷新统计卡（07 方案 3.4）。
+        /// </summary>
+        public void ApplySnapshot(HomeSnapshot snapshot)
         {
-            if (_statItems.Count < 6) return;
+            if (snapshot == null || _statItems.Count < 7) return;
 
-            _statItems[0].Value.Text = FormatStudyMinutes(todayStudyMinutes);
-            _statItems[1].Value.Text = streakDays > 0 ? $"{streakDays}天" : "—";
-            _statItems[2].Value.Text = totalXP.ToString();
-            _statItems[3].Value.Text = $"Lv.{currentLevel}";
-            _statItems[4].Value.Text = $"{completedChallenges}/{totalChallenges}";
-            _statItems[5].Value.Text = noteCount.ToString();
-            _statItems[5].Caption.Text = todayNewNotes > 0 ? $"笔记数（今日+{todayNewNotes}）" : "笔记数";
+            _statItems[0].Value.Text = FormatStudyMinutes(snapshot.TodayStudyMinutes);
+            _statItems[1].Value.Text = snapshot.StreakDays > 0 ? $"{snapshot.StreakDays}天" : "—";
+            _statItems[2].Value.Text = snapshot.TotalXp.ToString();
+            _statItems[3].Value.Text = $"Lv.{snapshot.Level}";
+            _statItems[4].Value.Text = $"{snapshot.CompletedChallenges}/{snapshot.TotalChallenges}";
+            _statItems[5].Value.Text = snapshot.DueReviewCount > 0 ? $"{snapshot.DueReviewCount}项" : "无";
+            _statItems[5].Caption.Text = "待复习";
+            _statItems[6].Value.Text = snapshot.NoteCount.ToString();
+            _statItems[6].Caption.Text = snapshot.TodayNewNotes > 0 ? $"笔记数（今日+{snapshot.TodayNewNotes}）" : "笔记数";
         }
 
         public void UpdateChallengeProgress(int completed, int total)

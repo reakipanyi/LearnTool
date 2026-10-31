@@ -8,6 +8,7 @@ using LearningAssistant.Forms.UserControls.Cards;
 using LearningAssistant.Forms.UserControls.Dashboard;
 using LearningAssistant.Forms.UserControls.Navigation;
 using LearningAssistant.Models.Config;
+using LearningAssistant.Models.Home;
 using LearningAssistant.Presenters;
 using LearningAssistant.Services.Gamification;
 using LearningAssistant.Services.Hotkeys;
@@ -781,6 +782,11 @@ namespace LearningAssistant.Forms.Main
             }
         }
 
+        /// <summary>
+        /// 当前是否使用完整版首页（DashboardView）；简洁版首页为 false。
+        /// </summary>
+        public bool IsDashboardHomeActive => simpleHomeView == null;
+
         [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
         public string ProgressSummary
         {
@@ -854,38 +860,44 @@ namespace LearningAssistant.Forms.Main
             }
         }
 
-        public void UpdateDashboardStats(int todayStudyMinutes, int streakDays, int totalXP,
-            int currentLevel, int xpToNextLevel, int completedChallenges, int totalChallenges,
-            int noteCount = 0, int todayNewNotes = 0)
+        public void UpdateHomeSnapshot(HomeSnapshot snapshot)
         {
+            if (snapshot == null)
+                return;
+
+            // presenter 可能在后台线程刷新快照，统一切回 UI 线程（07 方案 3.3）
+            if (!IsHandleCreated)
+                return;
+
+            if (InvokeRequired)
+            {
+                BeginInvoke(new Action<HomeSnapshot>(UpdateHomeSnapshot), snapshot);
+                return;
+            }
+
             if (dashboardView != null)
             {
                 dashboardView.UpdateDashboardStats(
-                    todayStudyMinutes,
-                    streakDays,
-                    totalXP,
-                    currentLevel,
-                    xpToNextLevel,
-                    completedChallenges,
-                    totalChallenges,
-                    noteCount,
-                    todayNewNotes);
+                    snapshot.TodayStudyMinutes,
+                    snapshot.StreakDays,
+                    snapshot.TotalXp,
+                    snapshot.Level,
+                    snapshot.XpToNextLevel,
+                    snapshot.CompletedChallenges,
+                    snapshot.TotalChallenges,
+                    snapshot.NoteCount,
+                    snapshot.TodayNewNotes);
             }
 
-            simpleHomeView?.UpdateStats(
-                todayStudyMinutes,
-                streakDays,
-                totalXP,
-                currentLevel,
-                xpToNextLevel,
-                completedChallenges,
-                totalChallenges,
-                noteCount,
-                todayNewNotes);
+            simpleHomeView?.ApplySnapshot(snapshot);
         }
 
         public void UpdateRecommendations(List<Models.Learning.LearningRecommendation> recommendations)
         {
+            // 简洁版首页不展示推荐，直接忽略，避免无意义的界面刷新（07 方案 H-5）
+            if (simpleHomeView != null)
+                return;
+
             if (dashboardView != null)
             {
                 dashboardView.UpdateRecommendations(recommendations);

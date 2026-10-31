@@ -1,3 +1,5 @@
+using LearningAssistant.Models.Home;
+
 namespace LearningAssistant.Views
 {
     /// <summary>
@@ -9,6 +11,12 @@ namespace LearningAssistant.Views
         /// 当前选中的用户名
         /// </summary>
         string SelectedUser { get; set; }
+
+        /// <summary>
+        /// 当前是否使用完整版首页（DashboardView）。
+        /// 简洁版首页不展示推荐，presenter 可据此跳过推荐请求。
+        /// </summary>
+        bool IsDashboardHomeActive { get; }
 
         /// <summary>
         /// 学习进度摘要文本
@@ -76,20 +84,11 @@ namespace LearningAssistant.Views
         void UpdateStreakInfo(int consecutiveDays, string studyTimeSummary);
 
         /// <summary>
-        /// 更新 Dashboard 统计卡片数据
+        /// 更新首页聚合快照（统计、挑战、笔记、待复习、今日目标）。
+        /// 视图负责切换到 UI 线程并分发给当前使用的首页实现。
         /// </summary>
-        /// <param name="todayStudyMinutes">今日学习分钟数</param>
-        /// <param name="streakDays">连续学习天数</param>
-        /// <param name="totalXP">总经验值</param>
-        /// <param name="currentLevel">当前等级</param>
-        /// <param name="xpToNextLevel">距下一级所需XP</param>
-        /// <param name="completedChallenges">已完成挑战数</param>
-        /// <param name="totalChallenges">总挑战数</param>
-        /// <param name="noteCount">笔记总数</param>
-        /// <param name="todayNewNotes">今日新增笔记数</param>
-        void UpdateDashboardStats(int todayStudyMinutes, int streakDays, int totalXP,
-            int currentLevel, int xpToNextLevel, int completedChallenges, int totalChallenges,
-            int noteCount = 0, int todayNewNotes = 0);
+        /// <param name="snapshot">首页聚合快照</param>
+        void UpdateHomeSnapshot(HomeSnapshot snapshot);
 
         void UpdateRecommendations(List<LearningAssistant.Models.Learning.LearningRecommendation> recommendations);
 

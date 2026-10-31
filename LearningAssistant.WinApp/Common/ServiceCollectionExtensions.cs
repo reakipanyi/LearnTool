@@ -390,6 +390,25 @@ namespace LearningAssistant.Common
                 var logger = sp.GetService<ILogger<LearningStatsAggregator>>();
                 return new LearningStatsAggregator(dbFactory, cache, eventBus, logger);
             });
+            // 首页快照聚合（07 方案）：一次汇总统计/游戏化/笔记/复习/目标，供首页单一入口消费
+            services.AddSingleton<IHomeSnapshotService>(sp =>
+            {
+                var gamificationService = sp.GetRequiredService<IGamificationService>();
+                var noteService = sp.GetService<INoteService>();
+                var spacedRepetitionService = sp.GetService<ISpacedRepetitionService>();
+                var goalService = sp.GetService<ILearningGoalService>();
+                var aggregator = sp.GetService<ILearningStatsAggregator>();
+                var persistenceService = sp.GetService<IDataPersistenceService>();
+                var logger = sp.GetService<ILogger<HomeSnapshotService>>();
+                return new HomeSnapshotService(
+                    gamificationService,
+                    noteService,
+                    spacedRepetitionService,
+                    goalService,
+                    aggregator,
+                    persistenceService,
+                    logger);
+            });
             services.AddSingleton<FavoritesBackupProvider>();
             services.AddSingleton<StudyStatsBackupProvider>();
             services.AddSingleton<LearningGoalsBackupProvider>();

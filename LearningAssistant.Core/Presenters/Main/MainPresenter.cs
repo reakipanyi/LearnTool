@@ -1,6 +1,8 @@
 using LearningAssistant.Abstractions;
 using LearningAssistant.Common;
+using LearningAssistant.Common.Events;
 using LearningAssistant.Managers;
+using LearningAssistant.Models.Home;
 using LearningAssistant.Models.Learning;
 using LearningAssistant.Models.User;
 using LearningAssistant.Services.Cache;
@@ -25,11 +27,17 @@ namespace LearningAssistant.Presenters
         private readonly IDataPersistenceService _persistenceService;
         private readonly IGamificationService _gamificationService;
         private readonly ILearningRecommendationService _recommendationService;
-        private readonly ILearningStatsAggregator? _aggregator;
         private readonly IDialogService _dialogService;
+        private readonly IHomeSnapshotService _homeSnapshotService;
+        private readonly IEventBus? _eventBus;
 
         private PdfPresenter? _pdfPresenter;
         private IMainView? _view;
+
+        private readonly object _homeRefreshGate = new();
+        private Timer? _homeRefreshTimer;
+        private int _homeRefreshRunning;
+        private bool _disposed;
 
         private string _currentUserId = Constants.DefaultUserId;
         private UserProfile? _currentUserProfile;
@@ -49,7 +57,8 @@ namespace LearningAssistant.Presenters
             IGamificationService gamificationService,
             ILearningRecommendationService recommendationService,
             IDialogService dialogService,
-            ILearningStatsAggregator? aggregator = null)
+            IHomeSnapshotService homeSnapshotService,
+            IEventBus? eventBus = null)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _sessionService = sessionService ?? throw new ArgumentNullException(nameof(sessionService));
@@ -62,7 +71,8 @@ namespace LearningAssistant.Presenters
             _gamificationService = gamificationService ?? throw new ArgumentNullException(nameof(gamificationService));
             _recommendationService = recommendationService ?? throw new ArgumentNullException(nameof(recommendationService));
             _dialogService = dialogService ?? throw new ArgumentNullException(nameof(dialogService));
-            _aggregator = aggregator;
+            _homeSnapshotService = homeSnapshotService ?? throw new ArgumentNullException(nameof(homeSnapshotService));
+            _eventBus = eventBus;
             _logger.LogInformation("MainPresenter initialized");
         }
 
@@ -92,6 +102,15 @@ namespace LearningAssistant.Presenters
             _view.OpenEditorClicked += View_OpenEditorClicked;
             _view.TabChanged += View_TabChanged;
             _view.OpenUserComparisonClicked += View_OpenUserComparisonClicked;
+
+            // 学习活动事件：用于首页快照的防抖刷新（07 方案 H-1）
+            if (_eventBus != null)
+            {
+                _eventBus.Subscribe<ItemLearnedEvent>(OnItemLearned);
+                _eventBus.Subscribe<ItemWrongEvent>(OnItemWrong);
+                _eventBus.Subscribe<ReviewDoneEvent>(OnReviewDone);
+                _eventBus.Subscribe<PomodoroCompletedEvent>(OnPomodoroCompleted);
+            }
         }
 
         private void UnsubscribeFromEvents()
@@ -105,6 +124,14 @@ namespace LearningAssistant.Presenters
             _view.OpenEditorClicked -= View_OpenEditorClicked;
             _view.TabChanged -= View_TabChanged;
             _view.OpenUserComparisonClicked -= View_OpenUserComparisonClicked;
+
+            if (_eventBus != null)
+            {
+                _eventBus.Unsubscribe<ItemLearnedEvent>(OnItemLearned);
+                _eventBus.Unsubscribe<ItemWrongEvent>(OnItemWrong);
+                _eventBus.Unsubscribe<ReviewDoneEvent>(OnReviewDone);
+                _eventBus.Unsubscribe<PomodoroCompletedEvent>(OnPomodoroCompleted);
+            }
         }
 
         public void Initialize()
@@ -174,53 +201,65 @@ namespace LearningAssistant.Presenters
 
             try
             {
-                // 真实数据优先来自统计底座聚合服务（06 方案 3.1）；
-                // 聚合不可用时回退到用户资料缓存，避免首页无数据。
-                int todayMinutes = 0;
-                int streakDays = 0;
-                int totalXP = _gamificationService.XP;
-                int currentLevel = _gamificationService.CurrentLevel;
-                int xpToNext = _gamificationService.XPToNextLevel;
+                // 首页数据统一由 HomeSnapshotService 聚合（07 方案 3.2）：
+                // 统计底座/游戏化/笔记/复习/目标的降级逻辑收敛在聚合服务内。
+                _view.UpdateHomeSnapshot(_homeSnapshotService.GetSnapshot(_currentUserId));
 
-                if (_aggregator != null)
+                // 简洁版首页不展示推荐，跳过无意义的后台请求（07 方案 H-5）
+                if (_view.IsDashboardHomeActive)
                 {
-                    var today = _aggregator.GetDailyOverview(_currentUserId, DateTime.Today);
-                    todayMinutes = today.TimeSpentMinutes;
-                    streakDays = today.StreakDays;
-                    if (today.XP > 0) totalXP = today.XP;
-                    if (today.Level > 0) currentLevel = today.Level;
+                    LoadRecommendationsAsync();
                 }
-                else if (_currentUserProfile != null)
-                {
-                    todayMinutes = _currentUserProfile.TodayStudyTimeMinutes;
-                    streakDays = _currentUserProfile.ConsecutiveStudyDays;
-                }
-
-                var challenges = _gamificationService.GetDailyChallenges().ToList();
-                int completedChallenges = challenges.Count(c => c.Completed);
-                int totalChallenges = challenges.Count;
-
-                int noteCount = 0;
-                int todayNewNotes = 0;
-
-                _view.UpdateDashboardStats(
-                    todayMinutes,
-                    streakDays,
-                    totalXP,
-                    currentLevel,
-                    xpToNext,
-                    completedChallenges,
-                    totalChallenges,
-                    noteCount,
-                    todayNewNotes);
-
-                LoadRecommendationsAsync();
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "更新 Dashboard 统计数据失败");
             }
         }
+
+        /// <summary>
+        /// 学习/复习/番茄钟等事件到达后，300ms 防抖刷新首页快照。
+        /// </summary>
+        private void OnHomeSnapshotChanged()
+        {
+            if (_disposed) return;
+
+            lock (_homeRefreshGate)
+            {
+                _homeRefreshTimer ??= new Timer(
+                    _ => RefreshHomeSnapshot(),
+                    null,
+                    Timeout.Infinite,
+                    Timeout.Infinite);
+                _homeRefreshTimer.Change(HomeRefreshDebounceMilliseconds, Timeout.Infinite);
+            }
+        }
+
+        private void OnItemLearned(ItemLearnedEvent e) => OnHomeSnapshotChanged();
+        private void OnItemWrong(ItemWrongEvent e) => OnHomeSnapshotChanged();
+        private void OnReviewDone(ReviewDoneEvent e) => OnHomeSnapshotChanged();
+        private void OnPomodoroCompleted(PomodoroCompletedEvent e) => OnHomeSnapshotChanged();
+
+        private void RefreshHomeSnapshot()
+        {
+            if (_disposed) return;
+            if (Interlocked.Exchange(ref _homeRefreshRunning, 1) == 1) return;
+
+            try
+            {
+                _view?.UpdateHomeSnapshot(_homeSnapshotService.GetSnapshot(_currentUserId));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "刷新首页快照失败");
+            }
+            finally
+            {
+                Interlocked.Exchange(ref _homeRefreshRunning, 0);
+            }
+        }
+
+        private const int HomeRefreshDebounceMilliseconds = 300;
 
         private void LoadRecommendationsAsync()
         {
@@ -408,7 +447,15 @@ namespace LearningAssistant.Presenters
 
         public void Dispose()
         {
+            _disposed = true;
             UnsubscribeFromEvents();
+
+            lock (_homeRefreshGate)
+            {
+                _homeRefreshTimer?.Dispose();
+                _homeRefreshTimer = null;
+            }
+
             _logger.LogInformation("MainPresenter disposed");
         }
     }
