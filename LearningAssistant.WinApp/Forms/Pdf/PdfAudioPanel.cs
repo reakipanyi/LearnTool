@@ -1361,6 +1361,10 @@ public partial class PdfAudioPanel : UserControl, ISidebarThemeAware
         var index = result.Tracks.FindIndex(t =>
             string.Equals(t.FilePath, track.FilePath, StringComparison.OrdinalIgnoreCase));
         if (index < 0) return;
+        // 列表条目由 RefreshData 重建，切页时 TrackChanged 可能先于刷新到达，
+        // 此时列表还是空的（或条目数滞后），直接赋值会抛 ArgumentOutOfRangeException；
+        // 跳过即可，随后的 RefreshData 会再按最新数据定位选中项
+        if (index >= _listTracks.Items.Count) return;
         _suppressAutoPlay = true;
         try
         {
