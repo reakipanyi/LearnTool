@@ -26,8 +26,8 @@ namespace LearningAssistant.Forms.UserControls.Dashboard
         private readonly FlowLayoutPanel _panelStats = new();
         private readonly FlowLayoutPanel _panelActions = new();
         private readonly List<StatCard> _statCards = new();
-        // 快捷入口按钮：与「今日概览」统计卡片同款白底/主色文字，不再使用彩色实心块
-        private readonly List<Button> _actionButtons = new();
+        // 快捷入口卡片：与「今日概览」统计卡片同款圆角底、阴影与着色图标块
+        private readonly List<QuickActionCard> _actionButtons = new();
         // 新用户引导：整页覆盖，只有产生学习数据后才回到正常首页（07 方案 B2）
         private readonly Panel _panelEmptyState = new();
         private readonly Label _labelEmptyIcon = new();
@@ -141,10 +141,14 @@ namespace LearningAssistant.Forms.UserControls.Dashboard
             AddStat("📝", "笔记数", Color.FromArgb(33, 150, 243));
 
             // 任务型入口：直接通往下一步可执行动作，不再重复左侧导航（07 方案 B3）
-            AddAction("learning", "📚", "继续学习");
-            AddAction("flashcard", "🔁", "开始复习");
-            AddAction("pomodoro", "🍅", "番茄钟");
-            AddAction("wrongbook", "❌", "错题本");
+            AddAction("learning", "📚", "继续学习", Color.FromArgb(99, 102, 241));
+            AddAction("flashcard", "🔁", "开始复习", Color.FromArgb(0, 150, 136));
+            AddAction("pomodoro", "🍅", "番茄钟", Color.FromArgb(244, 63, 54));
+            AddAction("wrongbook", "❌", "错题本", Color.FromArgb(249, 115, 22));
+            // 工具型入口：与左侧导航共用同一套路由，方便常用功能直达
+            AddAction("pdf", "📖", "PDF阅读", Color.FromArgb(34, 197, 94));
+            AddAction("browser", "🌐", "浏览器", Color.FromArgb(14, 165, 233));
+            AddAction("settings", "⚙️", "设置", Color.FromArgb(108, 117, 125));
 
             InitializeEmptyStatePanel();
         }
@@ -177,34 +181,25 @@ namespace LearningAssistant.Forms.UserControls.Dashboard
         }
 
         /// <summary>
-        /// 快捷入口：与「今日概览」卡片保持同一视觉语言（白底、主文字色、无彩色块），
-        /// 只用图标区分入口类型，悬停时给一层浅色反馈。
+        /// 快捷入口：与「今日概览」卡片保持同一视觉语言（圆角底、柔和阴影、着色图标块），
+        /// 只用图标底色区分入口类型，悬停时提亮底色并显示强调色描边。
         /// </summary>
-        private void AddAction(string key, string icon, string title)
+        private void AddAction(string key, string icon, string title, Color accentColor)
         {
-            var button = new Button
+            var card = new QuickActionCard
             {
                 Width = ActionWidth,
                 Height = ActionHeight,
                 Margin = new Padding(0, 0, ItemSpacing, ItemSpacing),
-                Text = $"{icon}   {title}",
-                Tag = key,
-                FlatStyle = FlatStyle.Flat,
-                BackColor = Color.White,
-                ForeColor = Color.FromArgb(33, 33, 33),
-                Font = new Font("微软雅黑", 11F, FontStyle.Bold),
-                TextAlign = ContentAlignment.MiddleLeft,
-                Padding = new Padding(14, 0, 0, 0),
-                Cursor = Cursors.Hand,
-                UseVisualStyleBackColor = false
+                Icon = icon,
+                Title = title,
+                AccentColor = accentColor,
+                AccessibleName = title
             };
-            button.FlatAppearance.BorderSize = 0;
-            button.FlatAppearance.MouseOverBackColor = Color.FromArgb(248, 249, 252);
-            button.FlatAppearance.MouseDownBackColor = Color.FromArgb(240, 241, 246);
-            button.TabIndex = _actionButtons.Count;
-            button.Click += (_, _) => QuickActionRequested?.Invoke(this, (string)button.Tag);
-            _panelActions.Controls.Add(button);
-            _actionButtons.Add(button);
+            card.TabIndex = _actionButtons.Count;
+            card.ActionClicked += (_, _) => QuickActionRequested?.Invoke(this, key);
+            _panelActions.Controls.Add(card);
+            _actionButtons.Add(card);
         }
 
         private void InitializeEmptyStatePanel()
@@ -436,12 +431,12 @@ namespace LearningAssistant.Forms.UserControls.Dashboard
             }
 
             // 快捷入口与统计卡片共用 Surface 底色，夜间不再是刺眼的白色块
-            foreach (var button in _actionButtons)
+            foreach (var card in _actionButtons)
             {
-                button.BackColor = colors.Surface;
-                button.ForeColor = colors.TextPrimary;
-                button.FlatAppearance.MouseOverBackColor = colors.SurfaceElevated;
-                button.FlatAppearance.MouseDownBackColor = colors.SurfaceElevated;
+                card.CardColor = colors.Surface;
+                card.HoverColor = colors.SurfaceElevated;
+                card.TextColor = colors.TextPrimary;
+                card.BorderColor = colors.Divider;
             }
         }
     }
