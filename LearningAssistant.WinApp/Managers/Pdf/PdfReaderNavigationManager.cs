@@ -110,6 +110,15 @@ namespace LearningAssistant.Managers
         private bool _isOneTimeTool = false;
         private AnnotationToolMode _defaultToolMode = AnnotationToolMode.None;
 
+        // 双击工具按钮锁定的“连续标注”：锁定后画完不自动回到选择，换工具或按 Esc 解除
+        private bool _toolSticky = false;
+
+        /// <summary>
+        /// 一次标注真正完成并落盘后触发（画笔/形状/高亮各一次）。
+        /// 是否自动回到选择模式由宿主按用户偏好决定，Manager 本身不读配置。
+        /// </summary>
+        public event EventHandler? AnnotationCommitted;
+
         // 临时笔模式：绘制的笔迹暂时显示后自动消失
         private List<PointF>? _temporaryPenPoints = null;
         private int _temporaryPenPageIndex = -1;
@@ -258,6 +267,11 @@ namespace LearningAssistant.Managers
 
         public void SetToolMode(AnnotationToolMode mode, bool isOneTime = false)
         {
+            // 换到另一个工具即解除双击锁定的连续标注；同一工具的重复设置保留锁定状态
+            // （按钮双击会触发两次 Click，第二次仍是同一工具，不能把刚锁定的状态清掉）
+            if (mode != _currentToolMode)
+                _toolSticky = false;
+
             _currentToolMode = mode;
             _isOneTimeTool = isOneTime;
             _toolHandler.IsDrawing = false;
@@ -294,6 +308,28 @@ namespace LearningAssistant.Managers
         public void SetDefaultToolMode(AnnotationToolMode mode)
         {
             _defaultToolMode = mode;
+        }
+
+        /// <summary>工具是否被双击锁定为连续标注（锁定后画完不自动回到选择模式）。</summary>
+        public bool IsToolSticky => _toolSticky;
+
+        /// <summary>锁定当前工具为连续标注；由工具按钮双击触发。</summary>
+        public void LockToolForContinuousDrawing()
+        {
+            _toolSticky = true;
+        }
+
+        /// <summary>通知宿主：一次标注已完成（是否回到选择由宿主按偏好判断）。</summary>
+        private void RaiseAnnotationCommitted()
+        {
+            try
+            {
+                AnnotationCommitted?.Invoke(this, EventArgs.Empty);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error notifying annotation committed");
+            }
         }
 
         public void SetPenColor(Color color)
@@ -835,8 +871,12 @@ namespace LearningAssistant.Managers
                         StartTemporaryPenClear();
                     }
 
-                    // 一次性工具使用完成后自动恢复默认模式
-                    RevertIfOneTimeTool();
+                    // 一次性工具使用完成后自动恢复默认模式；
+                    // 普通工具交给宿主按用户偏好决定是否回到选择模式
+                    if (_isOneTimeTool)
+                        RevertIfOneTimeTool();
+                    else
+                        RaiseAnnotationCommitted();
                     return;
                 }
 
@@ -895,8 +935,12 @@ namespace LearningAssistant.Managers
                     _form.HighlightManager?.RefreshHighlightList();
                     AnnotationAddedCallback?.Invoke();
 
-                    // 一次性工具：形状绘制完成后自动恢复默认模式
-                    RevertIfOneTimeTool();
+                    // 一次性工具：形状绘制完成后自动恢复默认模式；
+                    // 普通形状同样交给宿主按用户偏好回到选择模式
+                    if (_isOneTimeTool)
+                        RevertIfOneTimeTool();
+                    else
+                        RaiseAnnotationCommitted();
                     return;
                 }
 
@@ -925,6 +969,8 @@ namespace LearningAssistant.Managers
                         _lastSelectionRect = null;
                         // 延迟清除待处理矩形
                         StartClearPendingHighlightTimer();
+                        // 高亮已添加：与画笔/形状一样按宿主偏好回到选择模式
+                        RaiseAnnotationCommitted();
                     }
                     else
                     {
@@ -1283,21 +1329,27 @@ namespace LearningAssistant.Managers
         {
             if (_selectionManager.SelectedHighlight == null || _selectionManager.SelectedHighlightIndex < 0) return;
 
-            var highlightService = _form.HighlightService;
-            if (highlightService != null && !string.IsNullOrEmpty(_form.CurrentPdfPath))
-            {
-                highlightService.RemoveHighlight(_form.CurrentPdfPath, _selectionManager.SelectedHighlight.Id);
-            }
+            var highlight = _selectionManager.SelectedHighlight;
 
             _selectionManager.SelectedHighlight = null;
             _selectionManager.SelectedHighlightIndex = -1;
             _selectionManager.SelectionState = SelectionInteractionState.None;
 
-            // 触发高亮列表和图层刷新
-            _form.HighlightManager?.RefreshHighlightList();
-            _form.HighlightManager?.UpdateHighlightLayer();
-            _form.HighlightManager?.UpdateSecondHighlightLayer();
-            _form.PictureBoxPdf?.Invalidate();
+            // 删除动作统一走高亮管理器：会写入撤销栈（Delete 键删掉的高亮可被 Ctrl+Z 恢复），
+            // 同时由管理器负责列表项移除与当前页图层刷新。
+            var highlightManager = _form.HighlightManager;
+            if (highlightManager != null)
+            {
+                highlightManager.RemoveHighlight(highlight);
+                // 删除后同步列表条数与空状态（与原直接删除路径保持一致的外围刷新）
+                highlightManager.RefreshHighlightList();
+            }
+            else
+            {
+                // 管理器尚未初始化时的兜底：保持原有直接删除行为
+                _form.HighlightService?.RemoveHighlight(_form.CurrentPdfPath, highlight.Id);
+                _form.PictureBoxPdf?.Invalidate();
+            }
         }
 
         public void ClearSelection()

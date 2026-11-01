@@ -1096,6 +1096,7 @@ namespace LearningAssistant.Forms.Pdf
             _buttonMosaicMode.Size = new Size(28, 31);
             _buttonMosaicMode.TabIndex = 5;
             _buttonMosaicMode.Text = "▦";
+            _toolTip.SetToolTip(_buttonMosaicMode, "马赛克 (M)");
             _buttonMosaicMode.UseVisualStyleBackColor = false;
             _buttonMosaicMode.Click += ButtonMosaicMode_Click;
             // 

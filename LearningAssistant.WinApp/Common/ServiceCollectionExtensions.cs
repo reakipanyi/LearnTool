@@ -280,6 +280,9 @@ namespace LearningAssistant.Common
             // PDF 阅读打卡表筛选偏好：阈值、显示范围、显示模式与折叠状态按用户隔离
             services.AddSingleton(_ => new PdfReadingCheckInPreferenceStore(() => AppPaths.CurrentUserDir));
 
+            // PDF 阅读器交互偏好：画完是否自动回到选择等标注行为按用户隔离
+            services.AddSingleton(_ => new PdfReaderInteractionPreferenceStore(() => AppPaths.CurrentUserDir));
+
             // PDF 阅读打卡表导出：Excel 双工作表、离线 HTML 与布局模型驱动的分页打印
             services.AddSingleton(sp => new PdfReadingCheckInExportService(
                 sp.GetService<ILogger<PdfReadingCheckInExportService>>()));

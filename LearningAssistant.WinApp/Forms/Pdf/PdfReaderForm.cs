@@ -404,6 +404,14 @@ namespace LearningAssistant.Forms.Pdf
         private readonly PdfReaderCommandRegistry _commandRegistry =
             new PdfReaderCommandRegistry(() => AppPaths.CurrentUserDir);
 
+        // 交互偏好：画完一次标注后自动回到选择模式（默认开，关闭后等同连续标注）
+        private PdfReaderInteractionPreferenceStore? _interactionPreferenceStore;
+        private bool _autoReturnToSelectAfterDraw = true;
+        // 本次会话只在首次自动回退时提示“双击可锁定”，避免每次落笔都弹提示
+        private bool _autoReturnHintShown;
+        // 工具按钮上次左键按下时间：用间隔判断双击，比依赖 Button.DoubleClick 更稳定
+        private readonly Dictionary<Button, long> _toolButtonLastPressTicks = new();
+
         /// <summary>
         /// 标记当前文档的缩略图是否已加载，切换到缩略图选项卡时按需加载
         /// </summary>
@@ -580,6 +588,13 @@ namespace LearningAssistant.Forms.Pdf
 
         private void InitializeManagers()
         {
+            // 交互偏好按用户目录落盘；读取失败回退默认值（默认画完自动回到选择）
+            var interactionStore = Program.ServiceProvider?.GetService(typeof(PdfReaderInteractionPreferenceStore))
+                    as PdfReaderInteractionPreferenceStore
+                ?? new PdfReaderInteractionPreferenceStore(() => AppPaths.CurrentUserDir);
+            _interactionPreferenceStore = interactionStore;
+            _autoReturnToSelectAfterDraw = interactionStore.Load().AutoReturnToSelectAfterDraw;
+
             _nightModeManager = new PdfReaderNightModeManager(_logger, this);
             _highlightManager = new PdfReaderHighlightManager(_logger, this, _highlightService, _annotationService, _eventBus);
             // 摘录列表自身重建后同步空状态/条数，避免新增摘录要翻页才可见
@@ -609,6 +624,9 @@ namespace LearningAssistant.Forms.Pdf
             // 供工具栏撤销按钮按时间顺序智能撤销最近一次操作（画笔或高亮）。
             _highlightManager.UndoActionRecorded += (s, e) => RecordUndoAction(UndoActionKind.Highlight);
             _navigationManager.UndoActionRecorded += (s, e) => RecordUndoAction(UndoActionKind.Stroke);
+
+            // 一次标注完成后按偏好自动回到选择模式（双击锁定的连续标注不打断）
+            _navigationManager.AnnotationCommitted += (s, e) => AutoReturnToSelectIfNeeded();
 
             _navigationManager.IsHighlightModeCallback = () => _highlightManager?.IsHighlightMode ?? true;
             _navigationManager.AddHighlightCallback = rect => _highlightManager?.AddHighlight(rect);
@@ -2458,6 +2476,39 @@ namespace LearningAssistant.Forms.Pdf
         }
 
         /// <summary>
+        /// 构建「更多 - 标注偏好」子菜单：把“画完怎么回到默认态”这类行为开关集中在一处，
+        /// 与阅读辅助区分开，避免设置项散落在文件/视图菜单里。
+        /// </summary>
+        private ToolStripMenuItem CreateAnnotationBehaviorMenu()
+        {
+            var root = new ToolStripMenuItem("标注偏好");
+            root.Image = CreateGlyphIcon("✏️");
+
+            var autoReturnItem = new ToolStripMenuItem("画完自动回到选择")
+            {
+                Checked = _autoReturnToSelectAfterDraw
+            };
+            autoReturnItem.Click += (_, _) =>
+            {
+                _autoReturnToSelectAfterDraw = !_autoReturnToSelectAfterDraw;
+                autoReturnItem.Checked = _autoReturnToSelectAfterDraw;
+
+                // 立即落盘：下次启动沿用同一交互习惯
+                _interactionPreferenceStore?.Save(new PdfReaderInteractionPreferences
+                {
+                    AutoReturnToSelectAfterDraw = _autoReturnToSelectAfterDraw
+                });
+
+                ShowToast(_autoReturnToSelectAfterDraw
+                    ? "画完标注后自动回到选择模式"
+                    : "画完标注保持当前工具（连续标注）");
+            };
+            root.DropDownItems.Add(autoReturnItem);
+
+            return root;
+        }
+
+        /// <summary>
         /// 开关阅读引导线；开启时先放到当前可见页的中线，之后跟随鼠标。
         /// 状态同时回显到「更多 - 阅读辅助」菜单与一级条引导线按钮；会话内记住，不跨启动持久化。
         /// </summary>
@@ -3317,6 +3368,13 @@ namespace LearningAssistant.Forms.Pdf
                         else if (WindowState == FormWindowState.Maximized)
                         {
                             WindowState = FormWindowState.Normal;
+                            e.Handled = true;
+                        }
+                        else if (_navigationManager != null
+                            && _navigationManager.CurrentToolMode != AnnotationToolMode.Select)
+                        {
+                            // 退出当前标注工具（含双击锁定的连续标注）回到选择模式
+                            SetAnnotationToolMode(AnnotationToolMode.Select);
                             e.Handled = true;
                         }
                         break;
@@ -7601,8 +7659,43 @@ namespace LearningAssistant.Forms.Pdf
             {
                 Hint = "切换深色阅读界面",
                 Shortcut = "N",
-                Surfaces = PdfCommandSurfaces.Toolbar | PdfCommandSurfaces.Shortcut,
+                Surfaces = PdfCommandSurfaces.Toolbar | PdfCommandSurfaces.Shortcut | PdfCommandSurfaces.CommandPalette,
                 IsToggle = true
+            });
+
+            // 命令面板专用入口：标题/说明只在这里维护一份，面板按 Id 绑定动作，
+            // 避免同一功能在菜单与命令面板里各写一套文案而逐渐漂移。
+            RegisterPaletteCommand("palette.highlightPanel", "打开高亮面板", PdfCommandGroup.View, "在右侧弹出高亮与摘录面板");
+            RegisterPaletteCommand("palette.translatePanel", "打开翻译面板", PdfCommandGroup.Smart, "在右侧弹出翻译与 OCR 面板");
+            RegisterPaletteCommand("palette.translatePage", "翻译本页", PdfCommandGroup.Smart, "识别并翻译当前页");
+            RegisterPaletteCommand("palette.ocrPage", "整页识别", PdfCommandGroup.Smart, "只识别当前页文字，不翻译");
+            RegisterPaletteCommand("palette.shadowPage", "开始本页跟读", PdfCommandGroup.Study, "打开句子跟读窗口");
+            RegisterPaletteCommand("palette.shadowBook", "整本跟读", PdfCommandGroup.Study, "按全书高亮逐条跟读");
+            RegisterPaletteCommand("palette.audioCompanion", "配套音频", PdfCommandGroup.Reading, "在右侧抽屉查看配套音频");
+            // 整页录音入口已下线：开关关闭时不注册，命令面板自然不出现该项
+            if (PdfHiddenFeatures.EnablePageRecording)
+                RegisterPaletteCommand("palette.pageRecording", "整页录音", PdfCommandGroup.Reading, "在右侧抽屉为当前页录音");
+            RegisterPaletteCommand("palette.exportStudyNotes", "导出学习笔记", PdfCommandGroup.Study, "导出当前文档的 AI 学习笔记");
+            RegisterPaletteCommand("palette.batchOcr", "批量识别导出", PdfCommandGroup.File, "识别整本 PDF 并导出文本");
+            // AI 能力统一登记在 Smart 组：面板按组顺序排列，AI 项自然聚在一起
+            RegisterPaletteCommand("palette.aiSummarizePage", "总结当前页", PdfCommandGroup.Smart, "在 AI 侧栏总结当前页");
+            RegisterPaletteCommand("palette.aiExplainSelection", "解释选中内容", PdfCommandGroup.Smart, "在 AI 侧栏解释选中的文字");
+            RegisterPaletteCommand("palette.aiRetrieval", "全文检索问答", PdfCommandGroup.Smart, "按关键词召回相关页后回答");
+            RegisterPaletteCommand("palette.aiOutline", "生成文档大纲", PdfCommandGroup.Smart, "按章节生成可跳转大纲");
+            RegisterPaletteCommand("palette.aiOutlineTree", "大纲树形视图", PdfCommandGroup.Smart, "树形查看大纲并导出思维导图");
+            RegisterPaletteCommand("palette.aiFlashcards", "生成闪卡", PdfCommandGroup.Study, "从当前页生成闪卡并加入复习");
+            RegisterPaletteCommand("palette.aiQuiz", "生成测验", PdfCommandGroup.Study, "用本页/选中内容生成测验");
+            RegisterPaletteCommand("palette.aiCache", "AI 缓存管理", PdfCommandGroup.System, "查看并清理 AI 结果缓存");
+        }
+
+        /// <summary>登记一条只出现在命令面板（Ctrl+K）里的命令。</summary>
+        private void RegisterPaletteCommand(string id, string title, PdfCommandGroup group, string hint, bool isToggle = false)
+        {
+            _commandRegistry.Register(new PdfCommandDefinition(id, title, group)
+            {
+                Hint = hint,
+                Surfaces = PdfCommandSurfaces.CommandPalette,
+                IsToggle = isToggle
             });
         }
 
@@ -7718,6 +7811,9 @@ namespace LearningAssistant.Forms.Pdf
             // 选择/重做/阅读引导线为一级条新增按钮，先创建再参与下面的分组排布
             EnsurePrimaryToolbarButtons();
 
+            // 工具按钮双击 = 锁定连续标注（不打断当前工具，便于一次画多笔）
+            BindToolButtonContinuousLock();
+
 
 
             AddMoreMenuItem(moreMenu, "删除线", _buttonStrikethroughMode, () => ButtonStrikethroughMode_Click(this, EventArgs.Empty));
@@ -7738,6 +7834,8 @@ namespace LearningAssistant.Forms.Pdf
 
             // 阅读辅助：护眼色层、阅读引导线与阅读时长统计（纯视图层）
             moreMenu.Items.Add(CreateReadingAidMenu());
+            // 标注偏好：画完是否自动回到选择等行为开关（默认开，可关闭）
+            moreMenu.Items.Add(CreateAnnotationBehaviorMenu());
             AddMoreMenuItem(moreMenu, "检查清单", _buttonChecklistMode, () => ButtonChecklistMode_Click(this, EventArgs.Empty));
             AddMoreMenuItem(moreMenu, "插入图片", _buttonImageEmbedMode, () => ButtonImageEmbedMode_Click(this, EventArgs.Empty));
             AddMoreMenuItem(moreMenu, "聚光灯", _buttonSpotlightMode, () => ButtonSpotlightMode_Click(this, EventArgs.Empty));
@@ -8697,6 +8795,72 @@ namespace LearningAssistant.Forms.Pdf
         private void ButtonEraserMode_Click(object? sender, EventArgs e)
         {
             SetAnnotationToolMode(AnnotationToolMode.Eraser);
+        }
+
+        /// <summary>
+        /// 一次标注完成后按用户偏好自动回到选择模式。
+        /// 双击锁定连续标注、或本来就在选择模式时不打断；首次触发给一次可发现性提示。
+        /// </summary>
+        private void AutoReturnToSelectIfNeeded()
+        {
+            if (!_autoReturnToSelectAfterDraw) return;
+            if (_navigationManager == null || _navigationManager.IsToolSticky) return;
+            if (_navigationManager.CurrentToolMode == AnnotationToolMode.Select) return;
+
+            SetAnnotationToolMode(AnnotationToolMode.Select);
+
+            if (!_autoReturnHintShown)
+            {
+                _autoReturnHintShown = true;
+                ShowToast("已回到选择模式；双击工具按钮可锁定连续标注");
+            }
+        }
+
+        /// <summary>
+        /// 标注工具按钮双击锁定：锁定的工具画完不再自动回到选择，便于连续标注；
+        /// 切换到其他工具或按 Esc 即解除。Button 的 DoubleClick 事件在不同主题/自绘样式下
+        /// 触发并不可靠，这里改用同一按钮两次左键按下的间隔来识别双击，行为稳定。
+        /// </summary>
+        private void BindToolButtonContinuousLock()
+        {
+            var toolButtons = new[]
+            {
+                _buttonHighlightMode, _buttonTextMode, _buttonMosaicMode,
+                _buttonRectangleMode, _buttonEllipseMode, _buttonArrowMode,
+                _buttonPenMode, _buttonEraserMode
+            };
+
+            foreach (var button in toolButtons)
+            {
+                if (button == null) continue;
+                button.MouseDown += ToolButton_MouseDown_DetectContinuousLock;
+            }
+        }
+
+        private void ToolButton_MouseDown_DetectContinuousLock(object? sender, MouseEventArgs e)
+        {
+            if (e.Button != MouseButtons.Left) return;
+            if (sender is not Button button || _navigationManager == null) return;
+
+            const long DoubleClickTicks = TimeSpan.TicksPerMillisecond * 400;
+            long now = DateTime.UtcNow.Ticks;
+
+            if (_toolButtonLastPressTicks.TryGetValue(button, out var last)
+                && last > 0
+                && now - last <= DoubleClickTicks)
+            {
+                // 命中后清空，避免三连击被当成又一次双击
+                _toolButtonLastPressTicks[button] = 0;
+
+                if (_navigationManager.CurrentToolMode != AnnotationToolMode.Select)
+                {
+                    _navigationManager.LockToolForContinuousDrawing();
+                    ShowToast("已锁定当前工具：画完不会自动回到选择（按 Esc 退出）");
+                }
+                return;
+            }
+
+            _toolButtonLastPressTicks[button] = now;
         }
 
         private void SetAnnotationToolMode(AnnotationToolMode mode, bool isOneTime = false)
@@ -12197,41 +12361,95 @@ namespace LearningAssistant.Forms.Pdf
             _tabControlLeft.SelectedIndex = index;
         }
 
-        /// <summary>Ctrl+K：把常用入口聚合成可搜索的命令面板。</summary>
+        /// <summary>
+        /// Ctrl+K：把常用入口聚合成可搜索的命令面板。
+        /// 条目全部来自命令注册表（标题/说明/分组只维护一份定义），
+        /// 面板只负责按 Id 绑定动作并按使用频率反馈，避免与菜单文案各自漂移。
+        /// </summary>
         private void ShowCommandPalette()
         {
-            var commands = new List<PdfCommandPaletteItem>
+            var commands = new List<PdfCommandPaletteItem>();
+            foreach (var definition in _commandRegistry.Definitions)
             {
-                new("打开高亮面板", "在右侧弹出高亮与摘录面板", () => ShowAudioDrawer(AudioDrawerMode.Highlight)),
-                new("打开翻译面板", "在右侧弹出翻译与 OCR 面板", () => ShowAudioDrawer(AudioDrawerMode.Translate)),
-                new("翻译本页", "识别并翻译当前页", () => { ShowAudioDrawer(AudioDrawerMode.Translate); OnTranslateClicked(); }),
-                new("整页识别", "只识别当前页文字，不翻译", () => { ShowAudioDrawer(AudioDrawerMode.Translate); OnOcrPageClicked(); }),
-                new("开始本页跟读", "打开句子跟读窗口", OpenShadowingWindow),
-                new("整本跟读", "按全书高亮逐条跟读", OpenWholeBookShadowingWindow),
-                new("配套音频", "在右侧抽屉查看配套音频", ShowAudioCompanion),
-            };
-            // 整页录音入口已下线：命令面板不再出现该项
-            if (PdfHiddenFeatures.EnablePageRecording)
-                commands.Add(new("整页录音", "在右侧抽屉为当前页录音", () => ShowAudioDrawer(AudioDrawerMode.Recording)));
-            commands.Add(new PdfCommandPaletteItem("导出学习笔记", "导出当前文档的 AI 学习笔记", async () => await ExportAiStudyNotesAsync()));
-            commands.Add(new PdfCommandPaletteItem("批量识别导出", "识别整本 PDF 并导出文本", BatchOcrExport_Click));
-            commands.Add(new PdfCommandPaletteItem("切换夜间模式", "在浅色与夜间配色之间切换", () => _nightModeManager?.ToggleNightMode()));
-            // AI 动作统一补齐到命令面板：问答类进入同一侧栏，能力类走既有流程
-            commands.Add(new PdfCommandPaletteItem("AI 问答侧栏", "打开右侧 AI 侧栏，可流式追问", () => OpenAiSidebar()));
-            commands.Add(new PdfCommandPaletteItem("总结当前页", "在 AI 侧栏总结当前页", () =>
-                OpenAiSidebar("请用要点总结当前页的主要内容。", PdfAiScope.CurrentPage)));
-            commands.Add(new PdfCommandPaletteItem("解释选中内容", "在 AI 侧栏解释选中的文字", () =>
-                OpenAiSidebar("请解释选中内容的含义和作用。", PdfAiScope.Selection)));
-            commands.Add(new PdfCommandPaletteItem("全文检索问答", "按关键词召回相关页后回答", async () => await AskDocumentByRetrievalAsync()));
-            commands.Add(new PdfCommandPaletteItem("生成文档大纲", "按章节生成可跳转大纲", async () => await GenerateDocumentOutlineAsync()));
-            commands.Add(new PdfCommandPaletteItem("大纲树形视图", "树形查看大纲并导出思维导图", async () => await ShowOutlineTreeAsync()));
-            commands.Add(new PdfCommandPaletteItem("生成闪卡", "从当前页生成闪卡并加入复习", async () => await GenerateFlashcardsAsync()));
-            commands.Add(new PdfCommandPaletteItem("生成测验", "用本页/选中内容生成测验", async () => await GenerateQuizAsync()));
-            commands.Add(new PdfCommandPaletteItem("AI 缓存管理", "查看并清理 AI 结果缓存", ShowAiCacheManagerDialog));
+                if ((definition.Surfaces & PdfCommandSurfaces.CommandPalette) == 0) continue;
+                if (ResolvePaletteAction(definition.Id) == null) continue;
+
+                // 快捷键直接拼在说明里：面板里既能搜到，也顺便提示键盘入口
+                string hint = string.IsNullOrWhiteSpace(definition.Shortcut)
+                    ? definition.Hint
+                    : $"{definition.Hint} · {definition.Shortcut}";
+
+                string commandId = definition.Id;
+                commands.Add(new PdfCommandPaletteItem(definition.Title, hint, () => ExecuteRegisteredCommand(commandId)));
+            }
 
             using var dialog = new PdfCommandPaletteDialog(commands);
             dialog.ShowDialog(this);
         }
+
+        /// <summary>
+        /// 命令注册表 Id → 具体动作：注册表只描述“是什么”，这里集中绑定“怎么做”。
+        /// 返回 null 表示该命令暂无动作实现（面板自动跳过，不会出现点了没反应的条目）。
+        /// </summary>
+        private Action? ResolvePaletteAction(string id) => id switch
+        {
+            "tool.select" => () => SetAnnotationToolMode(AnnotationToolMode.Select),
+            "tool.highlight" => () => SetAnnotationToolMode(AnnotationToolMode.Highlight),
+            "tool.text" => () => SetAnnotationToolMode(AnnotationToolMode.Text),
+            "tool.mosaic" => () => SetAnnotationToolMode(AnnotationToolMode.Mosaic),
+            "tool.rectangle" => () => SetAnnotationToolMode(AnnotationToolMode.Rectangle),
+            "tool.ellipse" => () => SetAnnotationToolMode(AnnotationToolMode.Ellipse),
+            "tool.arrow" => () => SetAnnotationToolMode(AnnotationToolMode.Arrow),
+            "tool.pen" => () => SetAnnotationToolMode(AnnotationToolMode.Pen),
+            "tool.eraser" => () => SetAnnotationToolMode(AnnotationToolMode.Eraser),
+            "tool.guide" => () => ToggleReadingGuide(),
+            "translate.toggle" => () => ButtonTranslationToggle_Click(this, EventArgs.Empty),
+            "ai.open" => () => OpenAiSidebar(),
+            "edit.undo" => () => ButtonUndoAnnotation_Click(this, EventArgs.Empty),
+            "edit.redo" => () => ButtonRedoAnnotation_Click(this, EventArgs.Empty),
+            "file.openFolder" => () => ButtonOpenFolder_Click(this, EventArgs.Empty),
+            "view.nightMode" => () => _nightModeManager?.ToggleNightMode(),
+            "palette.highlightPanel" => () => ShowAudioDrawer(AudioDrawerMode.Highlight),
+            "palette.translatePanel" => () => ShowAudioDrawer(AudioDrawerMode.Translate),
+            "palette.translatePage" => () => { ShowAudioDrawer(AudioDrawerMode.Translate); OnTranslateClicked(); },
+            "palette.ocrPage" => () => { ShowAudioDrawer(AudioDrawerMode.Translate); OnOcrPageClicked(); },
+            "palette.shadowPage" => () => OpenShadowingWindow(),
+            "palette.shadowBook" => () => OpenWholeBookShadowingWindow(),
+            "palette.audioCompanion" => () => ShowAudioCompanion(),
+            "palette.pageRecording" => () => ShowAudioDrawer(AudioDrawerMode.Recording),
+            "palette.exportStudyNotes" => () => _ = ExportAiStudyNotesAsync(),
+            "palette.batchOcr" => () => BatchOcrExport_Click(),
+            "palette.aiSummarizePage" => () => OpenAiSidebar("请用要点总结当前页的主要内容。", PdfAiScope.CurrentPage),
+            "palette.aiExplainSelection" => () => OpenAiSidebar("请解释选中内容的含义和作用。", PdfAiScope.Selection),
+            "palette.aiRetrieval" => () => _ = AskDocumentByRetrievalAsync(),
+            "palette.aiOutline" => () => _ = GenerateDocumentOutlineAsync(),
+            "palette.aiOutlineTree" => () => _ = ShowOutlineTreeAsync(),
+            "palette.aiFlashcards" => () => _ = GenerateFlashcardsAsync(),
+            "palette.aiQuiz" => () => _ = GenerateQuizAsync(),
+            "palette.aiCache" => () => ShowAiCacheManagerDialog(),
+            _ => null
+        };
+
+        /// <summary>执行注册表命令：先按 Id 找动作，再按“是否已由工具模式切换计数”补记使用频率。</summary>
+        private void ExecuteRegisteredCommand(string id)
+        {
+            var invoke = ResolvePaletteAction(id);
+            if (invoke == null) return;
+
+            // 工具模式类命令在 SetAnnotationToolMode 内已经记过一次，避免重复计数
+            if (!IsAnnotationModeCommand(id))
+                _commandRegistry.RecordUsage(id);
+
+            invoke();
+        }
+
+        /// <summary>该命令是否通过 SetAnnotationToolMode 切换工具（这类命令的计数由模式切换统一处理）。</summary>
+        private static bool IsAnnotationModeCommand(string id) => id switch
+        {
+            "tool.select" or "tool.highlight" or "tool.text" or "tool.mosaic"
+                or "tool.rectangle" or "tool.ellipse" or "tool.arrow" or "tool.pen" or "tool.eraser" => true,
+            _ => false
+        };
 
         /// <summary>按侧栏实际宽度均分页签尺寸，确保任意 DPI 下都保持单行且不溢出。</summary>
         private void UpdateSidebarTabItemSize()
