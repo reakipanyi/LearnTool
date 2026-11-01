@@ -272,6 +272,14 @@ namespace LearningAssistant.Common
             // PDF 阅读时长统计：按用户 + 文档 + 日期落盘，目录懒解析后单例安全
             services.AddSingleton(_ => new PdfReadingTimeStore(() => AppPaths.PdfReadingStatsDir));
 
+            // PDF 阅读打卡表：聚合阅读记录为目录/文档报表，并输出界面共用的布局模型
+            services.AddSingleton(sp => new PdfReadingCheckInService(
+                sp.GetRequiredService<PdfReadingTimeStore>(),
+                sp.GetService<ILogger<PdfReadingCheckInService>>()));
+
+            // PDF 阅读打卡表筛选偏好：阈值、显示范围、显示模式与折叠状态按用户隔离
+            services.AddSingleton(_ => new PdfReadingCheckInPreferenceStore(() => AppPaths.CurrentUserDir));
+
             // PDF AI 摘要条目：按文档哈希落盘，带页码/录音锚点
             services.AddScoped<IPdfAiSummaryStore>(_ => new PdfAiSummaryStore());
 

@@ -2,6 +2,7 @@ using LearningAssistant.Abstractions;
 using LearningAssistant.Abstractions.Media;
 using LearningAssistant.Common;
 using LearningAssistant.Common.Events;
+using LearningAssistant.Common.Themes;
 using LearningAssistant.Common.UI;
 using LearningAssistant.Forms.UserControls.Common;
 using LearningAssistant.Managers;
@@ -2424,6 +2425,10 @@ namespace LearningAssistant.Forms.Pdf
             statsItem.Click += (_, _) => ShowReadingTimeStats();
             root.DropDownItems.Add(statsItem);
 
+            var checkInItem = new ToolStripMenuItem("阅读打卡表…");
+            checkInItem.Click += (_, _) => ShowReadingCheckInReport();
+            root.DropDownItems.Add(checkInItem);
+
             return root;
         }
 
@@ -2470,6 +2475,94 @@ namespace LearningAssistant.Forms.Pdf
                 $"本文档（{docName}）：{PdfReadingTimeSnapshot.Format(snapshot.Document)}\n" +
                 $"累计阅读：{PdfReadingTimeSnapshot.Format(snapshot.Total)}",
                 "阅读时长统计");
+        }
+
+        /// <summary>
+        /// 打开阅读打卡表：优先用阅读器当前目录与清单；仅有单个文档时回退到父目录（不递归，限 500 份）。
+        /// 看报表期间暂停阅读计时，避免把浏览报表的时间计入当前文档。
+        /// </summary>
+        private void ShowReadingCheckInReport()
+        {
+            const int singleFilePdfLimit = 500;
+
+            string rootPath;
+            List<string> documents;
+
+            if (!string.IsNullOrWhiteSpace(_rootFolderPath)
+                && (string.IsNullOrEmpty(_currentPdfPath) || IsUnderFolder(_currentPdfPath, _rootFolderPath))
+                && _allFiles.Any(file => IsUnderFolder(file, _rootFolderPath)))
+            {
+                rootPath = _rootFolderPath;
+                documents = _allFiles
+                    .Where(file => IsUnderFolder(file, rootPath))
+                    .Where(file => file.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+            }
+            else if (!string.IsNullOrWhiteSpace(_currentPdfPath) && File.Exists(_currentPdfPath))
+            {
+                rootPath = Path.GetDirectoryName(_currentPdfPath) ?? string.Empty;
+                documents = new List<string>();
+                if (Directory.Exists(rootPath))
+                {
+                    try
+                    {
+                        documents = Directory
+                            .EnumerateFiles(rootPath, "*.pdf", SearchOption.TopDirectoryOnly)
+                            .Take(singleFilePdfLimit)
+                            .ToList();
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "枚举单文档所在目录的 PDF 失败：{RootPath}", rootPath);
+                    }
+                }
+            }
+            else
+            {
+                ShowToast("请先打开一个文件夹或文档");
+                return;
+            }
+
+            if (string.IsNullOrEmpty(rootPath) || !Directory.Exists(rootPath))
+            {
+                ShowToast("当前目录不可用，无法生成阅读打卡表");
+                return;
+            }
+
+            if (documents.Count == 0)
+            {
+                ShowMessage("当前目录下没有 PDF 文件（图片不参与统计），无法生成阅读打卡表。", "阅读打卡表");
+                return;
+            }
+
+            var readingTimeStore = Program.ServiceProvider?.GetService(typeof(PdfReadingTimeStore)) as PdfReadingTimeStore
+                ?? new PdfReadingTimeStore(() => AppPaths.PdfReadingStatsDir);
+            var checkInService = Program.ServiceProvider?.GetService(typeof(PdfReadingCheckInService)) as PdfReadingCheckInService
+                ?? new PdfReadingCheckInService(readingTimeStore);
+            var preferenceStore = Program.ServiceProvider?.GetService(typeof(PdfReadingCheckInPreferenceStore))
+                    as PdfReadingCheckInPreferenceStore
+                ?? new PdfReadingCheckInPreferenceStore(() => AppPaths.CurrentUserDir);
+            var themeService = Program.ServiceProvider?.GetService(typeof(IThemeService)) as IThemeService;
+            var formLogger = Program.ServiceProvider?.GetService(typeof(ILogger<PdfReadingCheckInForm>))
+                as ILogger<PdfReadingCheckInForm>;
+
+            _readingTimeTracker?.SetActive(false);
+            try
+            {
+                using var dialog = new PdfReadingCheckInForm(
+                    checkInService,
+                    preferenceStore,
+                    rootPath,
+                    documents,
+                    path => _ = _presenter?.LoadPdf(path),
+                    formLogger,
+                    themeService);
+                dialog.ShowDialog(this);
+            }
+            finally
+            {
+                _readingTimeTracker?.SetActive(true);
+            }
         }
 
         #endregion
