@@ -5,7 +5,7 @@ namespace LearningAssistant.Common
 {
     /// <summary>
     /// 缓存路径管理器 - 统一管理各类缓存目录
-    /// 缓存文件存储在 AppPaths.CacheDir 下，便于清理
+    /// 缓存文件存储在 AppPaths.CacheDir（程序目录下的 AppCache）中，与需同步的用户数据分离，便于清理
     /// </summary>
     public static class CachePaths
     {

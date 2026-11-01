@@ -323,11 +323,11 @@ namespace LearningAssistant.Services.Cache
 
             var defaultDirs = new List<CacheDirectory>
             {
-                new() { Name = "临时文件", Path =Path.Combine(_appPaths?.CacheDir ?? AppPaths.CacheDir, "temp"), Enabled = true, ExpiryDays = 7 },
-                new() { Name = "PDF缓存", Path = Path.Combine(_appPaths?.CacheDir ?? AppPaths.CacheDir, "pdf"), Enabled = true, ExpiryDays = 30 },
+                new() { Name = "临时文件", Path = Path.Combine(_appPaths?.CacheDir ?? AppPaths.CacheDir, "temp"), Enabled = true, ExpiryDays = 7 },
+                new() { Name = "PDF缓存", Path = Path.Combine(_appPaths?.CacheDir ?? AppPaths.CacheDir, "pdf_render"), Enabled = true, ExpiryDays = 30 },
                 new() { Name = "图片缓存", Path = Path.Combine(_appPaths?.CacheDir ?? AppPaths.CacheDir, "images"), Enabled = true, ExpiryDays = 30 },
-                new() { Name = "AI缓存", Path = Path.Combine(_appPaths?.CacheDir ?? AppPaths.CacheDir, "ai"), Enabled = true, ExpiryDays = 15 },
-                new() { Name = "缩略图缓存", Path = Path.Combine(_appPaths?.CacheDir ?? AppPaths.CacheDir, "thumbnails"), Enabled = true, ExpiryDays = 60 }
+                new() { Name = "AI缓存", Path = Path.Combine(_appPaths?.CacheDir ?? AppPaths.CacheDir, "ai_response"), Enabled = true, ExpiryDays = 15 },
+                new() { Name = "OCR缓存", Path = Path.Combine(_appPaths?.CacheDir ?? AppPaths.CacheDir, "ocr_temp"), Enabled = true, ExpiryDays = 7 }
             };
 
             _config.CacheDirectories = defaultDirs;

@@ -19,7 +19,7 @@ public static class PdfFileThumbnailService
 
     private static readonly object RenderLock = new();
 
-    /// <summary>缩略图缓存目录：AppData/cache/pdf_render/file_thumbs。</summary>
+    /// <summary>缩略图缓存目录：AppCache/pdf_render/file_thumbs。</summary>
     public static string CacheDirectory => Path.Combine(CachePaths.PdfRender, "file_thumbs");
 
     /// <summary>

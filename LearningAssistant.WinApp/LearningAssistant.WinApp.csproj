@@ -11,6 +11,18 @@
 		<NoWarn>NU1510;NU1603</NoWarn>
 		<BaseOutputPath>E:\Tools\000个人\r9kyy-wr52p\LearningAssistant</BaseOutputPath>
 	</PropertyGroup>
+	<PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
+	  <IsPublishable>False</IsPublishable>
+	</PropertyGroup>
+	<PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+	  <IsPublishable>False</IsPublishable>
+	</PropertyGroup>
+	<PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
+	  <IsPublishable>False</IsPublishable>
+	</PropertyGroup>
+	<PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+	  <IsPublishable>False</IsPublishable>
+	</PropertyGroup>
 	
 	<ItemGroup>
 		<None Remove="AppData\config\appsettings.json" />

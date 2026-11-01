@@ -1,13 +1,15 @@
 namespace LearningAssistant.Common
 {
     /// <summary>
-    /// 统一的应用路径管理器
-    /// 所有用户数据统一存储在程序运行目录下的 AppData 文件夹中
+    /// 统一的应用路径管理器。目录按“是否参与同步”分为两类：
+    /// 1. 需同步的用户数据（配置、数据库、学习数据等）——桌面端位于“文档\LearningAssistant”；
+    /// 2. 不需同步的运行时产物（缓存、日志、会话、临时文件）——位于程序目录下的 AppCache。
     /// </summary>
     public static class AppPaths
     {
         static AppPaths()
         {
+            TryMigrateLegacyLayout();
             EnsureDirectoriesExist();
         }
 
@@ -19,9 +21,18 @@ namespace LearningAssistant.Common
         public static string AssemblyDir => AppDomain.CurrentDomain.BaseDirectory;
 
         /// <summary>
-        /// 用户数据根目录 - 程序运行目录下的 AppData
+        /// 需同步的数据根目录（配置/数据库/学习数据等）。
+        /// 桌面端默认位于“文档\LearningAssistant”，不随构建输出目录变化；测试/工具进程回退到程序目录下的 AppData。
+        /// 可用环境变量 LEARNING_ASSISTANT_DATA_ROOT 覆盖。
         /// </summary>
-        public static string DataRoot => Path.Combine(AssemblyDir, "AppData");
+        public static string DataRoot => _dataRoot;
+
+        private static readonly string _dataRoot = ResolveDataRoot();
+
+        /// <summary>
+        /// 不需同步的缓存根目录（缓存/日志/会话/临时文件），位于程序目录下的 AppCache。
+        /// </summary>
+        public static string CacheRoot => Path.Combine(AssemblyDir, "AppCache");
 
         /// <summary>
         /// OCR 数据目录（只读）
@@ -69,24 +80,34 @@ namespace LearningAssistant.Common
         public static string GetCurrentUserId() => _currentUserId;
 
         /// <summary>
-        /// 日志目录
+        /// 日志目录（不同步）
         /// </summary>
-        public static string LogsDir => Path.Combine(DataRoot, "logs");
+        public static string LogsDir => Path.Combine(CacheRoot, "logs");
 
         /// <summary>
-        /// 缓存目录
+        /// 缓存目录（不同步）
         /// </summary>
-        public static string CacheDir => Path.Combine(DataRoot, "cache");
+        public static string CacheDir => CacheRoot;
 
         /// <summary>
-        /// 数据库目录
+        /// 数据库目录（同步）
         /// </summary>
         public static string DatabaseDir => Path.Combine(DataRoot, "database");
 
         /// <summary>
-        /// 会话目录
+        /// 会话目录（不同步）
         /// </summary>
-        public static string SessionDir => Path.Combine(DataRoot, "session");
+        public static string SessionDir => Path.Combine(CacheRoot, "session");
+
+        /// <summary>
+        /// 用户级缓存根目录（不同步）：按用户隔离的 PDF 索引/AI/翻译等可再生成的缓存。
+        /// </summary>
+        public static string UserCacheRoot => Path.Combine(CacheRoot, "users");
+
+        /// <summary>
+        /// 当前用户缓存目录（不同步）
+        /// </summary>
+        public static string CurrentUserCacheDir => Path.Combine(UserCacheRoot, _currentUserId);
 
         /// <summary>
         /// 导出目录
@@ -139,14 +160,14 @@ namespace LearningAssistant.Common
         public static string ShadowingDir => Path.Combine(DataDir, "Shadowings");
 
         /// <summary>
-        /// PDF 文本索引目录（按用户 + 文件指纹缓存页级文本）
+        /// PDF 文本索引目录（按用户 + 文件指纹缓存页级文本，不同步）
         /// </summary>
-        public static string PdfTextIndexDir => Path.Combine(CurrentUserDir, "pdf_text_index");
+        public static string PdfTextIndexDir => Path.Combine(CurrentUserCacheDir, "pdf_text_index");
 
         /// <summary>
-        /// PDF AI 结果磁盘缓存目录（按用户隔离，LRU 淘汰）
+        /// PDF AI 结果磁盘缓存目录（按用户隔离，LRU 淘汰，不同步）
         /// </summary>
-        public static string PdfAiCacheDir => Path.Combine(CurrentUserDir, "pdf_ai_cache");
+        public static string PdfAiCacheDir => Path.Combine(CurrentUserCacheDir, "pdf_ai_cache");
 
         /// <summary>
         /// PDF AI 调用用量目录（按文档指纹 + 日期记录当日调用次数，用于成本上限）
@@ -159,19 +180,19 @@ namespace LearningAssistant.Common
         public static string PdfAiSummaryDir => Path.Combine(CurrentUserDir, "pdf_ai_summaries");
 
         /// <summary>
-        /// PDF 翻译术语表目录（按用户 + 文档指纹缓存）
+        /// PDF 翻译术语表目录（按用户 + 文档指纹缓存，不同步）
         /// </summary>
-        public static string PdfTranslationGlossaryDir => Path.Combine(CurrentUserDir, "pdf_translation_glossary");
+        public static string PdfTranslationGlossaryDir => Path.Combine(CurrentUserCacheDir, "pdf_translation_glossary");
 
         /// <summary>
-        /// PDF 选区翻译缓存目录（按用户 + 文档指纹 + 页码 + OCR 文本存放）
+        /// PDF 选区翻译缓存目录（按用户 + 文档指纹 + 页码 + OCR 文本存放，不同步）
         /// </summary>
-        public static string PdfSelectionTranslationDir => Path.Combine(CurrentUserDir, "pdf_selection_translations");
+        public static string PdfSelectionTranslationDir => Path.Combine(CurrentUserCacheDir, "pdf_selection_translations");
 
         /// <summary>
-        /// PDF 自动框选版面缓存目录（按用户 + 文档指纹 + 页码存放段落块）
+        /// PDF 自动框选版面缓存目录（按用户 + 文档指纹 + 页码存放段落块，不同步）
         /// </summary>
-        public static string PdfAutoLayoutDir => Path.Combine(CurrentUserDir, "pdf_auto_layout");
+        public static string PdfAutoLayoutDir => Path.Combine(CurrentUserCacheDir, "pdf_auto_layout");
 
         /// <summary>
         /// PDF 连续朗读断点目录（按用户 + 文档路径与修改时间存放页号/句号）
@@ -189,7 +210,10 @@ namespace LearningAssistant.Common
         public static string TTSCacheDir => Path.Combine(CacheDir, "tts");
 
         public static string UserDataDir => Path.Combine(DataDir, "Users");
-        public static string TempDir => Path.Combine(DataDir, "Temp");
+        /// <summary>
+        /// 临时文件目录（不同步）
+        /// </summary>
+        public static string TempDir => Path.Combine(CacheDir, "temp");
         #endregion
 
         #region 文件路径
@@ -253,13 +277,17 @@ namespace LearningAssistant.Common
         public static void EnsureDirectoriesExist()
         {
             EnsureDirectoryExists(DataRoot);
+            EnsureDirectoryExists(CacheRoot);
             EnsureDirectoryExists(ConfigDir);
             EnsureDirectoryExists(DataDir);
             EnsureDirectoryExists(UsersDir);
+            EnsureDirectoryExists(UserCacheRoot);
+            EnsureDirectoryExists(CurrentUserCacheDir);
             EnsureDirectoryExists(LogsDir);
             EnsureDirectoryExists(CacheDir);
             EnsureDirectoryExists(DatabaseDir);
             EnsureDirectoryExists(SessionDir);
+            EnsureDirectoryExists(TempDir);
             EnsureDirectoryExists(ExportsDir);
             EnsureDirectoryExists(AnnotationsDir);
             EnsureDirectoryExists(TranslationsDir);
@@ -293,6 +321,246 @@ namespace LearningAssistant.Common
                 Directory.CreateDirectory(path);
             }
         }
+
+        #region 旧目录迁移
+
+        /// <summary>旧布局中属于“不同步”的目录名。</summary>
+        private static readonly string[] LegacyRuntimeDirNames = { "cache", "logs", "session" };
+
+        /// <summary>旧布局中位于用户目录下、实际属于“不同步缓存”的子目录名。</summary>
+        private static readonly string[] LegacyUserCacheDirNames =
+        {
+            "pdf_text_index", "pdf_ai_cache", "pdf_translation_glossary",
+            "pdf_selection_translations", "pdf_auto_layout"
+        };
+
+        /// <summary>
+        /// 桌面端数据根目录：默认“文档\LearningAssistant”；
+        /// 测试/工具进程（非主程序入口）回退到程序目录下的 AppData，避免污染真实用户数据。
+        /// </summary>
+        private static string ResolveDataRoot()
+        {
+            var overridePath = Environment.GetEnvironmentVariable("LEARNING_ASSISTANT_DATA_ROOT");
+            if (!string.IsNullOrWhiteSpace(overridePath))
+                return Path.GetFullPath(overridePath);
+
+            var entryName = System.Reflection.Assembly.GetEntryAssembly()?.GetName().Name;
+            if (string.Equals(entryName, "LearningAssistant.WinApp", StringComparison.OrdinalIgnoreCase))
+            {
+                var documents = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+                if (!string.IsNullOrWhiteSpace(documents))
+                    return Path.Combine(documents, "LearningAssistant");
+            }
+
+            return Path.Combine(AssemblyDir, "AppData");
+        }
+
+        /// <summary>
+        /// 把旧布局（程序目录\AppData 内混放全部数据）迁移到新布局：
+        /// 需同步的内容移入 DataRoot，日志/会话移入 CacheRoot，旧 cache 与旧临时目录异步清理。
+        /// 迁移是幂等的，且失败时不阻塞启动。
+        /// </summary>
+        private static void TryMigrateLegacyLayout()
+        {
+            try
+            {
+                var legacyRoot = Path.Combine(AssemblyDir, "AppData");
+                if (!Directory.Exists(legacyRoot) || AreSamePath(legacyRoot, DataRoot))
+                    return;
+
+                EnsureDirectoryExists(DataRoot);
+                EnsureDirectoryExists(CacheRoot);
+
+                // 1. 同步类数据整体迁移（cache/logs/session 除外）
+                foreach (var entry in Directory.GetFileSystemEntries(legacyRoot))
+                {
+                    var name = Path.GetFileName(entry);
+                    if (IsLegacyRuntimeDirectory(name))
+                        continue;
+
+                    MergeInto(entry, Path.Combine(DataRoot, name));
+                }
+
+                // 2. 日志与会话属于不同步的运行时产物
+                MergeInto(Path.Combine(legacyRoot, "logs"), LogsDir);
+                MergeInto(Path.Combine(legacyRoot, "session"), SessionDir);
+
+                // 3. 用户目录里混放的 PDF 缓存移到专门的缓存根
+                MigrateUserCaches();
+
+                // 4. 旧缓存与旧临时目录不再使用，后台清理避免阻塞启动
+                var legacyCache = Path.Combine(legacyRoot, "cache");
+                if (Directory.Exists(legacyCache))
+                    Task.Run(() => DeleteDirectoryQuietly(legacyCache));
+
+                DeleteDirectoryQuietly(Path.Combine(DataRoot, "data", "Temp"));
+            }
+            catch
+            {
+                // 迁移失败时保留旧目录，下次启动继续尝试
+            }
+        }
+
+        private static void MigrateUserCaches()
+        {
+            var usersRoot = Path.Combine(DataRoot, "users");
+            if (!Directory.Exists(usersRoot))
+                return;
+
+            foreach (var userDir in Directory.GetDirectories(usersRoot))
+            {
+                var userId = Path.GetFileName(userDir);
+                foreach (var cacheName in LegacyUserCacheDirNames)
+                {
+                    var source = Path.Combine(userDir, cacheName);
+                    if (Directory.Exists(source))
+                        MergeInto(source, Path.Combine(UserCacheRoot, userId, cacheName));
+                }
+            }
+        }
+
+        /// <summary>
+        /// 把 source（文件或目录）并入 target：target 不存在时直接移动，存在时逐文件补充缺失项。
+        /// 目标已存在同名文件时保留目标版本；SQLite 的 -wal/-shm/-journal 属瞬态文件，不迁移。
+        /// </summary>
+        private static void MergeInto(string source, string target)
+        {
+            try
+            {
+                if (Directory.Exists(source))
+                {
+                    if (!Directory.Exists(target))
+                    {
+                        EnsureDirectoryExists(Path.GetDirectoryName(target) ?? DataRoot);
+                        MoveDirectory(source, target);
+                        return;
+                    }
+
+                    foreach (var file in Directory.GetFiles(source))
+                    {
+                        var targetFile = Path.Combine(target, Path.GetFileName(file));
+                        if (File.Exists(targetFile) || IsSqliteTransientFile(file))
+                            continue;
+
+                        MoveFile(file, targetFile);
+                    }
+
+                    foreach (var directory in Directory.GetDirectories(source))
+                        MergeInto(directory, Path.Combine(target, Path.GetFileName(directory)));
+
+                    TryDeleteEmptyDirectory(source);
+                    return;
+                }
+
+                if (File.Exists(source) && !File.Exists(target) && !IsSqliteTransientFile(source))
+                {
+                    EnsureDirectoryExists(Path.GetDirectoryName(target) ?? DataRoot);
+                    MoveFile(source, target);
+                }
+            }
+            catch
+            {
+                // 单个条目迁移失败时跳过，保留旧文件
+            }
+        }
+
+        /// <summary>移动文件；跨盘时退化为“复制 + 删除”，复制成功后才删除源文件。</summary>
+        private static void MoveFile(string source, string target)
+        {
+            try
+            {
+                File.Move(source, target);
+            }
+            catch (IOException)
+            {
+                File.Copy(source, target);
+                File.Delete(source);
+            }
+        }
+
+        /// <summary>移动目录；跨盘时退化为“递归复制 + 删除”，复制成功后才删除源目录。</summary>
+        private static void MoveDirectory(string source, string target)
+        {
+            try
+            {
+                Directory.Move(source, target);
+                return;
+            }
+            catch (IOException)
+            {
+                // 跨卷移动会以 IOException 失败，改用复制
+            }
+
+            CopyDirectory(source, target);
+            Directory.Delete(source, true);
+        }
+
+        private static void CopyDirectory(string source, string target)
+        {
+            EnsureDirectoryExists(target);
+            foreach (var file in Directory.GetFiles(source))
+            {
+                var targetFile = Path.Combine(target, Path.GetFileName(file));
+                if (!File.Exists(targetFile))
+                    File.Copy(file, targetFile);
+            }
+
+            foreach (var directory in Directory.GetDirectories(source))
+                CopyDirectory(directory, Path.Combine(target, Path.GetFileName(directory)));
+        }
+
+        private static bool IsLegacyRuntimeDirectory(string name)
+        {
+            foreach (var runtimeName in LegacyRuntimeDirNames)
+            {
+                if (string.Equals(name, runtimeName, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+            return false;
+        }
+
+        private static bool IsSqliteTransientFile(string path)
+        {
+            return path.EndsWith("-wal", StringComparison.OrdinalIgnoreCase)
+                || path.EndsWith("-shm", StringComparison.OrdinalIgnoreCase)
+                || path.EndsWith("-journal", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool AreSamePath(string left, string right)
+        {
+            return string.Equals(
+                Path.GetFullPath(left).TrimEnd(Path.DirectorySeparatorChar),
+                Path.GetFullPath(right).TrimEnd(Path.DirectorySeparatorChar),
+                StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static void TryDeleteEmptyDirectory(string path)
+        {
+            try
+            {
+                if (Directory.Exists(path) && Directory.GetFileSystemEntries(path).Length == 0)
+                    Directory.Delete(path, false);
+            }
+            catch
+            {
+                // 忽略删除失败
+            }
+        }
+
+        private static void DeleteDirectoryQuietly(string path)
+        {
+            try
+            {
+                if (Directory.Exists(path))
+                    Directory.Delete(path, true);
+            }
+            catch
+            {
+                // 忽略删除失败
+            }
+        }
+
+        #endregion
 
         /// <summary>
         /// 获取PDF标注文件路径
@@ -397,7 +665,7 @@ namespace LearningAssistant.Common
         /// </summary>
         public static string GetUserPdfTextIndexDir(string? userId = null)
         {
-            return Path.Combine(GetUserDir(userId), "pdf_text_index");
+            return Path.Combine(GetUserCacheDir(userId), "pdf_text_index");
         }
 
         /// <summary>
@@ -405,7 +673,7 @@ namespace LearningAssistant.Common
         /// </summary>
         public static string GetUserPdfAiCacheDir(string? userId = null)
         {
-            return Path.Combine(GetUserDir(userId), "pdf_ai_cache");
+            return Path.Combine(GetUserCacheDir(userId), "pdf_ai_cache");
         }
 
         /// <summary>
@@ -421,7 +689,7 @@ namespace LearningAssistant.Common
         /// </summary>
         public static string GetUserPdfTranslationGlossaryDir(string? userId = null)
         {
-            return Path.Combine(GetUserDir(userId), "pdf_translation_glossary");
+            return Path.Combine(GetUserCacheDir(userId), "pdf_translation_glossary");
         }
 
         /// <summary>
@@ -429,7 +697,16 @@ namespace LearningAssistant.Common
         /// </summary>
         public static string GetUserPdfSelectionTranslationDir(string? userId = null)
         {
-            return Path.Combine(GetUserDir(userId), "pdf_selection_translations");
+            return Path.Combine(GetUserCacheDir(userId), "pdf_selection_translations");
+        }
+
+        /// <summary>
+        /// 获取用户缓存根目录（不同步）
+        /// </summary>
+        public static string GetUserCacheDir(string? userId = null)
+        {
+            var actualUserId = string.IsNullOrWhiteSpace(userId) ? _currentUserId : userId;
+            return Path.Combine(UserCacheRoot, actualUserId);
         }
 
         /// <summary>
@@ -470,6 +747,7 @@ namespace LearningAssistant.Common
         public static void EnsureUserDirectoriesExist(string? userId = null)
         {
             EnsureDirectoryExists(GetUserDir(userId));
+            EnsureDirectoryExists(GetUserCacheDir(userId));
             EnsureDirectoryExists(GetUserAnnotationsDir(userId));
             EnsureDirectoryExists(GetUserBookmarksDir(userId));
             EnsureDirectoryExists(GetUserHighlightsDir(userId));

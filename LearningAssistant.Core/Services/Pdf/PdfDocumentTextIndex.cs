@@ -43,7 +43,7 @@ namespace LearningAssistant.Services.Pdf
             _ocrService = ocrService;
             _renderServiceFactory = renderServiceFactory;
             _logger = logger;
-            _indexRootPath = indexRootPath ?? Path.Combine(AppPaths.CurrentUserDir, "pdf_text_index");
+            _indexRootPath = indexRootPath ?? AppPaths.PdfTextIndexDir;
         }
 
         /// <summary>
