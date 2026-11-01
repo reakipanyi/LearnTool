@@ -50,23 +50,88 @@ namespace LearningAssistant.Services.Pdf
     /// <summary>
     /// 阅读时长累计：按“文档路径 + 日期”记账，单文件 JSON 持久化。
     /// 只记录时长，不参与阅读渲染；读写失败时静默忽略，不影响阅读。
+    /// 目录按当前用户懒解析并按目录缓存，单例实例可安全跨用户复用。
     /// </summary>
     public sealed class PdfReadingTimeStore
     {
         private const string FileName = "reading_time.json";
-        private const int MaxRecords = 800;
+
+        /// <summary>留存天数：约两年，足以支撑月度打卡表。</summary>
+        private const int MaxRetentionDays = 730;
+
+        /// <summary>硬上限：防止极端使用下文件无限增长。</summary>
+        private const int MaxRecords = 20000;
 
         private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = false };
 
-        private readonly string _directory;
+        private readonly Func<string> _directoryProvider;
         private readonly object _gate = new();
-        private List<PdfReadingTimeRecord>? _records;
+        private readonly Dictionary<string, List<PdfReadingTimeRecord>> _caches =
+            new(StringComparer.OrdinalIgnoreCase);
 
-        public PdfReadingTimeStore(string directoryPath)
+        /// <summary>按当前用户目录懒解析；切换用户后自动读写对应目录。</summary>
+        public PdfReadingTimeStore(Func<string> directoryProvider)
         {
-            _directory = string.IsNullOrWhiteSpace(directoryPath)
-                ? throw new ArgumentException("阅读时长目录不能为空", nameof(directoryPath))
-                : directoryPath;
+            _directoryProvider = directoryProvider ?? throw new ArgumentNullException(nameof(directoryProvider));
+        }
+
+        /// <summary>固定目录：测试与单用户场景使用。</summary>
+        public PdfReadingTimeStore(string directoryPath)
+            : this(CreateFixedProvider(directoryPath))
+        {
+        }
+
+        private static Func<string> CreateFixedProvider(string directoryPath)
+        {
+            if (string.IsNullOrWhiteSpace(directoryPath))
+                throw new ArgumentException("阅读时长目录不能为空", nameof(directoryPath));
+
+            string fixedPath = directoryPath;
+            return () => fixedPath;
+        }
+
+        /// <summary>读取指定日期区间的明细记录（返回副本，供打卡表聚合使用）。</summary>
+        public IReadOnlyList<PdfReadingTimeRecord> GetRecords(DateTime? fromDay = null, DateTime? toDay = null)
+        {
+            string directory = ResolveDirectory();
+            bool hasFrom = fromDay.HasValue;
+            bool hasTo = toDay.HasValue;
+            DateTime from = (fromDay ?? DateTime.MinValue).Date;
+            DateTime to = (toDay ?? DateTime.MaxValue).Date;
+
+            lock (_gate)
+            {
+                var records = GetRecordsCore(directory);
+                var result = new List<PdfReadingTimeRecord>(records.Count);
+                foreach (var record in records)
+                {
+                    if (hasFrom || hasTo)
+                    {
+                        if (!TryParseDay(record.Day, out var day))
+                            continue;
+                        if (hasFrom && day < from)
+                            continue;
+                        if (hasTo && day > to)
+                            continue;
+                    }
+
+                    result.Add(new PdfReadingTimeRecord
+                    {
+                        DocPath = record.DocPath,
+                        Day = record.Day,
+                        Seconds = record.Seconds
+                    });
+                }
+
+                result.Sort((a, b) =>
+                {
+                    int byDay = string.CompareOrdinal(a.Day, b.Day);
+                    return byDay != 0
+                        ? byDay
+                        : string.Compare(a.DocPath, b.DocPath, StringComparison.OrdinalIgnoreCase);
+                });
+                return result;
+            }
         }
 
         /// <summary>累加指定文档的阅读秒数；seconds 小于等于 0 时忽略。</summary>
@@ -75,12 +140,13 @@ namespace LearningAssistant.Services.Pdf
             if (string.IsNullOrWhiteSpace(pdfPath) || seconds <= 0)
                 return;
 
+            string directory = ResolveDirectory();
             string docPath = NormalizePath(pdfPath!);
             string day = (when ?? DateTime.Now).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
 
             lock (_gate)
             {
-                var records = EnsureLoaded();
+                var records = GetRecordsCore(directory);
                 var record = records.FirstOrDefault(r =>
                     r.Day == day && string.Equals(r.DocPath, docPath, StringComparison.OrdinalIgnoreCase));
                 if (record == null)
@@ -90,8 +156,8 @@ namespace LearningAssistant.Services.Pdf
                 }
 
                 record.Seconds += seconds;
-                Trim(records);
-                Persist(records);
+                Trim(records, DateTime.Now.Date);
+                Persist(directory, records);
             }
         }
 
@@ -102,6 +168,7 @@ namespace LearningAssistant.Services.Pdf
             string today = now.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
             DateTime weekStart = now.Date.AddDays(-6);
             string docPath = string.IsNullOrWhiteSpace(pdfPath) ? string.Empty : NormalizePath(pdfPath!);
+            string directory = ResolveDirectory();
 
             double todaySeconds = 0;
             double weekSeconds = 0;
@@ -110,7 +177,7 @@ namespace LearningAssistant.Services.Pdf
 
             lock (_gate)
             {
-                foreach (var record in EnsureLoaded())
+                foreach (var record in GetRecordsCore(directory))
                 {
                     totalSeconds += record.Seconds;
 
@@ -137,15 +204,25 @@ namespace LearningAssistant.Services.Pdf
             };
         }
 
-        private List<PdfReadingTimeRecord> EnsureLoaded()
+        private string ResolveDirectory()
         {
-            if (_records != null)
-                return _records;
+            string directory = _directoryProvider();
+            if (string.IsNullOrWhiteSpace(directory))
+                throw new InvalidOperationException("阅读时长目录未配置");
+
+            return directory;
+        }
+
+        /// <summary>按目录取缓存；首次加载时顺带裁剪，确实裁剪则回写文件。</summary>
+        private List<PdfReadingTimeRecord> GetRecordsCore(string directory)
+        {
+            if (_caches.TryGetValue(directory, out var cached))
+                return cached;
 
             var records = new List<PdfReadingTimeRecord>();
             try
             {
-                string file = Path.Combine(_directory, FileName);
+                string file = Path.Combine(directory, FileName);
                 if (File.Exists(file))
                 {
                     var loaded = JsonSerializer.Deserialize<List<PdfReadingTimeRecord>>(File.ReadAllText(file));
@@ -163,17 +240,23 @@ namespace LearningAssistant.Services.Pdf
                 records = new List<PdfReadingTimeRecord>();
             }
 
-            _records = records;
-            return _records;
+            if (Trim(records, DateTime.Now.Date))
+            {
+                // 历史数据超过留存范围时顺手回写；失败仅忽略
+                Persist(directory, records);
+            }
+
+            _caches[directory] = records;
+            return records;
         }
 
-        private void Persist(List<PdfReadingTimeRecord> records)
+        private void Persist(string directory, List<PdfReadingTimeRecord> records)
         {
             try
             {
-                Directory.CreateDirectory(_directory);
+                Directory.CreateDirectory(directory);
                 File.WriteAllText(
-                    Path.Combine(_directory, FileName),
+                    Path.Combine(directory, FileName),
                     JsonSerializer.Serialize(records, JsonOptions));
             }
             catch (Exception)
@@ -182,14 +265,32 @@ namespace LearningAssistant.Services.Pdf
             }
         }
 
-        /// <summary>只保留最近的若干条记录，避免长期使用后文件无限增长。</summary>
-        private static void Trim(List<PdfReadingTimeRecord> records)
+        /// <summary>按天数与条数裁剪，返回是否发生裁剪。</summary>
+        private static bool Trim(List<PdfReadingTimeRecord> records, DateTime today)
         {
-            if (records.Count <= MaxRecords)
-                return;
+            if (records.Count == 0)
+                return false;
 
-            records.Sort((a, b) => string.CompareOrdinal(a.Day, b.Day));
-            records.RemoveRange(0, records.Count - MaxRecords);
+            bool changed = false;
+            DateTime cutoff = today.AddDays(-MaxRetentionDays);
+            var expired = records
+                .Where(r => TryParseDay(r.Day, out var day) && day < cutoff)
+                .ToList();
+            if (expired.Count > 0)
+            {
+                foreach (var record in expired)
+                    records.Remove(record);
+                changed = true;
+            }
+
+            if (records.Count > MaxRecords)
+            {
+                records.Sort((a, b) => string.CompareOrdinal(a.Day, b.Day));
+                records.RemoveRange(0, records.Count - MaxRecords);
+                changed = true;
+            }
+
+            return changed;
         }
 
         private static bool TryParseDay(string? day, out DateTime value)

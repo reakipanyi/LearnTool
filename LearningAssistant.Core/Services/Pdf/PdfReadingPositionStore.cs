@@ -20,18 +20,42 @@ namespace LearningAssistant.Services.Pdf
     /// <summary>
     /// 按“文档路径 + 修改时间 + 文件大小”存放连续朗读断点，
     /// 换文档或文件被改动后自然失效，避免断点串位。
+    /// 目录按当前用户懒解析，单例实例可安全跨用户复用。
     /// </summary>
     public sealed class PdfReadingPositionStore
     {
         private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = false };
 
-        private readonly string _directory;
+        private readonly Func<string> _directoryProvider;
 
-        public PdfReadingPositionStore(string directoryPath)
+        /// <summary>按当前用户目录懒解析；切换用户后自动读写对应目录。</summary>
+        public PdfReadingPositionStore(Func<string> directoryProvider)
         {
-            _directory = string.IsNullOrWhiteSpace(directoryPath)
-                ? throw new ArgumentException("断点目录不能为空", nameof(directoryPath))
-                : directoryPath;
+            _directoryProvider = directoryProvider ?? throw new ArgumentNullException(nameof(directoryProvider));
+        }
+
+        /// <summary>固定目录：测试与单用户场景使用。</summary>
+        public PdfReadingPositionStore(string directoryPath)
+            : this(CreateFixedProvider(directoryPath))
+        {
+        }
+
+        private static Func<string> CreateFixedProvider(string directoryPath)
+        {
+            if (string.IsNullOrWhiteSpace(directoryPath))
+                throw new ArgumentException("断点目录不能为空", nameof(directoryPath));
+
+            string fixedPath = directoryPath;
+            return () => fixedPath;
+        }
+
+        private string ResolveDirectory()
+        {
+            string directory = _directoryProvider();
+            if (string.IsNullOrWhiteSpace(directory))
+                throw new InvalidOperationException("断点目录未配置");
+
+            return directory;
         }
 
         /// <summary>读取断点；不存在或内容损坏时返回 null。</summary>
@@ -66,14 +90,15 @@ namespace LearningAssistant.Services.Pdf
 
             try
             {
-                Directory.CreateDirectory(_directory);
+                string directory = ResolveDirectory();
+                Directory.CreateDirectory(directory);
                 var position = new PdfReadingPosition
                 {
                     PageIndex = pageIndex,
                     SentenceIndex = sentenceIndex,
                     UpdatedAtUtc = DateTime.UtcNow
                 };
-                File.WriteAllText(GetFilePath(pdfPath), JsonSerializer.Serialize(position, JsonOptions));
+                File.WriteAllText(GetFilePath(pdfPath, directory), JsonSerializer.Serialize(position, JsonOptions));
             }
             catch (Exception)
             {
@@ -100,7 +125,10 @@ namespace LearningAssistant.Services.Pdf
         }
 
         private string GetFilePath(string pdfPath)
-            => Path.Combine(_directory, ComputeKey(pdfPath) + ".json");
+            => GetFilePath(pdfPath, ResolveDirectory());
+
+        private static string GetFilePath(string pdfPath, string directory)
+            => Path.Combine(directory, ComputeKey(pdfPath) + ".json");
 
         private static string ComputeKey(string pdfPath)
         {

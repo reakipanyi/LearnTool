@@ -266,11 +266,11 @@ namespace LearningAssistant.Common
                 new PdfSelectionTranslationCache(AppPaths.PdfSelectionTranslationDir));
 
             // PDF 连续朗读断点：按文档路径 + 修改时间落盘页号/句号，重新打开时续读
-            // 无状态服务且从根容器解析使用，注册为单例避免 captive dependency
-            services.AddSingleton(_ => new PdfReadingPositionStore(AppPaths.PdfReadingPositionDir));
+            // 目录按当前用户懒解析，注册为单例避免 captive dependency
+            services.AddSingleton(_ => new PdfReadingPositionStore(() => AppPaths.PdfReadingPositionDir));
 
-            // PDF 阅读时长统计：按用户 + 文档 + 日期落盘
-            services.AddScoped(_ => new PdfReadingTimeStore(AppPaths.PdfReadingStatsDir));
+            // PDF 阅读时长统计：按用户 + 文档 + 日期落盘，目录懒解析后单例安全
+            services.AddSingleton(_ => new PdfReadingTimeStore(() => AppPaths.PdfReadingStatsDir));
 
             // PDF AI 摘要条目：按文档哈希落盘，带页码/录音锚点
             services.AddScoped<IPdfAiSummaryStore>(_ => new PdfAiSummaryStore());

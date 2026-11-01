@@ -566,7 +566,7 @@ namespace LearningAssistant.Forms.Pdf
 
             // 连续朗读：句子调度、同步高亮状态与断点续听
             var positionStore = Program.ServiceProvider?.GetService(typeof(PdfReadingPositionStore)) as PdfReadingPositionStore
-                ?? new PdfReadingPositionStore(AppPaths.PdfReadingPositionDir);
+                ?? new PdfReadingPositionStore(() => AppPaths.PdfReadingPositionDir);
             _readingPlaybackManager = new PdfReadingPlaybackManager(
                 _logger, this, positionStore, _autoLayoutService);
             _readingPlaybackManager.StateChanged += (_, _) => RefreshReadingPlaybackBar();
@@ -576,7 +576,7 @@ namespace LearningAssistant.Forms.Pdf
 
             // 阅读时长统计：窗口激活且已打开文档时按心跳累计，按文档与日期落盘
             var readingTimeStore = Program.ServiceProvider?.GetService(typeof(PdfReadingTimeStore)) as PdfReadingTimeStore
-                ?? new PdfReadingTimeStore(AppPaths.PdfReadingStatsDir);
+                ?? new PdfReadingTimeStore(() => AppPaths.PdfReadingStatsDir);
             _readingTimeTracker = new PdfReadingTimeTracker(readingTimeStore);
             Activated += (_, _) => _readingTimeTracker?.SetActive(true);
             Deactivate += (_, _) => _readingTimeTracker?.SetActive(false);
