@@ -31,6 +31,12 @@ namespace LearningAssistant.Services.TTS
         private volatile bool _isLoading = false;
         private readonly object _initLock = new object();
 
+        /// <summary>
+        /// 缓存键版本：v2 让旧缓存整体失效——程序目录含非 ASCII 字符时音素化只产出 1 个音素，
+        /// 会把约 0.5 秒的退化音频写进缓存，修复后不能再命中。
+        /// </summary>
+        protected override string CacheKeyVersion => "kokoro-v2";
+
         public KokoroSharpTtsService(TtsConfig config, ILogger<KokoroSharpTtsService>? logger = null, IAppPaths appPaths = null!)
             : base(logger, appPaths)
         {
@@ -48,6 +54,8 @@ namespace LearningAssistant.Services.TTS
 
                 try
                 {
+                    WarnIfInstallPathIsNonAscii();
+
                     string modelPath = GetModelPath();
                     _logger?.LogInformation("Loading KokoroSharp model from: {ModelPath}", modelPath);
                     _tts = KokoroTTS.LoadModel(modelPath);
@@ -443,7 +451,9 @@ namespace LearningAssistant.Services.TTS
                 var voice = SelectVoiceForSegment(langCode, language);
                 if (voice == null) return null;
                 _logger?.LogDebug("SynthesizeToWavCoreAsync: single segment, lang={LangCode}, voice={Voice}, speed={Speed}", langCode, voice.Name, safeSpeed);
-                var tokens = Tokenizer.Tokenize(langSegments[0].Text, MapLangCodeToTokenizerLang(langCode), preprocess: true);
+                string tokenizerLang = MapLangCodeToTokenizerLang(langCode);
+                var tokens = Tokenizer.Tokenize(langSegments[0].Text, tokenizerLang, preprocess: true);
+                EnsurePhonemizationSucceeded(tokens, langSegments[0].Text, tokenizerLang);
                 return await SynthesizeTokensToWavAsync(tokens, voice, safeSpeed, langSegments[0].Text, cancellationToken).ConfigureAwait(false);
             }
 
@@ -460,7 +470,9 @@ namespace LearningAssistant.Services.TTS
                 }
 
                 _logger?.LogDebug("SynthesizeToWavCoreAsync: processing segment lang={LangCode}, voice={Voice}, textLength={TextLength}, speed={Speed}", seg.LangCode, segVoice.Name, seg.Text.Length, safeSpeed);
-                var tokens = Tokenizer.Tokenize(seg.Text, MapLangCodeToTokenizerLang(seg.LangCode), preprocess: true);
+                string segmentTokenizerLang = MapLangCodeToTokenizerLang(seg.LangCode);
+                var tokens = Tokenizer.Tokenize(seg.Text, segmentTokenizerLang, preprocess: true);
+                EnsurePhonemizationSucceeded(tokens, seg.Text, segmentTokenizerLang);
                 var wavBytes = await SynthesizeTokensToWavAsync(tokens, segVoice, safeSpeed, seg.Text, cancellationToken).ConfigureAwait(false);
                 if (wavBytes == null || wavBytes.Length == 0)
                 {
@@ -506,6 +518,7 @@ namespace LearningAssistant.Services.TTS
                 _logger?.LogInformation("ProcessSingleSegmentAsync: tokenizerLang='{TokenizerLang}', synthesizing...", tokenizerLang);
                 
                 var tokens = Tokenizer.Tokenize(text, tokenizerLang, preprocess: true);
+                EnsurePhonemizationSucceeded(tokens, text, tokenizerLang);
                 _logger?.LogInformation("ProcessSingleSegmentAsync: tokenized text, tokenCount={TokenCount}", tokens.Length);
                 
                 var wavBytes = await SynthesizeTokensToWavAsync(tokens, voice, speed, text).ConfigureAwait(false);
@@ -526,7 +539,7 @@ namespace LearningAssistant.Services.TTS
                 _logger?.LogDebug("ProcessSingleSegmentAsync: cancelled");
                 throw;
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not PhonemizationFailedException)
             {
                 _logger?.LogError(ex, "ProcessSingleSegmentAsync: Synthesis failed for lang {LangCode}", langCode);
                 return null;
@@ -571,6 +584,7 @@ namespace LearningAssistant.Services.TTS
                     _logger?.LogInformation("ProcessMultiSegmentsAsync: segment[{Index}] tokenizerLang='{TokenizerLang}', synthesizing...", i, tokenizerLang);
 
                     var tokens = Tokenizer.Tokenize(segment.Text, tokenizerLang, preprocess: true);
+                    EnsurePhonemizationSucceeded(tokens, segment.Text, tokenizerLang);
                     _logger?.LogInformation("ProcessMultiSegmentsAsync: segment[{Index}] tokenized, tokenCount={TokenCount}", i, tokens.Length);
 
                     var wavBytes = await SynthesizeTokensToWavAsync(tokens, voice, speed, segment.Text).ConfigureAwait(false);
@@ -588,7 +602,7 @@ namespace LearningAssistant.Services.TTS
                     _logger?.LogDebug("ProcessMultiSegmentsAsync: cancelled at segment {Index}", i);
                     throw;
                 }
-                catch (Exception ex)
+                catch (Exception ex) when (ex is not PhonemizationFailedException)
                 {
                     _logger?.LogError(ex, "ProcessMultiSegmentsAsync: Segment {Index} synthesis failed, text='{Text}'", i, segment.Text.Length > 50 ? segment.Text.Substring(0, 50) + "..." : segment.Text);
                 }
@@ -910,6 +924,50 @@ namespace LearningAssistant.Services.TTS
                 "zh" or "zh-cn" or "zh_cn" or "chinese" or "cmn" => "cmn",
                 _ => "en"
             };
+        }
+
+
+        /// <summary>
+        /// 音素化结果退化（0/1 个音素）时抛出，让调用方明确失败并给出可操作提示，
+        /// 而不是把约 0.5 秒的固定短音频当作正常一句继续朗读/跳句。
+        /// </summary>
+        private sealed class PhonemizationFailedException : Exception
+        {
+            public PhonemizationFailedException(string message) : base(message) { }
+        }
+
+        /// <summary>
+        /// 校验音素化结果：espeak-ng 读不到词典时（最常见的诱因是程序目录含中文等非 ASCII 字符）
+        /// 只会返回 1 个音素，Kokoro 合成出的音频是一段与文本无关的固定短响。
+        /// </summary>
+        private void EnsurePhonemizationSucceeded(int[] tokens, string text, string tokenizerLang)
+        {
+            if (tokens != null && tokens.Length > 1)
+                return;
+
+            _logger?.LogError(
+                "Phonemization produced {TokenCount} token(s) for text='{Text}' (lang={Lang}, baseDir={BaseDir}); espeak-ng likely cannot read its dictionary (non-ASCII install path)",
+                tokens?.Length ?? 0, text, tokenizerLang, AppContext.BaseDirectory);
+
+            throw new PhonemizationFailedException(
+                "语音合成失败：文本音素化只得到 1 个音素。通常是程序安装路径包含中文等非 ASCII 字符，"
+                + "导致 espeak-ng 读不到发音词典；请把程序放到纯英文路径后重试。");
+        }
+
+        /// <summary>启动时提示非 ASCII 安装目录，便于提前定位“只响一下就跳句”的问题。</summary>
+        private void WarnIfInstallPathIsNonAscii()
+        {
+            string baseDir = AppContext.BaseDirectory;
+            foreach (char c in baseDir)
+            {
+                if (c > 127)
+                {
+                    _logger?.LogWarning(
+                        "程序目录包含非 ASCII 字符（{BaseDir}），espeak-ng 可能无法读取发音词典，Kokoro 朗读会退化为固定短音频",
+                        baseDir);
+                    return;
+                }
+            }
         }
 
 

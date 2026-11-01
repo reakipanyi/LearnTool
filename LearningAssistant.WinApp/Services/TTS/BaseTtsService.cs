@@ -415,10 +415,15 @@ namespace LearningAssistant.Services.TTS
             return Task.CompletedTask;
         }
 
+        /// <summary>
+        /// 缓存键版本：实现类在修复会让旧缓存失效时递增，例如旧缓存里已经写入了退化音频。
+        /// </summary>
+        protected virtual string CacheKeyVersion => "v1";
+
         protected string GetCacheFilePath(string text, string? language, float? speed, string? voiceName = null)
         {
             using var sha1 = SHA1.Create();
-            var meta = (voiceName ?? string.Empty) + "|" + (text ?? string.Empty) + "|" + (language ?? string.Empty) + "|" + (speed?.ToString() ?? string.Empty);
+            var meta = (voiceName ?? string.Empty) + "|" + (text ?? string.Empty) + "|" + (language ?? string.Empty) + "|" + (speed?.ToString() ?? string.Empty) + "|" + CacheKeyVersion;
             var hash = sha1.ComputeHash(Encoding.UTF8.GetBytes(meta));
             var sb = new StringBuilder();
             foreach (var b in hash) sb.Append(b.ToString("x2"));
