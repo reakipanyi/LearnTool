@@ -294,6 +294,12 @@ namespace LearningAssistant.Forms.Pdf
         private Button _buttonStrikethroughMode;
         private Button _buttonTextMode;
         private Button _buttonUndoAnnotation;
+        // 一级条新增按钮：选择/重做/阅读引导线（运行时创建，避免设计器文件继续膨胀）
+        private Button? _buttonSelectMode;
+        private Button? _buttonRedoAnnotation;
+        private Button? _buttonReadingGuide;
+        // 一级条分组竖线位置：由 LayoutAnnotationToolStrip 计算，ToolbarGroupTools_Paint 统一绘制
+        private readonly List<int> _toolbarGroupSeparatorXs = new List<int>();
         private Button _buttonClearAllAnnotations;
         private Button _buttonToggleAnnotationLayer;
         private Button _buttonExportAnnotationsAsImage;
@@ -384,6 +390,19 @@ namespace LearningAssistant.Forms.Pdf
         /// 取代原先书签面板中只针对高亮的撤销按钮。
         /// </summary>
         private readonly Stack<UndoActionKind> _unifiedUndoStack = new Stack<UndoActionKind>();
+
+        /// <summary>
+        /// 统一重做栈：与撤销栈对称，撤销成功时把该操作类型压入，
+        /// Ctrl+Y / 工具栏「重做」据此按原顺序回放；产生新操作时清空。
+        /// </summary>
+        private readonly Stack<UndoActionKind> _unifiedRedoStack = new Stack<UndoActionKind>();
+
+        /// <summary>
+        /// 本地命令注册表：命令目录 + 使用计数（仅本机落盘，不联网），
+        /// 用于「最近使用」排序与后续频次校准，不参与任何业务判断。
+        /// </summary>
+        private readonly PdfReaderCommandRegistry _commandRegistry =
+            new PdfReaderCommandRegistry(() => AppPaths.CurrentUserDir);
 
         /// <summary>
         /// 标记当前文档的缩略图是否已加载，切换到缩略图选项卡时按需加载
@@ -512,6 +531,8 @@ namespace LearningAssistant.Forms.Pdf
             _quizEngineService = quizEngineService;
             _pdfAiCacheService = pdfAiCacheService;
             _appConfig = appConfig;
+            // 命令目录先于工具栏初始化登记，之后工具栏/命令面板都按同一份 Id 记录用法
+            RegisterReaderCommands();
             KeyPreview = true;
             Load += PdfReaderFormV2_Load;
             Resize += PdfReaderFormV2_Resize;
@@ -527,6 +548,8 @@ namespace LearningAssistant.Forms.Pdf
             // 任何关闭路径都先落盘因防抖挂起的会话（页码等），避免最后几页翻页记录丢失；
             // 无挂起写入时是无操作，不影响关闭确认流程
             (Program.ServiceProvider?.GetService(typeof(IPdfFileManager)) as IPdfFileManager)?.FlushSessionSave();
+            // 命令使用计数只在关闭时统一落盘，避免每次点击都写文件
+            _commandRegistry.Flush();
 
             if (e.CloseReason != CloseReason.UserClosing || _closeConfirmed)
                 return;
@@ -584,8 +607,8 @@ namespace LearningAssistant.Forms.Pdf
 
             // 订阅两个 Manager 的撤销动作入栈事件，统一记录到 _unifiedUndoStack，
             // 供工具栏撤销按钮按时间顺序智能撤销最近一次操作（画笔或高亮）。
-            _highlightManager.UndoActionRecorded += (s, e) => _unifiedUndoStack.Push(UndoActionKind.Highlight);
-            _navigationManager.UndoActionRecorded += (s, e) => _unifiedUndoStack.Push(UndoActionKind.Stroke);
+            _highlightManager.UndoActionRecorded += (s, e) => RecordUndoAction(UndoActionKind.Highlight);
+            _navigationManager.UndoActionRecorded += (s, e) => RecordUndoAction(UndoActionKind.Stroke);
 
             _navigationManager.IsHighlightModeCallback = () => _highlightManager?.IsHighlightMode ?? true;
             _navigationManager.AddHighlightCallback = rect => _highlightManager?.AddHighlight(rect);
@@ -717,6 +740,8 @@ namespace LearningAssistant.Forms.Pdf
                 _buttonUndoAnnotation, _buttonClearAllAnnotations, _buttonDashStyle,
                 _buttonToggleAnnotationLayer, _buttonChecklistMode, _buttonImageEmbedMode,
                 _buttonSpotlightMode, _buttonMagnifierMode, _buttonAskAi, _buttonTranslationToggle,
+                // 一级条新增按钮（运行时创建）同样不参与 Tab 焦点切换
+                _buttonSelectMode, _buttonReadingGuide, _buttonRedoAnnotation,
                 _buttonPrev, _buttonNext, _buttonZoomOut, _buttonZoomIn, _buttonResetView,
                 _buttonRotate, _buttonLockView, _buttonNightMode, _buttonDualPage, _buttonFullscreen,
                 _buttonAddToLearningContent
@@ -2432,14 +2457,20 @@ namespace LearningAssistant.Forms.Pdf
             return root;
         }
 
-        /// <summary>开关阅读引导线；开启时先放到当前可见页的中线，之后跟随鼠标。</summary>
-        private void ToggleReadingGuide(ToolStripMenuItem? menuItem = null)
+        /// <summary>
+        /// 开关阅读引导线；开启时先放到当前可见页的中线，之后跟随鼠标。
+        /// 状态同时回显到「更多 - 阅读辅助」菜单与一级条引导线按钮；会话内记住，不跨启动持久化。
+        /// </summary>
+        private void ToggleReadingGuide(ToolStripMenuItem? menuItem = null, bool showToast = true)
         {
             if (_readingAidManager == null) return;
 
             bool enabled = _readingAidManager.ToggleGuide();
             if (menuItem != null)
                 menuItem.Checked = enabled;
+
+            // 一级条按钮同步开启态，避免菜单与工具栏显示不一致
+            UpdateToolButtonState(_buttonReadingGuide, enabled);
 
             if (enabled && _readingAidManager.GuideCenterY < 0)
             {
@@ -2452,7 +2483,8 @@ namespace LearningAssistant.Forms.Pdf
             }
 
             _pictureBoxPdf?.Invalidate();
-            ShowToast(enabled ? "阅读引导线已开启，移动鼠标可跟随" : "阅读引导线已关闭");
+            if (showToast)
+                ShowToast(enabled ? "阅读引导线已开启，移动鼠标可跟随" : "阅读引导线已关闭");
         }
 
         /// <summary>展示今日 / 近 7 天 / 本文档 / 累计阅读时长。</summary>
@@ -2741,6 +2773,8 @@ namespace LearningAssistant.Forms.Pdf
                 _buttonToggleAnnotationLayer, _buttonChecklistMode, _buttonImageEmbedMode,
                 _buttonExportAnnotationsAsImage,
                 _buttonSpotlightMode, _buttonMagnifierMode, _buttonAskAi, _buttonTranslationToggle,
+                // 一级条运行时新增按钮同样参与夜间配色刷新
+                _buttonSelectMode, _buttonReadingGuide, _buttonRedoAnnotation,
                 _buttonMoreTools
             };
         }
@@ -3351,7 +3385,8 @@ namespace LearningAssistant.Forms.Pdf
                     case Keys.Y:
                         if (e.Control)
                         {
-                            _presenter?.UndoAnnotationStroke();
+                            // Ctrl+Y 重做最近一次撤销（旧实现误调用了撤销接口）
+                            _buttonRedoAnnotation?.PerformClick();
                             e.Handled = true;
                         }
                         break;
@@ -4052,6 +4087,13 @@ namespace LearningAssistant.Forms.Pdf
             HideAudioPlayerBarForDocumentSwitch();
             if (documentChanged)
             {
+                // 撤销/重做历史按文档隔离：换文档后不能把上一本文档的笔迹或高亮重做到新文档
+                _unifiedUndoStack.Clear();
+                _unifiedRedoStack.Clear();
+                _navigationManager?.ClearUndoRedoHistory();
+                _highlightManager?.ClearUndoRedoHistory();
+                UpdateRedoButtonState();
+
                 // 打开文档后按开关自动播放配套音频；双击目录 PDF 时即使开关关闭也保留该文档的播放意图
                 bool requestedByDoubleClick =
                     string.Equals(_pendingAudioPlayPath, pdfPath, StringComparison.OrdinalIgnoreCase);
@@ -7248,6 +7290,13 @@ namespace LearningAssistant.Forms.Pdf
                 e.Graphics.DrawLine(pen, _toolbarViewSepX, 8, _toolbarViewSepX, 32);
             if (_toolbarPageSepX > 0)
                 e.Graphics.DrawLine(pen, _toolbarPageSepX, 8, _toolbarPageSepX, 32);
+
+            // 一级条内部的分组竖线：选择/标注/绘制/辅助/智能/编辑之间各一条
+            foreach (var sepX in _toolbarGroupSeparatorXs)
+            {
+                if (sepX > 0)
+                    e.Graphics.DrawLine(pen, sepX, 8, sepX, 32);
+            }
         }
 
         private void ButtonTextMode_Click(object? sender, EventArgs e)
@@ -7430,12 +7479,244 @@ namespace LearningAssistant.Forms.Pdf
         }
 
         /// <summary>
+        /// 注册阅读器命令目录（P1 骨架）：先登记一级条与常用入口，
+        /// 后续右键菜单、「更多」菜单与命令面板统一按这里的 Id 收敛入口并记录用法。
+        /// </summary>
+        private void RegisterReaderCommands()
+        {
+            _commandRegistry.Register(new PdfCommandDefinition("tool.select", "选择/浏览", PdfCommandGroup.Selection)
+            {
+                Hint = "单击选中标注，拖动调整位置；Esc 退出当前工具",
+                Shortcut = "S",
+                Surfaces = PdfCommandSurfaces.Toolbar | PdfCommandSurfaces.Shortcut | PdfCommandSurfaces.CommandPalette
+            });
+
+            _commandRegistry.Register(new PdfCommandDefinition("tool.highlight", "高亮", PdfCommandGroup.Markup)
+            {
+                Hint = "拖选文字区域添加高亮",
+                Shortcut = "H",
+                Surfaces = PdfCommandSurfaces.Toolbar | PdfCommandSurfaces.ContextMenu |
+                           PdfCommandSurfaces.Shortcut | PdfCommandSurfaces.CommandPalette
+            });
+
+            _commandRegistry.Register(new PdfCommandDefinition("tool.text", "文字注解", PdfCommandGroup.Markup)
+            {
+                Hint = "在页面上插入文字注释",
+                Shortcut = "T",
+                Surfaces = PdfCommandSurfaces.Toolbar | PdfCommandSurfaces.ContextMenu |
+                           PdfCommandSurfaces.Shortcut | PdfCommandSurfaces.CommandPalette
+            });
+
+            _commandRegistry.Register(new PdfCommandDefinition("tool.mosaic", "马赛克", PdfCommandGroup.Markup)
+            {
+                Hint = "遮挡敏感或需要打码的内容",
+                Shortcut = "M",
+                Surfaces = PdfCommandSurfaces.Toolbar | PdfCommandSurfaces.Shortcut | PdfCommandSurfaces.CommandPalette
+            });
+
+            _commandRegistry.Register(new PdfCommandDefinition("tool.rectangle", "矩形标注", PdfCommandGroup.Draw)
+            {
+                Hint = "框选重点区域",
+                Shortcut = "R",
+                Surfaces = PdfCommandSurfaces.Toolbar | PdfCommandSurfaces.ContextMenu |
+                           PdfCommandSurfaces.Shortcut | PdfCommandSurfaces.CommandPalette
+            });
+
+            _commandRegistry.Register(new PdfCommandDefinition("tool.ellipse", "椭圆标注", PdfCommandGroup.Draw)
+            {
+                Hint = "圈出重点内容",
+                Shortcut = "L",
+                Surfaces = PdfCommandSurfaces.Toolbar | PdfCommandSurfaces.Shortcut | PdfCommandSurfaces.CommandPalette
+            });
+
+            _commandRegistry.Register(new PdfCommandDefinition("tool.arrow", "箭头标注", PdfCommandGroup.Draw)
+            {
+                Hint = "用箭头指向重点",
+                Shortcut = "A",
+                Surfaces = PdfCommandSurfaces.Toolbar | PdfCommandSurfaces.Shortcut | PdfCommandSurfaces.CommandPalette
+            });
+
+            _commandRegistry.Register(new PdfCommandDefinition("tool.pen", "画笔", PdfCommandGroup.Draw)
+            {
+                Hint = "自由手写或批注",
+                Shortcut = "P",
+                Surfaces = PdfCommandSurfaces.Toolbar | PdfCommandSurfaces.Shortcut | PdfCommandSurfaces.CommandPalette
+            });
+
+            _commandRegistry.Register(new PdfCommandDefinition("tool.eraser", "橡皮擦", PdfCommandGroup.Draw)
+            {
+                Hint = "点击删除单条笔划，拖动可框选擦除",
+                Shortcut = "E",
+                Surfaces = PdfCommandSurfaces.Toolbar | PdfCommandSurfaces.Shortcut | PdfCommandSurfaces.CommandPalette
+            });
+
+            _commandRegistry.Register(new PdfCommandDefinition("tool.guide", "阅读引导线", PdfCommandGroup.Reading)
+            {
+                Hint = "横向高亮带跟随鼠标，辅助逐行阅读（与聚光灯互斥）",
+                Surfaces = PdfCommandSurfaces.Toolbar | PdfCommandSurfaces.MoreMenu | PdfCommandSurfaces.CommandPalette,
+                IsToggle = true
+            });
+
+            _commandRegistry.Register(new PdfCommandDefinition("translate.toggle", "翻译模式", PdfCommandGroup.Smart)
+            {
+                Hint = "选中翻译与整页翻译入口",
+                Surfaces = PdfCommandSurfaces.Toolbar | PdfCommandSurfaces.Sidebar | PdfCommandSurfaces.CommandPalette,
+                IsToggle = true
+            });
+
+            _commandRegistry.Register(new PdfCommandDefinition("ai.open", "AI 问答", PdfCommandGroup.Smart)
+            {
+                Hint = "打开 AI 侧栏，支持流式输出与追问",
+                Surfaces = PdfCommandSurfaces.Toolbar | PdfCommandSurfaces.Sidebar | PdfCommandSurfaces.CommandPalette
+            });
+
+            _commandRegistry.Register(new PdfCommandDefinition("edit.undo", "撤销", PdfCommandGroup.Edit)
+            {
+                Hint = "按时间顺序撤销最近的笔划或高亮操作",
+                Shortcut = "Ctrl+Z",
+                Surfaces = PdfCommandSurfaces.Toolbar | PdfCommandSurfaces.Shortcut | PdfCommandSurfaces.CommandPalette
+            });
+
+            _commandRegistry.Register(new PdfCommandDefinition("edit.redo", "重做", PdfCommandGroup.Edit)
+            {
+                Hint = "回放刚刚撤销的笔划或高亮操作",
+                Shortcut = "Ctrl+Y",
+                Surfaces = PdfCommandSurfaces.Toolbar | PdfCommandSurfaces.Shortcut | PdfCommandSurfaces.CommandPalette
+            });
+
+            _commandRegistry.Register(new PdfCommandDefinition("edit.moreTools", "更多工具", PdfCommandGroup.Edit)
+            {
+                Hint = "低频工具下拉：删除线、聚光灯、放大镜、检查清单等",
+                Surfaces = PdfCommandSurfaces.Toolbar | PdfCommandSurfaces.MoreMenu
+            });
+
+            _commandRegistry.Register(new PdfCommandDefinition("file.openFolder", "打开文件夹", PdfCommandGroup.File)
+            {
+                Hint = "选择一个文件夹并按目录浏览其中的 PDF",
+                Shortcut = "Ctrl+O",
+                Surfaces = PdfCommandSurfaces.Toolbar | PdfCommandSurfaces.Shortcut | PdfCommandSurfaces.CommandPalette
+            });
+
+            _commandRegistry.Register(new PdfCommandDefinition("view.nightMode", "夜间模式", PdfCommandGroup.View)
+            {
+                Hint = "切换深色阅读界面",
+                Shortcut = "N",
+                Surfaces = PdfCommandSurfaces.Toolbar | PdfCommandSurfaces.Shortcut,
+                IsToggle = true
+            });
+        }
+
+        /// <summary>
+        /// 记录一次新的可撤销操作：入统一撤销栈，并清空重做栈（标准撤销/重做语义）。
+        /// 由两个 Manager 的 UndoActionRecorded 事件调用。
+        /// </summary>
+        private void RecordUndoAction(UndoActionKind kind)
+        {
+            _unifiedUndoStack.Push(kind);
+            _unifiedRedoStack.Clear();
+            UpdateRedoButtonState();
+        }
+
+        /// <summary>
+        /// 撤销成功后把该操作类型压入统一重做栈，并刷新重做按钮可用态。
+        /// 与 <see cref="RecordUndoAction"/> 相反：这里不清空重做栈，保证可连续 Ctrl+Y 回放。
+        /// </summary>
+        private void PushRedoKind(UndoActionKind kind)
+        {
+            _unifiedRedoStack.Push(kind);
+            UpdateRedoButtonState();
+        }
+
+        /// <summary>把工具模式映射到命令 Id，用于本地使用计数；未登记的瞬时工具返回 null。</summary>
+        private static string? ResolveToolCommandId(AnnotationToolMode mode)
+        {
+            return mode switch
+            {
+                AnnotationToolMode.Select => "tool.select",
+                AnnotationToolMode.Highlight => "tool.highlight",
+                AnnotationToolMode.Text => "tool.text",
+                AnnotationToolMode.Mosaic => "tool.mosaic",
+                AnnotationToolMode.Rectangle => "tool.rectangle",
+                AnnotationToolMode.Ellipse => "tool.ellipse",
+                AnnotationToolMode.Arrow => "tool.arrow",
+                AnnotationToolMode.Pen => "tool.pen",
+                AnnotationToolMode.Eraser => "tool.eraser",
+                _ => null
+            };
+        }
+
+        /// <summary>重做按钮仅在统一重做栈有内容时可用；无可重做的操作时置灰。</summary>
+        private void UpdateRedoButtonState()
+        {
+            if (_buttonRedoAnnotation == null) return;
+            _buttonRedoAnnotation.Enabled = _unifiedRedoStack.Count > 0;
+        }
+
+        /// <summary>
+        /// 创建一级条新增按钮：选择、阅读引导线、重做。
+        /// 运行时创建并复用现有工具栏按钮的圆角/悬停样式，避免 Designer 文件继续膨胀。
+        /// </summary>
+        private void EnsurePrimaryToolbarButtons()
+        {
+            if (_toolbarGroupTools == null) return;
+
+            _buttonSelectMode ??= CreateToolbarGlyphButton(
+                "🖱", "选择/浏览 (S)：单击选中标注，双击文字可编辑", ButtonSelectMode_Click, 10F);
+            _buttonReadingGuide ??= CreateToolbarGlyphButton(
+                "📏", "阅读引导线：横向高亮带跟随鼠标（与聚光灯互斥）", ButtonReadingGuide_Click, 10F);
+            _buttonRedoAnnotation ??= CreateToolbarGlyphButton(
+                "↻", "重做 (Ctrl+Y)", ButtonRedoAnnotation_Click, 10F);
+
+            foreach (var button in new[] { _buttonSelectMode, _buttonReadingGuide, _buttonRedoAnnotation })
+            {
+                if (button != null && button.Parent == null)
+                    _toolbarGroupTools.Controls.Add(button);
+            }
+
+            UpdateRedoButtonState();
+        }
+
+        /// <summary>创建一级条图标按钮：统一字体/圆角/悬停，并挂接现有工具栏鼠标反馈。</summary>
+        private Button CreateToolbarGlyphButton(string glyph, string tooltip, EventHandler clickHandler, float fontSize)
+        {
+            var button = new Button
+            {
+                Text = glyph,
+                Size = new Size(28, 31),
+                FlatStyle = FlatStyle.Flat,
+                UseVisualStyleBackColor = false,
+                TabStop = false,
+                Font = new Font("Microsoft YaHei UI", fontSize, FontStyle.Regular)
+            };
+            button.FlatAppearance.BorderSize = 0;
+            button.Click += clickHandler;
+            _toolTip?.SetToolTip(button, tooltip);
+
+            ApplyToolbarButtonChrome(button);
+            button.MouseEnter += ToolbarButton_MouseEnter;
+            button.MouseLeave += ToolbarButton_MouseLeave;
+            button.MouseDown += ToolbarButton_MouseDown;
+            button.MouseUp += ToolbarButton_MouseUp;
+            return button;
+        }
+
+        /// <summary>记录分组竖线位置：nextButtonX 为下一组首个按钮的左边界。</summary>
+        private void AddToolbarGroupSeparator(int nextButtonX)
+        {
+            if (nextButtonX <= 0) return;
+            _toolbarGroupSeparatorXs.Add(nextButtonX - 6);
+        }
+
+        /// <summary>
         /// 参照微信截图工具栏重整标注工具条：一级图标条只保留高频工具，
         /// 低频工具收进「更多」下拉，并重新紧凑排布以消除原有的按钮位置重叠。
         /// </summary>
         private void InitializeAnnotationToolStrip()
         {
             if (_toolbarGroupTools == null) return;
+
+            // 选择/重做/阅读引导线为一级条新增按钮，先创建再参与下面的分组排布
+            EnsurePrimaryToolbarButtons();
 
 
 
@@ -7561,7 +7842,10 @@ namespace LearningAssistant.Forms.Pdf
             if (button != null) button.Visible = false;
         }
 
-        /// <summary>按分组顺序重排一级图标条：绘制工具 → 编辑动作 → 更多 → 视图与智能</summary>
+        /// <summary>
+        /// 按分组顺序重排一级图标条：选择 → 阅读标注 → 绘制 → 阅读辅助 → 智能 → 编辑 → 显示。
+        /// 每组之间留出更宽的间距并绘制短竖线，用空间换清晰，避免 14 个图标连成一片。
+        /// </summary>
         private void LayoutAnnotationToolStrip()
         {
             const int y = 2;
@@ -7570,22 +7854,44 @@ namespace LearningAssistant.Forms.Pdf
             const int groupGap = 12;
             int x = 5;
 
+            // 分组竖线随重排结果动态计算，交给 ToolbarGroupTools_Paint 统一绘制
+            _toolbarGroupSeparatorXs.Clear();
+
+            // 组1：选择/浏览（不产生标注，阅读时的默认态）
+            x = PlaceInToolStrip(_buttonSelectMode, x, y, size, groupGap);
+            AddToolbarGroupSeparator(x);
+
+            // 组2：阅读标注（高亮/文字/马赛克是阅读时最高频的标注）
             x = PlaceInToolStrip(_buttonHighlightMode, x, y, size, gap);
+            x = PlaceInToolStrip(_buttonTextMode, x, y, size, gap);
+            x = PlaceInToolStrip(_buttonMosaicMode, x, y, size, groupGap);
+            AddToolbarGroupSeparator(x);
+
+            // 组3：绘制工具（矩形/椭圆/箭头/画笔/橡皮）
             x = PlaceInToolStrip(_buttonRectangleMode, x, y, size, gap);
             x = PlaceInToolStrip(_buttonEllipseMode, x, y, size, gap);
             x = PlaceInToolStrip(_buttonArrowMode, x, y, size, gap);
             x = PlaceInToolStrip(_buttonPenMode, x, y, size, gap);
-            x = PlaceInToolStrip(_buttonMosaicMode, x, y, size, gap);
-            x = PlaceInToolStrip(_buttonTextMode, x, y, size, gap);
             x = PlaceInToolStrip(_buttonEraserMode, x, y, size, groupGap);
+            AddToolbarGroupSeparator(x);
 
-            x = PlaceInToolStrip(_buttonUndoAnnotation, x, y, size, groupGap);
+            // 组4：阅读辅助（阅读引导线提升为一级开关，与聚光灯互斥）
+            x = PlaceInToolStrip(_buttonReadingGuide, x, y, size, groupGap);
+            AddToolbarGroupSeparator(x);
 
-            x = PlaceInToolStrip(_buttonMoreTools, x, y, size, groupGap);
-
-            x = PlaceInToolStrip(_buttonNightMode, x, y, size, gap);
-            x = PlaceInToolStrip(_buttonAskAi, x, y, size, gap);
+            // 组5：智能入口（翻译 / AI 常驻，不再埋在二级菜单）
             x = PlaceInToolStrip(_buttonTranslationToggle, x, y, size, gap);
+            x = PlaceInToolStrip(_buttonAskAi, x, y, size, groupGap);
+            AddToolbarGroupSeparator(x);
+
+            // 组6：编辑动作（撤销 / 重做 / 更多）
+            x = PlaceInToolStrip(_buttonUndoAnnotation, x, y, size, gap);
+            x = PlaceInToolStrip(_buttonRedoAnnotation, x, y, size, gap);
+            x = PlaceInToolStrip(_buttonMoreTools, x, y, size, groupGap);
+            AddToolbarGroupSeparator(x);
+
+            // 组7：显示与清空（保持原有位置语义，仅顺延到最后一组）
+            x = PlaceInToolStrip(_buttonNightMode, x, y, size, gap);
             int toolsEndX = PlaceInToolStrip(_buttonClearAllAnnotations, x, y, size, gap);
 
             // 视图组、页码组的位置同样不能在设计器里写死，否则会与上面重排后的图标条相互压盖
@@ -7964,6 +8270,33 @@ namespace LearningAssistant.Forms.Pdf
             await UndoLastActionAsync();
             RefreshHighlightList();
         }
+
+        /// <summary>一级条「重做」：按统一重做栈回放最近一次被撤销的操作。</summary>
+        private async void ButtonRedoAnnotation_Click(object? sender, EventArgs e)
+        {
+            await RedoLastActionAsync();
+            RefreshHighlightList();
+        }
+
+        /// <summary>一级条「选择」：回到选择/浏览模式，单击选中已有标注。</summary>
+        private void ButtonSelectMode_Click(object? sender, EventArgs e)
+        {
+            SetAnnotationToolMode(AnnotationToolMode.Select);
+        }
+
+        /// <summary>一级条「阅读引导线」：复用「更多 - 阅读辅助」的开关逻辑，状态同步回显到按钮。</summary>
+        private void ButtonReadingGuide_Click(object? sender, EventArgs e)
+        {
+            // 与聚光灯互斥：开启引导线前若正处于聚光灯模式，先回到选择模式，避免两套跟随层叠加
+            if (_readingAidManager?.IsGuideEnabled != true
+                && _navigationManager?.CurrentToolMode == AnnotationToolMode.Spotlight)
+            {
+                SetAnnotationToolMode(AnnotationToolMode.Select);
+            }
+
+            ToggleReadingGuide();
+        }
+
         private async void ButtonMoreTools_Click(object? sender, EventArgs e)
         {
             moreMenu.Show(_buttonMoreTools, new Point(0, _buttonMoreTools.Height));
@@ -7987,6 +8320,9 @@ namespace LearningAssistant.Forms.Pdf
                     if (_navigationManager != null && _navigationManager.CanUndoStroke())
                     {
                         _navigationManager.UndoStroke();
+                        // 只有真正取回了可回放实体时才有重做路径，避免产生空的重做记录
+                        if (_navigationManager.CanRedoStroke())
+                            PushRedoKind(kind);
                         return;
                     }
                     // 内部画笔栈已空，跳过此记录继续尝试下一个
@@ -7996,14 +8332,61 @@ namespace LearningAssistant.Forms.Pdf
                     if (_highlightManager != null && _highlightManager.CanUndoHighlight())
                     {
                         await _highlightManager.UndoHighlightAsync();
+                        // 撤销确实留下了反向动作才登记重做，与画笔保持一致的判断
+                        if (_highlightManager.CanRedoHighlight())
+                            PushRedoKind(kind);
                         return;
                     }
                     // 内部高亮栈已空，跳过此记录继续尝试下一个
                 }
             }
 
+            UpdateRedoButtonState();
             _logger?.LogInformation("UndoLastAction: 统一撤销栈为空，无可撤销的操作");
             ShowMessage("没有可撤销的操作", "提示");
+        }
+
+        /// <summary>
+        /// 按时间顺序重做最近一次被撤销的操作：从统一重做栈弹出操作类型，
+        /// 调用对应 Manager 的重做方法按原数据回放，成功后再把该类型压回统一撤销栈。
+        /// 若对应 Manager 的重做栈已空（与统一栈不同步的边界情况），
+        /// 自动跳过该记录并继续尝试下一个，保证用户感知一致。
+        /// </summary>
+        private async Task RedoLastActionAsync()
+        {
+            while (_unifiedRedoStack.Count > 0)
+            {
+                var kind = _unifiedRedoStack.Pop();
+
+                if (kind == UndoActionKind.Stroke)
+                {
+                    if (_navigationManager != null && _navigationManager.CanRedoStroke()
+                        && _navigationManager.RedoStroke())
+                    {
+                        // 重做后重新可撤销；此处直接入栈，避免再清空剩余的重做记录
+                        _unifiedUndoStack.Push(kind);
+                        UpdateRedoButtonState();
+                        return;
+                    }
+                }
+                else if (kind == UndoActionKind.Highlight)
+                {
+                    if (_highlightManager != null && _highlightManager.CanRedoHighlight())
+                    {
+                        if (await _highlightManager.RedoHighlightAsync())
+                        {
+                            // 重放期间 Manager 不广播撤销事件，由这里补记统一撤销栈
+                            _unifiedUndoStack.Push(kind);
+                            UpdateRedoButtonState();
+                            return;
+                        }
+                    }
+                }
+            }
+
+            UpdateRedoButtonState();
+            _logger?.LogInformation("RedoLastAction: 统一重做栈为空，无可重做的操作");
+            ShowMessage("没有可重做的操作", "提示");
         }
 
         private void ButtonClearAllAnnotations_Click(object? sender, EventArgs e)
@@ -8342,6 +8725,8 @@ namespace LearningAssistant.Forms.Pdf
             UpdateToolButtonState(_buttonStrikethroughMode, mode == AnnotationToolMode.Strikethrough);
             UpdateToolButtonState(_buttonSpotlightMode, mode == AnnotationToolMode.Spotlight);
             UpdateToolButtonState(_buttonMagnifierMode, mode == AnnotationToolMode.Magnifier);
+            // 选择态：不产生标注的默认态，阅读时一眼能看出当前不会误画
+            UpdateToolButtonState(_buttonSelectMode, mode == AnnotationToolMode.Select);
             UpdatePenTypeButtonState();
 
             if (_highlightManager != null)
@@ -8355,6 +8740,15 @@ namespace LearningAssistant.Forms.Pdf
             {
                 UpdateAnnotationColorSelection(_navigationManager.TemporaryPenColor);
             }
+
+            // 阅读引导线与聚光灯互斥：进入聚光灯时自动收起引导线，避免两套跟随层叠加
+            if (mode == AnnotationToolMode.Spotlight && _readingAidManager?.IsGuideEnabled == true)
+                ToggleReadingGuide(showToast: false);
+
+            // 本地使用计数：只用于「最近使用」与频次校准，不联网、不参与业务判断
+            string? commandId = ResolveToolCommandId(mode);
+            if (commandId != null)
+                _commandRegistry.RecordUsage(commandId);
 
             UpdateStatusBar();
         }

@@ -531,7 +531,7 @@ namespace LearningAssistant.Forms.Pdf
             _buttonStrikethroughMode.Size = new Size(28, 31);
             _buttonStrikethroughMode.TabIndex = 25;
             _buttonStrikethroughMode.Text = "S";
-            _toolTip.SetToolTip(_buttonStrikethroughMode, "删除线 (W)");
+            _toolTip.SetToolTip(_buttonStrikethroughMode, "删除线");
             _buttonStrikethroughMode.UseVisualStyleBackColor = false;
             _buttonStrikethroughMode.Click += ButtonStrikethroughMode_Click;
             // 
@@ -615,7 +615,7 @@ namespace LearningAssistant.Forms.Pdf
             _buttonMagnifierMode.Size = new Size(28, 31);
             _buttonMagnifierMode.TabIndex = 25;
             _buttonMagnifierMode.Text = "🔍";
-            _toolTip.SetToolTip(_buttonMagnifierMode, "放大镜 (L)");
+            _toolTip.SetToolTip(_buttonMagnifierMode, "放大镜");
             _buttonMagnifierMode.UseVisualStyleBackColor = false;
             _buttonMagnifierMode.Click += ButtonMagnifierMode_Click;
             // 
@@ -658,6 +658,7 @@ namespace LearningAssistant.Forms.Pdf
             _buttonOpenFolder.Size = new Size(28, 32);
             _buttonOpenFolder.TabIndex = 9;
             _buttonOpenFolder.Text = "📂";
+            _toolTip.SetToolTip(_buttonOpenFolder, "打开文件夹 (Ctrl+O)");
             _buttonOpenFolder.UseVisualStyleBackColor = false;
             _buttonOpenFolder.Click += ButtonOpenFolder_Click;
             // 
@@ -1067,7 +1068,7 @@ namespace LearningAssistant.Forms.Pdf
             _buttonEllipseMode.Size = new Size(28, 31);
             _buttonEllipseMode.TabIndex = 2;
             _buttonEllipseMode.Text = "◯";
-            _toolTip.SetToolTip(_buttonEllipseMode, "椭圆 (E)");
+            _toolTip.SetToolTip(_buttonEllipseMode, "椭圆 (L)");
             _buttonEllipseMode.UseVisualStyleBackColor = false;
             _buttonEllipseMode.Click += ButtonEllipseMode_Click;
             // 
@@ -1122,7 +1123,7 @@ namespace LearningAssistant.Forms.Pdf
             _buttonEraserMode.Size = new Size(28, 31);
             _buttonEraserMode.TabIndex = 19;
             _buttonEraserMode.Text = "\U0001f9fd";
-            _toolTip.SetToolTip(_buttonEraserMode, "橡皮擦");
+            _toolTip.SetToolTip(_buttonEraserMode, "橡皮擦 (E)");
             _buttonEraserMode.UseVisualStyleBackColor = false;
             _buttonEraserMode.Click += ButtonEraserMode_Click;
             // 

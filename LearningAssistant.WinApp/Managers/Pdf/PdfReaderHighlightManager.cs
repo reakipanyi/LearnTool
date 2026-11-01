@@ -13,6 +13,10 @@ namespace LearningAssistant.Managers
         private readonly ILogger _logger;
         private readonly IHighlightService _highlightService;
         private readonly Stack<HighlightUndoAction> _undoStack = new Stack<HighlightUndoAction>();
+        // 重做栈：撤销时把反向动作留存，重做时按原数据再落库一次
+        private readonly Stack<HighlightUndoAction> _redoStack = new Stack<HighlightUndoAction>();
+        // 重放期间：重做不应清空重做栈，也不应再次广播撤销事件
+        private bool _isReplayingRedo;
         private readonly IPdfReaderFormAccess _form;
         private bool _disposed = false;
         private readonly IAnnotationService? _annotationService;
@@ -804,7 +808,28 @@ namespace LearningAssistant.Managers
                     _undoStack.Push(items[i]);
             }
             _undoStack.Push(action);
+
+            // 重做期间由调用方统一维护撤销栈与事件，避免重做把自己刚清空的重做栈再清一次
+            if (_isReplayingRedo) return;
+
+            // 产生新高亮操作后，之前的重做路径失效（标准撤销/重做语义）
+            _redoStack.Clear();
             UndoActionRecorded?.Invoke(this, EventArgs.Empty);
+        }
+
+        /// <summary>把可重做的动作压入重做栈，超限时丢弃最早的一条（与方法栈上限保持一致）。</summary>
+        private void PushRedoAction(HighlightUndoAction action)
+        {
+            if (action == null) return;
+
+            if (_redoStack.Count >= MaxUndoStackSize)
+            {
+                var items = _redoStack.ToArray();
+                _redoStack.Clear();
+                for (int i = items.Length - 2; i >= 0; i--)
+                    _redoStack.Push(items[i]);
+            }
+            _redoStack.Push(action);
         }
 
         public void RemoveHighlight(PdfHighlight highlight)
@@ -899,6 +924,18 @@ namespace LearningAssistant.Managers
             return _undoStack.Count > 0;
         }
 
+        public bool CanRedoHighlight()
+        {
+            return _redoStack.Count > 0;
+        }
+
+        /// <summary>清空撤销/重做历史（切换文档时调用，避免把上一本文档的高亮重做到新文档）。</summary>
+        public void ClearUndoRedoHistory()
+        {
+            _undoStack.Clear();
+            _redoStack.Clear();
+        }
+
         public async Task UndoHighlightAsync()
         {
             if (_undoStack.Count == 0)
@@ -908,6 +945,8 @@ namespace LearningAssistant.Managers
                 return;
             }
             var lastAction = _undoStack.Pop();
+            // 重做所需实体：撤销“新增”时用原实体再新增；撤销“删除”时用恢复后的新 Id 再删除
+            PdfHighlight? redoHighlight = lastAction.Highlight;
             _logger.LogInformation("UndoHighlight: 执行撤销, ActionType={ActionType}, HighlightId={HighlightId}",
                 lastAction.ActionType, lastAction.Highlight?.Id);
 
@@ -950,6 +989,9 @@ namespace LearningAssistant.Managers
                         CreatedAt = highlight.CreatedAt
                     };
 
+                    // 撤销“删除”后恢复出来的高亮换了新 Id，重做删除必须用这个新 Id
+                    redoHighlight = recoveredHighlight;
+
                     if (!string.IsNullOrEmpty(highlight.TranslationText))
                     {
                         _highlightService.UpdateHighlightContent(
@@ -966,9 +1008,108 @@ namespace LearningAssistant.Managers
                 }
             }
 
+            // 撤销完成后把反向动作压入重做栈，保证 Ctrl+Y 能按原顺序回放
+            if (redoHighlight != null)
+            {
+                PushRedoAction(new HighlightUndoAction
+                {
+                    ActionType = lastAction.ActionType,
+                    Highlight = redoHighlight
+                });
+            }
+
             RefreshHighlightList();
             RefreshHighlightLayerForPage(lastAction.Highlight?.PageIndex ?? _form.CurrentPageIndex);
             _form.PictureBoxPdf?.Invalidate();
+        }
+
+        /// <summary>
+        /// 重做最近撤销的高亮动作：新增 → 按原数据重新落库；删除 → 按恢复后的 Id 再删除。
+        /// 重放期间抑制撤销事件，由调用方统一把操作类型压回统一撤销栈。
+        /// </summary>
+        public async Task<bool> RedoHighlightAsync()
+        {
+            if (_redoStack.Count == 0)
+            {
+                _logger.LogInformation("RedoHighlight: 重做栈为空，无可重做的操作");
+                _form.ShowMessage("没有可重做的操作", "提示");
+                return false;
+            }
+
+            var action = _redoStack.Pop();
+            _logger.LogInformation("RedoHighlight: 执行重做, ActionType={ActionType}, HighlightId={HighlightId}",
+                action.ActionType, action.Highlight?.Id);
+
+            bool applied = false;
+            _isReplayingRedo = true;
+            try
+            {
+                if (action.ActionType == HighlightActionType.Add && action.Highlight != null)
+                {
+                    var highlight = action.Highlight;
+                    var newHighlightId = await _highlightService.AddHighlightAsync(
+                        _form.CurrentPdfPath,
+                        highlight.PageIndex,
+                        highlight.NormalizedWidth > 0 ? highlight.NormalizedX : highlight.X,
+                        highlight.NormalizedWidth > 0 ? highlight.NormalizedY : highlight.Y,
+                        highlight.NormalizedWidth > 0 ? highlight.NormalizedWidth : highlight.Width,
+                        highlight.NormalizedWidth > 0 ? highlight.NormalizedHeight : highlight.Height,
+                        highlight.Text,
+                        highlight.Color
+                    );
+
+                    var restoredHighlight = new PdfHighlight
+                    {
+                        Id = newHighlightId,
+                        PdfPath = _form.CurrentPdfPath,
+                        PageIndex = highlight.PageIndex,
+                        NormalizedX = highlight.NormalizedWidth > 0 ? highlight.NormalizedX : highlight.X,
+                        NormalizedY = highlight.NormalizedWidth > 0 ? highlight.NormalizedY : highlight.Y,
+                        NormalizedWidth = highlight.NormalizedWidth > 0 ? highlight.NormalizedWidth : highlight.Width,
+                        NormalizedHeight = highlight.NormalizedWidth > 0 ? highlight.NormalizedHeight : highlight.Height,
+                        Text = highlight.Text,
+                        TranslationText = highlight.TranslationText,
+                        Color = highlight.Color,
+                        CreatedAt = highlight.CreatedAt
+                    };
+
+                    if (!string.IsNullOrEmpty(highlight.TranslationText))
+                    {
+                        _highlightService.UpdateHighlightContent(
+                            _form.CurrentPdfPath, newHighlightId, highlight.Text, highlight.TranslationText);
+                    }
+
+                    // 重做属于“重放”：不清空重做栈，只把这次新增放回撤销栈，便于再次撤销
+                    PushUndoAction(new HighlightUndoAction
+                    {
+                        ActionType = HighlightActionType.Add,
+                        Highlight = restoredHighlight
+                    });
+
+                    applied = true;
+                }
+                else if (action.ActionType == HighlightActionType.Remove && action.Highlight != null)
+                {
+                    _highlightService.RemoveHighlight(_form.CurrentPdfPath, action.Highlight.Id);
+
+                    PushUndoAction(new HighlightUndoAction
+                    {
+                        ActionType = HighlightActionType.Remove,
+                        Highlight = action.Highlight
+                    });
+
+                    applied = true;
+                }
+            }
+            finally
+            {
+                _isReplayingRedo = false;
+            }
+
+            RefreshHighlightList();
+            RefreshHighlightLayerForPage(action.Highlight?.PageIndex ?? _form.CurrentPageIndex);
+            _form.PictureBoxPdf?.Invalidate();
+            return applied;
         }
 
         public void RefreshHighlightList()

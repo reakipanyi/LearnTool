@@ -967,16 +967,44 @@ namespace LearningAssistant.Presenters
             _annotationService.ClearAnnotation(_pdfFileManager.CurrentFilePath, _pdfFileManager.CurrentPageIndex);
         }
 
-        public void UndoAnnotationStroke()
+        /// <summary>
+        /// 撤销当前页最后一笔标注，并返回被移除的笔划实体；
+        /// 返回的实体供统一撤销/重做栈保存，重做时按原坐标与样式重新写回。
+        /// </summary>
+        public AnnotationStroke? UndoAnnotationStroke()
         {
             try
             {
-                if (string.IsNullOrEmpty(_pdfFileManager.CurrentFilePath)) return;
-                _annotationService.RemoveLastStroke(_pdfFileManager.CurrentFilePath, _pdfFileManager.CurrentPageIndex);
+                if (string.IsNullOrEmpty(_pdfFileManager.CurrentFilePath)) return null;
+                return _annotationService.RemoveLastStroke(_pdfFileManager.CurrentFilePath, _pdfFileManager.CurrentPageIndex);
             }
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "Failed to undo annotation stroke");
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// 重做时把撤销前的笔划按原坐标/样式写回指定页；坐标已由撤销时取回的实体保持一致。
+        /// </summary>
+        public bool RestoreAnnotationStroke(AnnotationStroke stroke, int pageIndex = -1)
+        {
+            try
+            {
+                if (stroke == null || string.IsNullOrEmpty(_pdfFileManager.CurrentFilePath))
+                    return false;
+
+                if (pageIndex < 0)
+                    pageIndex = _pdfFileManager.CurrentPageIndex;
+
+                _annotationService.AddStroke(_pdfFileManager.CurrentFilePath, pageIndex, stroke);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to restore annotation stroke");
+                return false;
             }
         }
 

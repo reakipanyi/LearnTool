@@ -91,6 +91,8 @@ namespace LearningAssistant.Managers
         private bool _favoriteToolbarActive = false;
 
         private readonly Stack<AnnotationStroke> _strokeUndoStack = new Stack<AnnotationStroke>();
+        // 重做栈：撤销时把被移除的笔划实体留存，重做时按原坐标与样式写回；产生新笔划会清空它
+        private readonly Stack<AnnotationStroke> _strokeRedoStack = new Stack<AnnotationStroke>();
         private const int MaxUndoStackSize = 50;
 
         /// <summary>
@@ -1637,12 +1639,26 @@ namespace LearningAssistant.Managers
                     _strokeUndoStack.Push(items[i]);
             }
             _strokeUndoStack.Push(stroke);
+            // 产生新笔划后，之前的重做路径失效（标准撤销/重做语义）
+            _strokeRedoStack.Clear();
             UndoActionRecorded?.Invoke(this, EventArgs.Empty);
         }
 
         public bool CanUndoStroke()
         {
             return _strokeUndoStack.Count > 0;
+        }
+
+        public bool CanRedoStroke()
+        {
+            return _strokeRedoStack.Count > 0;
+        }
+
+        /// <summary>清空撤销/重做历史（切换文档时调用，避免把上一本文档的笔迹重做到新文档）。</summary>
+        public void ClearUndoRedoHistory()
+        {
+            _strokeUndoStack.Clear();
+            _strokeRedoStack.Clear();
         }
 
         public void UndoStroke()
@@ -1656,7 +1672,13 @@ namespace LearningAssistant.Managers
             {
                 if (_form.Presenter != null)
                 {
-                    _form.Presenter.UndoAnnotationStroke();
+                    // 取回真正落盘的笔划（页面归一化坐标），供重做时原样写回
+                    var removed = _form.Presenter.UndoAnnotationStroke();
+                    if (removed != null)
+                    {
+                        removed.PageIndex = _form.CurrentPageIndex;
+                        PushStrokeToRedoStack(removed);
+                    }
                 }
 
                 CleanupAnnotationBitmap();
@@ -1666,6 +1688,51 @@ namespace LearningAssistant.Managers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error undoing stroke");
+            }
+        }
+
+        private void PushStrokeToRedoStack(AnnotationStroke stroke)
+        {
+            if (stroke == null) return;
+
+            if (_strokeRedoStack.Count >= MaxUndoStackSize)
+            {
+                var items = _strokeRedoStack.ToArray();
+                _strokeRedoStack.Clear();
+                for (int i = items.Length - 2; i >= 0; i--)
+                    _strokeRedoStack.Push(items[i]);
+            }
+            _strokeRedoStack.Push(stroke);
+        }
+
+        /// <summary>
+        /// 重做最近撤销的笔划：按撤销时取回的实体写回原页，并重新放回撤销栈。
+        /// 返回 true 表示成功；重做不应再清空重做栈，所以这里直接入栈而不走 PushStrokeToUndoStack。
+        /// </summary>
+        public bool RedoStroke()
+        {
+            if (_strokeRedoStack.Count == 0)
+                return false;
+
+            var stroke = _strokeRedoStack.Pop();
+
+            try
+            {
+                int pageIndex = stroke.PageIndex >= 0 ? stroke.PageIndex : _form.CurrentPageIndex;
+                if (_form.Presenter?.RestoreAnnotationStroke(stroke, pageIndex) != true)
+                    return false;
+
+                _strokeUndoStack.Push(stroke);
+
+                CleanupAnnotationBitmap();
+                LoadAnnotationsForCurrentPage();
+                _form.PictureBoxPdf.Invalidate();
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error redoing stroke");
+                return false;
             }
         }
 
