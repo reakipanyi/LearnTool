@@ -39,12 +39,8 @@ namespace LearningAssistant.Services.Learning
 
                 case SubCategoryType.EnglishWord:
                     AddField(fields, ref order, "词性", item.WordFeatures?.PartOfSpeech, language: "en");
-                    AddField(fields, ref order, "音标", item.Pronunciation?.Main, item.MainContent, true, "en");
-                    if (!string.IsNullOrWhiteSpace(item.Pronunciation?.UkPhonetic))
-                        AddField(fields, ref order, "英式", item.Pronunciation?.UkPhonetic, item.MainContent, true, "en");
-                    if (!string.IsNullOrWhiteSpace(item.Pronunciation?.UsPhonetic))
-                        AddField(fields, ref order, "美式", item.Pronunciation?.UsPhonetic, item.MainContent, true, "en");
-                    AddField(fields, ref order, "拼读", item.WordFeatures?.SyllableBreakdown, language: "en");
+                    // 音标/英式/美式/拼读合并为一行，避免同一发音信息重复占用多行
+                    AddField(fields, ref order, "发音", BuildPronunciationDisplay(item, includeSyllable: true), item.MainContent, true, "en");
                     AddField(fields, ref order, "释义", item.Meaning?.Content, language: "zh", isAnswer: true);
                     AddField(fields, ref order, "词形", item.WordFeatures?.WordForms, language: "en", isAnswer: true);
                     AddField(fields, ref order, "搭配", item.WordFeatures?.Collocations, language: "en", isAnswer: true);
@@ -53,7 +49,7 @@ namespace LearningAssistant.Services.Learning
                     break;
 
                 case SubCategoryType.EnglishPhrase:
-                    AddField(fields, ref order, "音标", item.Pronunciation?.Main, item.MainContent, true, "en");
+                    AddField(fields, ref order, "发音", BuildPronunciationDisplay(item), item.MainContent, true, "en");
                     AddField(fields, ref order, "释义", item.Meaning?.Content, language: "zh", isAnswer: true);
                     AddField(fields, ref order, "例句", item.Example?.Content, item.Example?.Content, true, "en", isAnswer: true);
                     break;
@@ -163,6 +159,50 @@ namespace LearningAssistant.Services.Learning
             var fields = BuildFields(item);
             return string.Join("\n", fields.Select(f => $"{f.Label}:?"));
         }
+
+        /// <summary>
+        /// 将音标、英式/美式差异和音节拼读合并为一行，避免同一发音信息重复占用多行。
+        /// </summary>
+        private static string? BuildPronunciationDisplay(LearningItem item, bool includeSyllable = false)
+        {
+            var pronunciation = item.Pronunciation;
+            string? main = NullIfWhiteSpace(pronunciation?.Main);
+            string? uk = NullIfWhiteSpace(pronunciation?.UkPhonetic);
+            string? us = NullIfWhiteSpace(pronunciation?.UsPhonetic);
+
+            var parts = new List<string>();
+            if (main != null)
+                parts.Add(main);
+
+            // 只展示与主音标不同的变体，避免 /x/ 英 /x/ 美 /x/ 三段重复
+            bool ukDiffers = uk != null && (main == null || !string.Equals(uk, main, StringComparison.OrdinalIgnoreCase));
+            bool usDiffers = us != null && (main == null || !string.Equals(us, main, StringComparison.OrdinalIgnoreCase));
+
+            if (ukDiffers && usDiffers && string.Equals(uk, us, StringComparison.OrdinalIgnoreCase))
+            {
+                // 英式与美式完全一致时合并为一个标签
+                parts.Add($"英/美 {uk}");
+            }
+            else
+            {
+                if (ukDiffers)
+                    parts.Add($"英 {uk}");
+                if (usDiffers)
+                    parts.Add($"美 {us}");
+            }
+
+            if (includeSyllable)
+            {
+                string? syllables = NullIfWhiteSpace(item.WordFeatures?.SyllableBreakdown);
+                if (syllables != null)
+                    parts.Add($"拼读 {syllables}");
+            }
+
+            return parts.Count == 0 ? null : string.Join("  ·  ", parts);
+        }
+
+        private static string? NullIfWhiteSpace(string? value) =>
+            string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
         private static void AddField(List<ContentField> fields, ref int order, string label, string? value, string? speakText = null, bool enableSpeak = false, string language = "en", bool isAnswer = false)
         {

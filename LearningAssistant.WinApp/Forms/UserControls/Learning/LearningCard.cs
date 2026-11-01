@@ -221,6 +221,8 @@ namespace LearningAssistant.Forms.UserControls.Learning
             for (int i = 0; i < neededCount; i++)
             {
                 _fieldRows[i].Field = fieldList[i];
+                // Dock=Top 时后加入的控件先停靠到顶部，需显式调整 z 序，保证首字段显示在最上方
+                _fieldsContainer.Controls.SetChildIndex(_fieldRows[i], neededCount - 1 - i);
             }
 
             _fieldsContainer.ResumeLayout();

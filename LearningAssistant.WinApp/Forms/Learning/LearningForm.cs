@@ -313,6 +313,15 @@ namespace LearningAssistant.Forms.Learning
             if (_buttonsView != null && _buttonsView.ButtonsPanel != null)
             {
                 _buttonsView.ButtonsPanel.BackColor = colors.Background;
+                // 「更多」菜单与入口随主题弱化，深色主题下不再是一块亮色
+                _buttonsView.ApplyTheme(colors);
+            }
+
+            if (_buttonNotes != null)
+            {
+                _buttonNotes.BackColor = colors.ThemeMode == ThemeMode.Dark ? colors.Surface : Color.White;
+                _buttonNotes.ForeColor = colors.TextPrimary;
+                _buttonNotes.FlatAppearance.BorderColor = colors.Divider;
             }
 
             if (buttonKnown != null)
@@ -1482,12 +1491,6 @@ namespace LearningAssistant.Forms.Learning
             ApplyRoundedStyle(buttonShowAnswer, 8);
             ApplyRoundedStyle(buttonThemeToggle, 8);
 
-            if (_buttonsView.ButtonStats != null) ApplyRoundedStyle(_buttonsView.ButtonStats, 8);
-            if (_buttonsView.ButtonChallenge != null) ApplyRoundedStyle(_buttonsView.ButtonChallenge, 8);
-            if (_buttonsView.ButtonAchievement != null) ApplyRoundedStyle(_buttonsView.ButtonAchievement, 8);
-            if (_buttonsView.ButtonWrongBook != null) ApplyRoundedStyle(_buttonsView.ButtonWrongBook, 8);
-            if (_buttonsView.ButtonPractice != null) ApplyRoundedStyle(_buttonsView.ButtonPractice, 8);
-
             foreach (Control ctrl in _buttonsView.ButtonsPanel.Controls)
             {
                 if (ctrl is Button btn)
@@ -1508,12 +1511,7 @@ namespace LearningAssistant.Forms.Learning
             _toolTip.SetToolTip(_buttonsView.ButtonKnown, "标记为已知 (1 / K)");
             _toolTip.SetToolTip(_buttonsView.ButtonUnknown, "标记为未知 (2 / U)");
             _toolTip.SetToolTip(_buttonsView.ButtonFavorite, "收藏/取消收藏 (3 / F)");
-            _toolTip.SetToolTip(_buttonsView.ButtonEdit, "编辑内容 (5 / E)");
-            _toolTip.SetToolTip(_buttonsView.ButtonStats, "打开学习统计");
-            _toolTip.SetToolTip(_buttonsView.ButtonChallenge, "打开每日挑战");
-            _toolTip.SetToolTip(_buttonsView.ButtonAchievement, "查看成就徽章");
-            _toolTip.SetToolTip(_buttonsView.ButtonWrongBook, "打开错题本");
-            _toolTip.SetToolTip(_buttonsView.ButtonPractice, "单词跟读练习");
+            _toolTip.SetToolTip(_buttonsView.ButtonMore, "更多工具：练习 / 编辑(E) / 统计 / 挑战 / 成就 / 错题");
             _toolTip.SetToolTip(_buttonsView.ButtonExit, "退出学习 (Esc)");
 
             _toolTip.SetToolTip(buttonShowAnswer, "切换学习/答题模式 (F3)");
@@ -1628,6 +1626,12 @@ namespace LearningAssistant.Forms.Learning
             _buttonNotes.FlatAppearance.BorderSize = 1;
             _buttonNotes.Click += ButtonNotes_Click;
             _buttonsView.ButtonsPanel.Controls.Add(_buttonNotes);
+            // 笔记放在「收藏」之后、「更多」之前，保持高频操作集中、低频工具靠后
+            int moreIndex = _buttonsView.ButtonsPanel.Controls.GetChildIndex(_buttonsView.ButtonMore);
+            if (moreIndex >= 0)
+            {
+                _buttonsView.ButtonsPanel.Controls.SetChildIndex(_buttonNotes, moreIndex);
+            }
             _toolTip.SetToolTip(_buttonNotes, "展开/收起当前学习项的笔记");
 
             _contentView.NoteTextChanged += (_, _) =>

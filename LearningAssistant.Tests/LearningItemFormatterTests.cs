@@ -71,12 +71,18 @@ namespace LearningAssistant.Tests
 
             var fields = LearningItemFormatter.BuildFields(item);
 
-            fields.Should().HaveCount(10);
-            fields.Select(f => f.Label).Should().Contain("词性", "音标", "英式", "美式", "拼读", "释义", "词形", "搭配", "例句", "例句翻译");
-            fields.First(f => f.Label == "音标").SpeakText.Should().Be("/ˈæpl/");
-            fields.First(f => f.Label == "音标").CanSpeak.Should().BeTrue();
+            // 音标/英式/美式/拼读已合并为单个「发音」行，避免重复
+            fields.Should().HaveCount(7);
+            fields.Select(f => f.Label).Should().Contain("词性", "发音", "释义", "词形", "搭配", "例句", "例句翻译");
+            var pronunciation = fields.First(f => f.Label == "发音");
+            pronunciation.SpeakText.Should().Be("apple");
+            pronunciation.CanSpeak.Should().BeTrue();
+            pronunciation.Value.Should().Contain("/ˈæpl/");
+            pronunciation.Value.Should().Contain("美 /ˈæp.əl/");
+            pronunciation.Value.Should().Contain("拼读 ap-ple");
+            // 英式与主音标相同，不再重复展示
+            pronunciation.Value.Should().NotContain("英 /ˈæpl/");
             fields.First(f => f.Label == "词性").HasSpeakText.Should().BeFalse();
-            fields.First(f => f.Label == "拼读").HasSpeakText.Should().BeFalse();
             fields.First(f => f.Label == "释义").HasSpeakText.Should().BeFalse();
             fields.First(f => f.Label == "词形").HasSpeakText.Should().BeFalse();
             fields.First(f => f.Label == "搭配").HasSpeakText.Should().BeFalse();
@@ -84,7 +90,7 @@ namespace LearningAssistant.Tests
         }
 
         [Fact]
-        public void BuildFields_EnglishWord_NoUkPhonetic_ShouldSkipUkPhonetic()
+        public void BuildFields_EnglishWord_OnlyUsDiffers_ShouldShowUsVariantInSingleRow()
         {
             var item = new LearningItem
             {
@@ -96,8 +102,27 @@ namespace LearningAssistant.Tests
 
             var fields = LearningItemFormatter.BuildFields(item);
 
-            fields.Select(f => f.Label).Should().NotContain("英式");
-            fields.Select(f => f.Label).Should().Contain("美式");
+            fields.Select(f => f.Label).Should().NotContain("英式", "美式", "音标", "拼读");
+            var pronunciation = fields.First(f => f.Label == "发音");
+            pronunciation.Value.Should().Contain("美 /ˈæp.əl/");
+            pronunciation.Value.Should().NotContain("英");
+        }
+
+        [Fact]
+        public void BuildFields_EnglishWord_UkAndUsSame_ShouldMergeVariantLabel()
+        {
+            var item = new LearningItem
+            {
+                SubCategory = SubCategoryType.EnglishWord,
+                MainContent = "learn",
+                Pronunciation = Pronunciation.Create("/lɜːn/", "/lɜːn/", "/lɜːn/"),
+                Meaning = Meaning.Create("学习")
+            };
+
+            var fields = LearningItemFormatter.BuildFields(item);
+
+            var pronunciation = fields.First(f => f.Label == "发音");
+            pronunciation.Value.Should().Be("/lɜːn/");
         }
 
         [Fact]
@@ -170,8 +195,8 @@ namespace LearningAssistant.Tests
             var fields = LearningItemFormatter.BuildFields(item);
 
             fields.Should().HaveCount(3);
-            fields.Select(f => f.Label).Should().Contain("音标", "释义", "例句");
-            fields.First(f => f.Label == "音标").CanSpeak.Should().BeTrue();
+            fields.Select(f => f.Label).Should().Contain("发音", "释义", "例句");
+            fields.First(f => f.Label == "发音").CanSpeak.Should().BeTrue();
         }
 
         [Fact]

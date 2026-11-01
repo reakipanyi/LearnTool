@@ -41,6 +41,8 @@ namespace LearningAssistant.Forms.UserControls.Learning
             this.BackColor = Color.Transparent;
             this.Padding = new Padding(0);
             this.Dock = DockStyle.Top;
+            // 固定紧凑行高：Panel 默认高 100px，会让多条字段撑出大量空白和滚动
+            this.Height = 32;
 
             _speakButton.Click += SpeakButton_Click;
             _copyButton.Click += CopyButton_Click;
@@ -71,6 +73,8 @@ namespace LearningAssistant.Forms.UserControls.Learning
             _valueLabel.TextAlign = ContentAlignment.MiddleLeft;
             _valueLabel.UseMnemonic = false;
             _valueLabel.AutoSize = false;
+            // 合并后的发音行等长文本用省略号收尾，避免被按钮列硬裁切
+            _valueLabel.AutoEllipsis = true;
             _valueLabel.Dock = DockStyle.Fill;
             _valueLabel.Padding = new Padding(0);
 

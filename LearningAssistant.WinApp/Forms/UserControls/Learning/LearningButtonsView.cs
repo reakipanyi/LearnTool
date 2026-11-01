@@ -1,9 +1,11 @@
 using System.ComponentModel;
+using LearningAssistant.Common;
 
 namespace LearningAssistant.Forms.UserControls.Learning
 {
     /// <summary>
     /// 学习按钮视图 - 底部操作按钮区
+    /// 只保留高频主操作；统计/挑战/成就/错题/练习/编辑收纳到「更多」菜单，降低视觉干扰。
     /// </summary>
     public class LearningButtonsView : UserControl
     {
@@ -14,17 +16,17 @@ namespace LearningAssistant.Forms.UserControls.Learning
         private Button _buttonUnknown = null!;
         private Button _buttonFavorite = null!;
         private Button _buttonExit = null!;
-        private Panel separator1;
-        private Panel separator2;
-        private Panel separator3;
+        private Panel separator1 = null!;
         private Button _buttonPrevious = null!;
         private Button _buttonNext = null!;
-        private Button _buttonEdit = null!;
-        private Button _buttonStats = null!;
-        private Button _buttonChallenge = null!;
-        private Button _buttonAchievement = null!;
-        private Button _buttonWrongBook = null!;
-        private Button _buttonPractice = null!;
+        private Button _buttonMore = null!;
+        private ContextMenuStrip _moreMenu = null!;
+        private ToolStripMenuItem _menuPractice = null!;
+        private ToolStripMenuItem _menuEdit = null!;
+        private ToolStripMenuItem _menuStats = null!;
+        private ToolStripMenuItem _menuChallenge = null!;
+        private ToolStripMenuItem _menuAchievement = null!;
+        private ToolStripMenuItem _menuWrongBook = null!;
         private readonly Dictionary<Button, Size> _originalButtonSizes = new Dictionary<Button, Size>();
 
         #endregion
@@ -53,22 +55,7 @@ namespace LearningAssistant.Forms.UserControls.Learning
         public Button ButtonNext => _buttonNext;
 
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
-        public Button ButtonEdit => _buttonEdit;
-
-        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
-        public Button ButtonStats => _buttonStats;
-
-        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
-        public Button ButtonChallenge => _buttonChallenge;
-
-        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
-        public Button ButtonAchievement => _buttonAchievement;
-
-        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
-        public Button ButtonWrongBook => _buttonWrongBook;
-
-        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
-        public Button ButtonPractice => _buttonPractice;
+        public Button ButtonMore => _buttonMore;
 
         #endregion
 
@@ -152,12 +139,7 @@ namespace LearningAssistant.Forms.UserControls.Learning
             ApplyRoundedStyle(_buttonExit, 6);
             ApplyRoundedStyle(_buttonPrevious, 6);
             ApplyRoundedStyle(_buttonNext, 6);
-            ApplyRoundedStyle(_buttonEdit, 6);
-            ApplyRoundedStyle(_buttonStats, 6);
-            ApplyRoundedStyle(_buttonChallenge, 6);
-            ApplyRoundedStyle(_buttonAchievement, 6);
-            ApplyRoundedStyle(_buttonWrongBook, 6);
-            ApplyRoundedStyle(_buttonPractice, 6);
+            ApplyRoundedStyle(_buttonMore, 6);
         }
 
         private void ApplyRoundedStyle(Button button, int radius)
@@ -231,34 +213,21 @@ namespace LearningAssistant.Forms.UserControls.Learning
             _buttonUnknown = new Button();
             separator1 = new Panel();
             _buttonFavorite = new Button();
-            _buttonEdit = new Button();
-            separator2 = new Panel();
-            _buttonStats = new Button();
-            _buttonChallenge = new Button();
-            _buttonAchievement = new Button();
-            _buttonWrongBook = new Button();
-            _buttonPractice = new Button();
-            separator3 = new Panel();
+            _buttonMore = new Button();
             _buttonExit = new Button();
             _buttonsPanel.SuspendLayout();
             SuspendLayout();
             // 
             // _buttonsPanel
             // 
+            // 主次分组：导航 → 判定 → 收藏/更多工具
             _buttonsPanel.Controls.Add(_buttonPrevious);
-            _buttonsPanel.Controls.Add(_buttonNext);
-            _buttonsPanel.Controls.Add(_buttonKnown);
             _buttonsPanel.Controls.Add(_buttonUnknown);
+            _buttonsPanel.Controls.Add(_buttonKnown);
+            _buttonsPanel.Controls.Add(_buttonNext);
             _buttonsPanel.Controls.Add(separator1);
             _buttonsPanel.Controls.Add(_buttonFavorite);
-            _buttonsPanel.Controls.Add(_buttonEdit);
-            _buttonsPanel.Controls.Add(separator2);
-            _buttonsPanel.Controls.Add(_buttonStats);
-            _buttonsPanel.Controls.Add(_buttonChallenge);
-            _buttonsPanel.Controls.Add(_buttonAchievement);
-            _buttonsPanel.Controls.Add(_buttonWrongBook);
-            _buttonsPanel.Controls.Add(_buttonPractice);
-            _buttonsPanel.Controls.Add(separator3);
+            _buttonsPanel.Controls.Add(_buttonMore);
             _buttonsPanel.Controls.Add(_buttonExit);
             _buttonsPanel.Dock = DockStyle.Fill;
             _buttonsPanel.Location = new Point(0, 0);
@@ -270,6 +239,7 @@ namespace LearningAssistant.Forms.UserControls.Learning
             // 
             // _buttonPrevious
             // 
+            // 导航操作：中性灰，避免与「会了/不会」抢视觉焦点
             _buttonPrevious.BackColor = Color.FromArgb(108, 117, 125);
             _buttonPrevious.FlatAppearance.BorderSize = 0;
             _buttonPrevious.FlatAppearance.MouseDownBackColor = Color.FromArgb(98, 107, 115);
@@ -277,7 +247,7 @@ namespace LearningAssistant.Forms.UserControls.Learning
             _buttonPrevious.FlatStyle = FlatStyle.Flat;
             _buttonPrevious.Font = new Font("微软雅黑", 11F, FontStyle.Bold);
             _buttonPrevious.ForeColor = Color.White;
-            _buttonPrevious.Location = new Point(15, 12);
+            _buttonPrevious.Location = new Point(15, 6);
             _buttonPrevious.Margin = new Padding(5, 6, 5, 6);
             _buttonPrevious.Name = "_buttonPrevious";
             _buttonPrevious.Size = new Size(90, 51);
@@ -285,44 +255,6 @@ namespace LearningAssistant.Forms.UserControls.Learning
             _buttonPrevious.Text = "⏮ 上一项";
             _buttonPrevious.UseVisualStyleBackColor = false;
             _buttonPrevious.Click += ButtonPrevious_Click;
-            // 
-            // _buttonNext
-            // 
-            // 语义色：绿色 #22C55E = 成功/主操作（与设计系统 Success 对齐）
-            _buttonNext.BackColor = Color.FromArgb(34, 197, 94);
-            _buttonNext.FlatAppearance.BorderSize = 0;
-            _buttonNext.FlatAppearance.MouseDownBackColor = Color.FromArgb(22, 163, 74);
-            _buttonNext.FlatAppearance.MouseOverBackColor = Color.FromArgb(74, 222, 128);
-            _buttonNext.FlatStyle = FlatStyle.Flat;
-            _buttonNext.Font = new Font("微软雅黑", 11F, FontStyle.Bold);
-            _buttonNext.ForeColor = Color.White;
-            _buttonNext.Location = new Point(115, 12);
-            _buttonNext.Margin = new Padding(5, 6, 5, 6);
-            _buttonNext.Name = "_buttonNext";
-            _buttonNext.Size = new Size(90, 51);
-            _buttonNext.TabIndex = 1;
-            _buttonNext.Text = "下一项 ⏭";
-            _buttonNext.UseVisualStyleBackColor = false;
-            _buttonNext.Click += ButtonNext_Click;
-            // 
-            // _buttonKnown
-            // 
-            // 主操作：绿色实心 #22C55E，加大加粗突出（Width 约为普通按钮的1.6倍，字号14F bold）
-            _buttonKnown.BackColor = Color.FromArgb(34, 197, 94);
-            _buttonKnown.FlatAppearance.BorderSize = 0;
-            _buttonKnown.FlatAppearance.MouseDownBackColor = Color.FromArgb(22, 163, 74);
-            _buttonKnown.FlatAppearance.MouseOverBackColor = Color.FromArgb(74, 222, 128);
-            _buttonKnown.FlatStyle = FlatStyle.Flat;
-            _buttonKnown.Font = new Font("微软雅黑", 14F, FontStyle.Bold);
-            _buttonKnown.ForeColor = Color.White;
-            _buttonKnown.Location = new Point(215, 12);
-            _buttonKnown.Margin = new Padding(5, 6, 5, 6);
-            _buttonKnown.Name = "_buttonKnown";
-            _buttonKnown.Size = new Size(160, 51);
-            _buttonKnown.TabIndex = 2;
-            _buttonKnown.Text = "✅ 会了";
-            _buttonKnown.UseVisualStyleBackColor = false;
-            _buttonKnown.Click += ButtonKnown_Click;
             // 
             // _buttonUnknown
             // 
@@ -334,20 +266,58 @@ namespace LearningAssistant.Forms.UserControls.Learning
             _buttonUnknown.FlatStyle = FlatStyle.Flat;
             _buttonUnknown.Font = new Font("微软雅黑", 11F, FontStyle.Bold);
             _buttonUnknown.ForeColor = Color.White;
-            _buttonUnknown.Location = new Point(325, 12);
+            _buttonUnknown.Location = new Point(115, 6);
             _buttonUnknown.Margin = new Padding(5, 6, 5, 6);
             _buttonUnknown.Name = "_buttonUnknown";
             _buttonUnknown.Size = new Size(100, 51);
-            _buttonUnknown.TabIndex = 3;
+            _buttonUnknown.TabIndex = 1;
             _buttonUnknown.Text = "❌ 不会";
             _buttonUnknown.UseVisualStyleBackColor = false;
             _buttonUnknown.Click += ButtonUnknown_Click;
             // 
+            // _buttonKnown
+            // 
+            // 主操作：绿色实心 #22C55E，加大加粗突出（Width 约为普通按钮的1.6倍，字号14F bold）
+            _buttonKnown.BackColor = Color.FromArgb(34, 197, 94);
+            _buttonKnown.FlatAppearance.BorderSize = 0;
+            _buttonKnown.FlatAppearance.MouseDownBackColor = Color.FromArgb(22, 163, 74);
+            _buttonKnown.FlatAppearance.MouseOverBackColor = Color.FromArgb(74, 222, 128);
+            _buttonKnown.FlatStyle = FlatStyle.Flat;
+            _buttonKnown.Font = new Font("微软雅黑", 14F, FontStyle.Bold);
+            _buttonKnown.ForeColor = Color.White;
+            _buttonKnown.Location = new Point(220, 6);
+            _buttonKnown.Margin = new Padding(5, 6, 5, 6);
+            _buttonKnown.Name = "_buttonKnown";
+            _buttonKnown.Size = new Size(160, 51);
+            _buttonKnown.TabIndex = 2;
+            _buttonKnown.Text = "✅ 会了";
+            _buttonKnown.UseVisualStyleBackColor = false;
+            _buttonKnown.Click += ButtonKnown_Click;
+            // 
+            // _buttonNext
+            // 
+            // 导航操作：中性灰，与上一项同一层级
+            _buttonNext.BackColor = Color.FromArgb(108, 117, 125);
+            _buttonNext.FlatAppearance.BorderSize = 0;
+            _buttonNext.FlatAppearance.MouseDownBackColor = Color.FromArgb(98, 107, 115);
+            _buttonNext.FlatAppearance.MouseOverBackColor = Color.FromArgb(118, 127, 135);
+            _buttonNext.FlatStyle = FlatStyle.Flat;
+            _buttonNext.Font = new Font("微软雅黑", 11F, FontStyle.Bold);
+            _buttonNext.ForeColor = Color.White;
+            _buttonNext.Location = new Point(330, 6);
+            _buttonNext.Margin = new Padding(5, 6, 5, 6);
+            _buttonNext.Name = "_buttonNext";
+            _buttonNext.Size = new Size(90, 51);
+            _buttonNext.TabIndex = 3;
+            _buttonNext.Text = "下一项 ⏭";
+            _buttonNext.UseVisualStyleBackColor = false;
+            _buttonNext.Click += ButtonNext_Click;
+            // 
             // separator1
             // 
-            separator1.Location = new Point(433, 9);
+            separator1.Location = new Point(428, 9);
             separator1.Name = "separator1";
-            separator1.Size = new Size(20, 51);
+            separator1.Size = new Size(20, 45);
             separator1.TabIndex = 4;
             // 
             // _buttonFavorite
@@ -360,7 +330,7 @@ namespace LearningAssistant.Forms.UserControls.Learning
             _buttonFavorite.FlatStyle = FlatStyle.Flat;
             _buttonFavorite.Font = new Font("微软雅黑", 11F, FontStyle.Bold);
             _buttonFavorite.ForeColor = Color.White;
-            _buttonFavorite.Location = new Point(461, 12);
+            _buttonFavorite.Location = new Point(456, 6);
             _buttonFavorite.Margin = new Padding(5, 6, 5, 6);
             _buttonFavorite.Name = "_buttonFavorite";
             _buttonFavorite.Size = new Size(86, 51);
@@ -369,129 +339,29 @@ namespace LearningAssistant.Forms.UserControls.Learning
             _buttonFavorite.UseVisualStyleBackColor = false;
             _buttonFavorite.Click += ButtonFavorite_Click;
             // 
-            // _buttonEdit
+            // _buttonMore
             // 
-            _buttonEdit.BackColor = Color.FromArgb(52, 152, 219);
-            _buttonEdit.FlatAppearance.BorderSize = 0;
-            _buttonEdit.FlatAppearance.MouseDownBackColor = Color.FromArgb(42, 142, 209);
-            _buttonEdit.FlatAppearance.MouseOverBackColor = Color.FromArgb(62, 162, 229);
-            _buttonEdit.FlatStyle = FlatStyle.Flat;
-            _buttonEdit.Font = new Font("微软雅黑", 11F, FontStyle.Bold);
-            _buttonEdit.ForeColor = Color.White;
-            _buttonEdit.Location = new Point(557, 12);
-            _buttonEdit.Margin = new Padding(5, 6, 5, 6);
-            _buttonEdit.Name = "_buttonEdit";
-            _buttonEdit.Size = new Size(86, 51);
-            _buttonEdit.TabIndex = 6;
-            _buttonEdit.Text = "✏️ 编辑";
-            _buttonEdit.UseVisualStyleBackColor = false;
-            _buttonEdit.Click += ButtonEdit_Click;
-            // 
-            // separator2
-            // 
-            separator2.Location = new Point(651, 9);
-            separator2.Name = "separator2";
-            separator2.Size = new Size(20, 51);
-            separator2.TabIndex = 7;
-            // 
-            // _buttonStats
-            // 
-            // 语义色：紫色 #8B5CF6 = 主色（与设计系统 Primary 对齐）
-            _buttonStats.BackColor = Color.FromArgb(139, 92, 246);
-            _buttonStats.FlatAppearance.BorderSize = 0;
-            _buttonStats.FlatAppearance.MouseDownBackColor = Color.FromArgb(124, 58, 237);
-            _buttonStats.FlatAppearance.MouseOverBackColor = Color.FromArgb(167, 139, 250);
-            _buttonStats.FlatStyle = FlatStyle.Flat;
-            _buttonStats.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
-            _buttonStats.ForeColor = Color.White;
-            _buttonStats.Margin = new Padding(5, 6, 5, 6);
-            _buttonStats.Name = "_buttonStats";
-            _buttonStats.Size = new Size(86, 51);
-            _buttonStats.TabIndex = 9;
-            _buttonStats.Text = "📊 统计";
-            _buttonStats.UseVisualStyleBackColor = false;
-            _buttonStats.Click += ButtonStats_Click;
-            // 
-            // _buttonChallenge
-            // 
-            // 语义色：橙色 #F59E0B = 警告/挑战（与设计系统 Warning 对齐）
-            _buttonChallenge.BackColor = Color.FromArgb(245, 158, 11);
-            _buttonChallenge.FlatAppearance.BorderSize = 0;
-            _buttonChallenge.FlatAppearance.MouseDownBackColor = Color.FromArgb(217, 119, 6);
-            _buttonChallenge.FlatAppearance.MouseOverBackColor = Color.FromArgb(251, 191, 36);
-            _buttonChallenge.FlatStyle = FlatStyle.Flat;
-            _buttonChallenge.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
-            _buttonChallenge.ForeColor = Color.White;
-            _buttonChallenge.Margin = new Padding(5, 6, 5, 6);
-            _buttonChallenge.Name = "_buttonChallenge";
-            _buttonChallenge.Size = new Size(86, 51);
-            _buttonChallenge.TabIndex = 10;
-            _buttonChallenge.Text = "🎯 挑战";
-            _buttonChallenge.UseVisualStyleBackColor = false;
-            _buttonChallenge.Click += ButtonChallenge_Click;
-            // 
-            // _buttonAchievement
-            // 
-            // 语义色：橙色 #F59E0B = 成就/收藏（与设计系统 Warning/Favorite 对齐）
-            _buttonAchievement.BackColor = Color.FromArgb(245, 158, 11);
-            _buttonAchievement.FlatAppearance.BorderSize = 0;
-            _buttonAchievement.FlatAppearance.MouseDownBackColor = Color.FromArgb(217, 119, 6);
-            _buttonAchievement.FlatAppearance.MouseOverBackColor = Color.FromArgb(251, 191, 36);
-            _buttonAchievement.FlatStyle = FlatStyle.Flat;
-            _buttonAchievement.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
-            _buttonAchievement.ForeColor = Color.White;
-            _buttonAchievement.Margin = new Padding(5, 6, 5, 6);
-            _buttonAchievement.Name = "_buttonAchievement";
-            _buttonAchievement.Size = new Size(86, 51);
-            _buttonAchievement.TabIndex = 11;
-            _buttonAchievement.Text = "🏆 成就";
-            _buttonAchievement.UseVisualStyleBackColor = false;
-            _buttonAchievement.Click += ButtonAchievement_Click;
-            // 
-            // _buttonWrongBook
-            // 
-            // 语义色：红色 #EF4444 = 危险/错题（与设计系统 Error 对齐）
-            _buttonWrongBook.BackColor = Color.FromArgb(239, 68, 68);
-            _buttonWrongBook.FlatAppearance.BorderSize = 0;
-            _buttonWrongBook.FlatAppearance.MouseDownBackColor = Color.FromArgb(220, 38, 38);
-            _buttonWrongBook.FlatAppearance.MouseOverBackColor = Color.FromArgb(248, 113, 113);
-            _buttonWrongBook.FlatStyle = FlatStyle.Flat;
-            _buttonWrongBook.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
-            _buttonWrongBook.ForeColor = Color.White;
-            _buttonWrongBook.Margin = new Padding(5, 6, 5, 6);
-            _buttonWrongBook.Name = "_buttonWrongBook";
-            _buttonWrongBook.Size = new Size(86, 51);
-            _buttonWrongBook.TabIndex = 12;
-            _buttonWrongBook.Text = "📕 错题";
-            _buttonWrongBook.UseVisualStyleBackColor = false;
-            _buttonWrongBook.Click += ButtonWrongBook_Click;
-            // 
-            // _buttonPractice
-            // 
-            // 语义色：蓝色 #3B82F6 = 练习入口，与统计/挑战/错题工具区分
-            _buttonPractice.BackColor = Color.FromArgb(59, 130, 246);
-            _buttonPractice.FlatAppearance.BorderSize = 0;
-            _buttonPractice.FlatAppearance.MouseDownBackColor = Color.FromArgb(37, 99, 235);
-            _buttonPractice.FlatAppearance.MouseOverBackColor = Color.FromArgb(96, 165, 250);
-            _buttonPractice.FlatStyle = FlatStyle.Flat;
-            _buttonPractice.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
-            _buttonPractice.ForeColor = Color.White;
-            _buttonPractice.Margin = new Padding(5, 6, 5, 6);
-            _buttonPractice.Name = "_buttonPractice";
-            _buttonPractice.Size = new Size(86, 51);
-            _buttonPractice.TabIndex = 13;
-            _buttonPractice.Text = "🎤 练习";
-            _buttonPractice.UseVisualStyleBackColor = false;
-            _buttonPractice.Click += ButtonPractice_Click;
-            // 
-            // separator3
-            // 
-            separator3.Name = "separator3";
-            separator3.Size = new Size(20, 51);
-            separator3.TabIndex = 14;
+            // 次要工具入口：浅灰描边，不参与主操作的色彩竞争
+            _buttonMore.BackColor = Color.FromArgb(241, 245, 249);
+            _buttonMore.FlatAppearance.BorderColor = Color.FromArgb(203, 213, 225);
+            _buttonMore.FlatAppearance.BorderSize = 1;
+            _buttonMore.FlatAppearance.MouseDownBackColor = Color.FromArgb(226, 232, 240);
+            _buttonMore.FlatAppearance.MouseOverBackColor = Color.FromArgb(248, 250, 252);
+            _buttonMore.FlatStyle = FlatStyle.Flat;
+            _buttonMore.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
+            _buttonMore.ForeColor = Color.FromArgb(51, 65, 85);
+            _buttonMore.Location = new Point(552, 6);
+            _buttonMore.Margin = new Padding(5, 6, 5, 6);
+            _buttonMore.Name = "_buttonMore";
+            _buttonMore.Size = new Size(86, 51);
+            _buttonMore.TabIndex = 6;
+            _buttonMore.Text = "⋯ 更多";
+            _buttonMore.UseVisualStyleBackColor = false;
+            _buttonMore.Click += ButtonMore_Click;
             // 
             // _buttonExit
             // 
+            // 退出按钮由 LearningForm 移到顶栏复用，这里保留创建以兼容既有布局逻辑
             _buttonExit.BackColor = Color.FromArgb(108, 117, 125);
             _buttonExit.FlatAppearance.BorderSize = 0;
             _buttonExit.FlatAppearance.MouseDownBackColor = Color.FromArgb(98, 107, 115);
@@ -502,7 +372,7 @@ namespace LearningAssistant.Forms.UserControls.Learning
             _buttonExit.Margin = new Padding(5, 6, 5, 6);
             _buttonExit.Name = "_buttonExit";
             _buttonExit.Size = new Size(86, 51);
-            _buttonExit.TabIndex = 14;
+            _buttonExit.TabIndex = 7;
             _buttonExit.Text = "🏠 返回";
             _buttonExit.UseVisualStyleBackColor = false;
             _buttonExit.Click += ButtonExit_Click;
@@ -516,13 +386,60 @@ namespace LearningAssistant.Forms.UserControls.Learning
             Size = new Size(1172, 80);
             _buttonsPanel.ResumeLayout(false);
             ResumeLayout(false);
+
+            InitializeMoreMenu();
         }
+
+        /// <summary>
+        /// 构建「更多」菜单：低频工具集中收纳，避免底部操作条被按钮淹没。
+        /// </summary>
+        private void InitializeMoreMenu()
+        {
+            _moreMenu = new ContextMenuStrip
+            {
+                ShowImageMargin = false,
+                Font = new Font("微软雅黑", 10F),
+                BackColor = Color.White
+            };
+
+            _menuPractice = CreateMoreMenuItem("🎤 单词跟读练习");
+            _menuPractice.Click += (_, _) => PracticeClicked?.Invoke(this, EventArgs.Empty);
+
+            _menuEdit = CreateMoreMenuItem("✏️ 编辑内容");
+            // 与现有快捷键 E 对应，方便键盘用户发现
+            _menuEdit.ShortcutKeyDisplayString = "E";
+            _menuEdit.Click += (_, _) => EditClicked?.Invoke(this, EventArgs.Empty);
+
+            _menuStats = CreateMoreMenuItem("📊 学习统计");
+            _menuStats.Click += (_, _) => StatsClicked?.Invoke(this, EventArgs.Empty);
+
+            _menuChallenge = CreateMoreMenuItem("🎯 每日挑战");
+            _menuChallenge.Click += (_, _) => ChallengeClicked?.Invoke(this, EventArgs.Empty);
+
+            _menuAchievement = CreateMoreMenuItem("🏆 成就徽章");
+            _menuAchievement.Click += (_, _) => AchievementClicked?.Invoke(this, EventArgs.Empty);
+
+            _menuWrongBook = CreateMoreMenuItem("📕 错题本");
+            _menuWrongBook.Click += (_, _) => WrongBookClicked?.Invoke(this, EventArgs.Empty);
+
+            _moreMenu.Items.Add(_menuPractice);
+            _moreMenu.Items.Add(_menuEdit);
+            _moreMenu.Items.Add(new ToolStripSeparator());
+            _moreMenu.Items.Add(_menuStats);
+            _moreMenu.Items.Add(_menuChallenge);
+            _moreMenu.Items.Add(_menuAchievement);
+            _moreMenu.Items.Add(_menuWrongBook);
+        }
+
+        private static ToolStripMenuItem CreateMoreMenuItem(string text) =>
+            new ToolStripMenuItem(text)
+            {
+                Padding = new Padding(4, 3, 4, 3)
+            };
 
         private void ButtonPrevious_Click(object? sender, EventArgs e) => PreviousClicked?.Invoke(sender, e);
 
         private void ButtonNext_Click(object? sender, EventArgs e) => NextClicked?.Invoke(sender, e);
-
-        private void ButtonEdit_Click(object? sender, EventArgs e) => EditClicked?.Invoke(sender, e);
 
         private void ButtonKnown_Click(object? sender, EventArgs e) => KnownClicked?.Invoke(sender, e);
 
@@ -532,15 +449,12 @@ namespace LearningAssistant.Forms.UserControls.Learning
 
         private void ButtonExit_Click(object? sender, EventArgs e) => ExitClicked?.Invoke(sender, e);
 
-        private void ButtonStats_Click(object? sender, EventArgs e) => StatsClicked?.Invoke(sender, e);
-
-        private void ButtonChallenge_Click(object? sender, EventArgs e) => ChallengeClicked?.Invoke(sender, e);
-
-        private void ButtonAchievement_Click(object? sender, EventArgs e) => AchievementClicked?.Invoke(sender, e);
-
-        private void ButtonWrongBook_Click(object? sender, EventArgs e) => WrongBookClicked?.Invoke(sender, e);
-
-        private void ButtonPractice_Click(object? sender, EventArgs e) => PracticeClicked?.Invoke(sender, e);
+        private void ButtonMore_Click(object? sender, EventArgs e)
+        {
+            if (_moreMenu.Items.Count == 0) return;
+            // 底部操作条贴近窗口下沿，菜单向上展开
+            _moreMenu.Show(_buttonMore, new Point(0, -_moreMenu.PreferredSize.Height));
+        }
 
         #endregion
 
@@ -556,13 +470,15 @@ namespace LearningAssistant.Forms.UserControls.Learning
             _buttonKnown.Enabled = enabled;
             _buttonUnknown.Enabled = enabled;
             _buttonFavorite.Enabled = enabled;
-            _buttonEdit.Enabled = enabled;
-            _buttonStats.Enabled = enabled;
-            _buttonChallenge.Enabled = enabled;
-            _buttonAchievement.Enabled = enabled;
-            _buttonWrongBook.Enabled = enabled;
-            _buttonPractice.Enabled = enabled;
+            _buttonMore.Enabled = enabled;
             _buttonExit.Enabled = enabled;
+
+            _menuPractice.Enabled = enabled;
+            _menuEdit.Enabled = enabled;
+            _menuStats.Enabled = enabled;
+            _menuChallenge.Enabled = enabled;
+            _menuAchievement.Enabled = enabled;
+            _menuWrongBook.Enabled = enabled;
         }
 
         /// <summary>
@@ -589,6 +505,40 @@ namespace LearningAssistant.Forms.UserControls.Learning
             _buttonFavorite.Text = isFavorite ? "⭐ 已收藏" : "⭐ 收藏";
         }
 
+        /// <summary>
+        /// 应用主题：低频工具入口（更多/菜单）随主题弱化，避免在深色背景上过于抢眼。
+        /// </summary>
+        public void ApplyTheme(ThemeColors colors)
+        {
+            bool dark = colors.ThemeMode == ThemeMode.Dark;
+
+            _buttonMore.BackColor = dark ? colors.Surface : Color.FromArgb(241, 245, 249);
+            _buttonMore.ForeColor = dark ? colors.TextSecondary : Color.FromArgb(51, 65, 85);
+            _buttonMore.FlatAppearance.BorderColor = dark ? colors.Divider : Color.FromArgb(203, 213, 225);
+            _buttonMore.FlatAppearance.MouseOverBackColor = dark
+                ? ControlPaint.Light(colors.Surface, 0.08f)
+                : Color.FromArgb(248, 250, 252);
+            _buttonMore.FlatAppearance.MouseDownBackColor = dark
+                ? ControlPaint.Dark(colors.Surface, 0.06f)
+                : Color.FromArgb(226, 232, 240);
+
+            _moreMenu.BackColor = dark ? colors.SurfaceElevated : Color.White;
+            _moreMenu.ForeColor = colors.TextPrimary;
+            foreach (ToolStripItem item in _moreMenu.Items)
+            {
+                item.ForeColor = colors.TextPrimary;
+            }
+        }
+
         #endregion
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                _moreMenu?.Dispose();
+            }
+            base.Dispose(disposing);
+        }
     }
 }
