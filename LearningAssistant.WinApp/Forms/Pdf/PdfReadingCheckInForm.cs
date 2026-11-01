@@ -21,6 +21,15 @@ namespace LearningAssistant.Forms.Pdf
         private const int SummaryStreakColumn = 6;
         private const int MatrixStreakColumn = 4;
 
+        // 运行时设置的像素尺寸（行高、缩进、进度条）不会随 AutoScaleMode.Dpi 自动缩放，按 DPI 换算
+        private const int FolderRowHeight = 28;
+        private const int DocumentRowHeight = 26;
+        private const int SummaryDocumentIndent = 24;
+        private const int MatrixDocumentIndent = 20;
+        private const int CoverageBarInset = 8;
+        private const int CoverageBarHeight = 4;
+        private const int CoverageBarBottomOffset = 10;
+
         private static readonly IReadOnlyDictionary<DateTime, int> EmptyDaySeconds =
             new Dictionary<DateTime, int>();
 
@@ -49,6 +58,10 @@ namespace LearningAssistant.Forms.Pdf
         private bool _suppressFilterEvents;
         private bool _disposed;
         private bool _refreshing;
+        // 大目录导出在后台线程执行，导出期间禁用导出按钮，避免界面卡顿与重复点击
+        private bool _exporting;
+        // 矩阵页不在前台时延迟渲染，切换页签后再构建，降低大目录首次统计的界面等待
+        private bool _matrixDirty;
 
         /// <summary>创建打卡表窗口。</summary>
         /// <param name="service">报表聚合服务。</param>
@@ -112,8 +125,8 @@ namespace LearningAssistant.Forms.Pdf
                 StartRefresh();
             };
             buttonClose.Click += (_, _) => Close();
-            buttonExportExcel.Click += (_, _) => ExportExcel();
-            buttonExportHtml.Click += (_, _) => ExportHtml();
+            buttonExportExcel.Click += async (_, _) => await ExportExcelAsync();
+            buttonExportHtml.Click += async (_, _) => await ExportHtmlAsync();
             buttonPrint.Click += (_, _) => ShowPrintPreview();
 
             numericThreshold.ValueChanged += (_, _) => OnFilterChanged();
@@ -123,6 +136,12 @@ namespace LearningAssistant.Forms.Pdf
                 OnFilterChanged();
                 // 显示模式只影响单元格内容与配色，旧报表可立即重绘，无需等待重新聚合
                 if (_report != null)
+                    RenderMatrixIfVisible();
+            };
+
+            tabMain.SelectedIndexChanged += (_, _) =>
+            {
+                if (_matrixDirty && tabMain.SelectedTab == tabMatrix)
                     RenderMatrix();
             };
 
@@ -192,6 +211,8 @@ namespace LearningAssistant.Forms.Pdf
             comboScope.ForeColor = colors.TextPrimary;
             comboDisplayMode.BackColor = colors.SurfaceElevated;
             comboDisplayMode.ForeColor = colors.TextPrimary;
+            comboPrintScope.BackColor = colors.SurfaceElevated;
+            comboPrintScope.ForeColor = colors.TextPrimary;
 
             ApplyGridTheme(gridSummary);
             ApplyGridTheme(gridMatrix);
@@ -210,6 +231,10 @@ namespace LearningAssistant.Forms.Pdf
             grid.ColumnHeadersDefaultCellStyle.ForeColor = _colors.TextPrimary;
             grid.EnableHeadersVisualStyles = false;
         }
+
+        /// <summary>按当前 DPI 缩放运行时设置的像素尺寸，保证 125% / 150% 下行高与字号匹配。</summary>
+        private int ScaleForDpi(int logicalPixels)
+            => (int)Math.Round(logicalPixels * DeviceDpi / 96.0, MidpointRounding.AwayFromZero);
 
         protected override void Dispose(bool disposing)
         {
@@ -353,7 +378,7 @@ namespace LearningAssistant.Forms.Pdf
                 _logger?.LogError(ex, "生成阅读打卡表失败");
                 if (_refreshCts?.Token == token && !_disposed)
                 {
-                    labelStatus.Text = $"统计失败：{ex.Message}";
+                    SetStatus($"统计失败：{ex.Message}");
                     if (_report == null)
                     {
                         labelMetrics.Text = "统计失败";
@@ -408,7 +433,7 @@ namespace LearningAssistant.Forms.Pdf
         {
             if (string.IsNullOrEmpty(_initialRootPath))
             {
-                labelStatus.Text = "阅读器尚未打开目录或文档";
+                SetStatus("阅读器尚未打开目录或文档");
                 return;
             }
 
@@ -498,7 +523,21 @@ namespace LearningAssistant.Forms.Pdf
                 return;
 
             RenderSummary();
-            RenderMatrix();
+            RenderMatrixIfVisible();
+        }
+
+        /// <summary>矩阵页不在前台时只标记待渲染，避免在汇总页等待两页同时构建。</summary>
+        private void RenderMatrixIfVisible()
+        {
+            if (tabMain.SelectedTab == tabMatrix)
+            {
+                RenderMatrix();
+                _matrixDirty = false;
+            }
+            else
+            {
+                _matrixDirty = true;
+            }
         }
 
         private void RenderSummary()
@@ -525,7 +564,7 @@ namespace LearningAssistant.Forms.Pdf
         {
             var row = new DataGridViewRow
             {
-                Height = 28,
+                Height = ScaleForDpi(FolderRowHeight),
                 Tag = new CheckInRowTag
                 {
                     IsFolder = true,
@@ -559,7 +598,7 @@ namespace LearningAssistant.Forms.Pdf
         {
             var row = new DataGridViewRow
             {
-                Height = 26,
+                Height = ScaleForDpi(DocumentRowHeight),
                 Tag = new CheckInRowTag
                 {
                     FolderKey = folder.RelativePath,
@@ -573,7 +612,7 @@ namespace LearningAssistant.Forms.Pdf
 
             row.Cells[0].Value = FormatDocumentTitle(document);
             row.Cells[0].ToolTipText = document.FullPath;
-            row.Cells[0].Style.Padding = new Padding(24, 0, 0, 0);
+            row.Cells[0].Style.Padding = new Padding(ScaleForDpi(SummaryDocumentIndent), 0, 0, 0);
             row.Cells[1].Value = string.Empty;
             row.Cells[2].Value = string.Empty;
             row.Cells[3].Value = document.CheckInDays > 0 ? $"{document.CheckInDays} 天" : "—";
@@ -689,13 +728,14 @@ namespace LearningAssistant.Forms.Pdf
                 gridMatrix.Columns.RemoveAt(index);
 
             _matrixColumns = _report?.Layout.Columns ?? Array.Empty<PdfCheckInMatrixColumn>();
+            int dateColumnWidth = ScaleForDpi(MatrixDateColumnWidth);
             foreach (var column in _matrixColumns)
             {
                 var gridColumn = new DataGridViewTextBoxColumn
                 {
                     HeaderText = column.DayNumber.ToString(CultureInfo.InvariantCulture),
-                    Width = MatrixDateColumnWidth,
-                    MinimumWidth = MatrixDateColumnWidth,
+                    Width = dateColumnWidth,
+                    MinimumWidth = dateColumnWidth,
                     SortMode = DataGridViewColumnSortMode.NotSortable,
                     ToolTipText = $"{column.Day.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)} 周{column.WeekdayLabel}"
                 };
@@ -725,7 +765,7 @@ namespace LearningAssistant.Forms.Pdf
         {
             var row = new DataGridViewRow
             {
-                Height = 28,
+                Height = ScaleForDpi(FolderRowHeight),
                 Tag = new CheckInRowTag
                 {
                     IsFolder = true,
@@ -754,7 +794,7 @@ namespace LearningAssistant.Forms.Pdf
         {
             var row = new DataGridViewRow
             {
-                Height = 26,
+                Height = ScaleForDpi(DocumentRowHeight),
                 Tag = new CheckInRowTag
                 {
                     FolderKey = folder.RelativePath,
@@ -768,7 +808,7 @@ namespace LearningAssistant.Forms.Pdf
             row.Cells[0].Value = string.Empty;
             row.Cells[1].Value = FormatDocumentTitle(document);
             row.Cells[1].ToolTipText = document.FullPath;
-            row.Cells[1].Style.Padding = new Padding(20, 0, 0, 0);
+            row.Cells[1].Style.Padding = new Padding(ScaleForDpi(MatrixDocumentIndent), 0, 0, 0);
             row.Cells[2].Value = document.CheckInDays > 0
                 ? document.CheckInDays.ToString(CultureInfo.CurrentCulture)
                 : "—";
@@ -884,7 +924,12 @@ namespace LearningAssistant.Forms.Pdf
 
             double coverage = Math.Clamp(tag.Coverage, 0, 1);
             var bounds = e.CellBounds;
-            var barRect = new Rectangle(bounds.X + 8, bounds.Bottom - 10, Math.Max(0, bounds.Width - 16), 4);
+            int inset = ScaleForDpi(CoverageBarInset);
+            var barRect = new Rectangle(
+                bounds.X + inset,
+                bounds.Bottom - ScaleForDpi(CoverageBarBottomOffset),
+                Math.Max(0, bounds.Width - inset * 2),
+                ScaleForDpi(CoverageBarHeight));
             using (var track = new SolidBrush(_colors.Divider))
                 e.Graphics.FillRectangle(track, barRect);
             int fillWidth = (int)Math.Round(barRect.Width * coverage);
@@ -1152,31 +1197,45 @@ namespace LearningAssistant.Forms.Pdf
             if (string.IsNullOrEmpty(_rootPath))
                 parts.Add("尚未选择根目录");
 
-            labelStatus.Text = string.Join(" · ", parts);
+            SetStatus(string.Join(" · ", parts));
         }
 
         #endregion
 
         #region 导出与打印
 
+        /// <summary>状态栏统一入口：空态、不可用与导出结果都走同一处，避免各处措辞不一致。</summary>
+        private void SetStatus(string text) => labelStatus.Text = text;
+
+        private static string DescribeExportFailure(Exception exception)
+        {
+            return exception switch
+            {
+                UnauthorizedAccessException => "目标位置没有写入权限，请换一个目录后重试",
+                DirectoryNotFoundException => "目标目录不存在，请重新选择保存位置",
+                IOException => $"写入文件失败（文件可能被其他程序占用）：{exception.Message}",
+                _ => exception.Message
+            };
+        }
+
         /// <summary>导出/打印前校验：报表可用且当前月份确实有内容。</summary>
         private bool HasExportableReport()
         {
             if (_report == null)
             {
-                labelStatus.Text = "请等待统计完成后再导出";
+                SetStatus("请等待统计完成后再导出");
                 return false;
             }
 
             if (_report.RootUnavailable)
             {
-                labelStatus.Text = "根目录不可用，无法导出";
+                SetStatus("根目录不可用，无法导出");
                 return false;
             }
 
             if (_report.Folders.Count == 0)
             {
-                labelStatus.Text = "该月份暂无阅读记录，没有可导出的内容";
+                SetStatus("该月份暂无阅读记录，没有可导出的内容");
                 return false;
             }
 
@@ -1188,7 +1247,8 @@ namespace LearningAssistant.Forms.Pdf
             bool ready = _report != null
                 && !_report.RootUnavailable
                 && _report.Folders.Count > 0
-                && !_refreshing;
+                && !_refreshing
+                && !_exporting;
 
             buttonExportExcel.Enabled = ready;
             buttonExportHtml.Enabled = ready;
@@ -1196,15 +1256,30 @@ namespace LearningAssistant.Forms.Pdf
             comboPrintScope.Enabled = ready;
         }
 
-        private void ExportExcel()
+        /// <summary>导出期间切换等待光标并禁用入口，大目录导出（数千行）不阻塞界面。</summary>
+        private void SetExporting(bool exporting, string? status = null)
+        {
+            _exporting = exporting;
+            if (_disposed || IsDisposed)
+                return;
+
+            UseWaitCursor = exporting;
+            if (status != null)
+                SetStatus(status);
+            UpdateActionAvailability();
+        }
+
+        private async Task ExportExcelAsync()
         {
             if (!HasExportableReport())
                 return;
 
+            // 导出使用当前报表快照，期间刷新筛选不会影响写出的内容
+            var report = _report!;
             using var dialog = new SaveFileDialog
             {
                 Filter = "Excel 工作簿 (*.xlsx)|*.xlsx",
-                FileName = PdfReadingCheckInExportService.BuildFileName(_report!, "xlsx"),
+                FileName = PdfReadingCheckInExportService.BuildFileName(report, "xlsx"),
                 DefaultExt = "xlsx",
                 Title = "导出阅读打卡表（Excel）",
                 InitialDirectory = AppPaths.ExportsDir
@@ -1212,35 +1287,51 @@ namespace LearningAssistant.Forms.Pdf
             if (dialog.ShowDialog(this) != DialogResult.OK)
                 return;
 
+            SetExporting(true, "正在导出 Excel…");
             try
             {
-                string path = _exportService.ExportExcel(
-                    _report!,
-                    dialog.FileName,
+                string target = dialog.FileName;
+                string path = await Task.Run(() => _exportService.ExportExcel(
+                    report,
+                    target,
                     new PdfReadingCheckInExportOptions
                     {
                         UseRelativePaths = true,
                         GeneratedAt = DateTime.Now
-                    });
-                labelStatus.Text = $"已导出 Excel：{path}";
+                    }));
+
+                if (_disposed || IsDisposed)
+                    return;
+
+                SetStatus($"已导出 Excel：{path}");
                 MessageBox.Show(this, $"已导出到：\n{path}", "导出成功", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             catch (Exception ex)
             {
                 _logger?.LogError(ex, "导出阅读打卡表 Excel 失败");
-                MessageBox.Show(this, $"导出失败：{ex.Message}", "导出 Excel", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                if (_disposed || IsDisposed)
+                    return;
+
+                string reason = DescribeExportFailure(ex);
+                SetStatus($"导出失败：{reason}");
+                MessageBox.Show(this, $"导出失败：{reason}", "导出 Excel", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            finally
+            {
+                SetExporting(false);
             }
         }
 
-        private void ExportHtml()
+        private async Task ExportHtmlAsync()
         {
             if (!HasExportableReport())
                 return;
 
+            var report = _report!;
             using var dialog = new SaveFileDialog
             {
                 Filter = "HTML 文件 (*.html)|*.html",
-                FileName = PdfReadingCheckInExportService.BuildFileName(_report!, "html"),
+                FileName = PdfReadingCheckInExportService.BuildFileName(report, "html"),
                 DefaultExt = "html",
                 Title = "导出阅读打卡表（HTML）",
                 InitialDirectory = AppPaths.ExportsDir
@@ -1248,23 +1339,38 @@ namespace LearningAssistant.Forms.Pdf
             if (dialog.ShowDialog(this) != DialogResult.OK)
                 return;
 
+            SetExporting(true, "正在导出 HTML…");
             try
             {
-                string path = _exportService.ExportHtml(
-                    _report!,
-                    dialog.FileName,
+                string target = dialog.FileName;
+                string path = await Task.Run(() => _exportService.ExportHtml(
+                    report,
+                    target,
                     new PdfReadingCheckInExportOptions
                     {
                         UseRelativePaths = true,
                         GeneratedAt = DateTime.Now
-                    });
-                labelStatus.Text = $"已导出 HTML：{path}";
+                    }));
+
+                if (_disposed || IsDisposed)
+                    return;
+
+                SetStatus($"已导出 HTML：{path}");
                 MessageBox.Show(this, $"已导出到：\n{path}", "导出成功", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             catch (Exception ex)
             {
                 _logger?.LogError(ex, "导出阅读打卡表 HTML 失败");
-                MessageBox.Show(this, $"导出失败：{ex.Message}", "导出 HTML", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                if (_disposed || IsDisposed)
+                    return;
+
+                string reason = DescribeExportFailure(ex);
+                SetStatus($"导出失败：{reason}");
+                MessageBox.Show(this, $"导出失败：{reason}", "导出 HTML", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            finally
+            {
+                SetExporting(false);
             }
         }
 
@@ -1315,14 +1421,16 @@ namespace LearningAssistant.Forms.Pdf
                     Height = 760
                 };
                 preview.ShowDialog(this);
-                labelStatus.Text = $"打印预览：{DescribeScope(scope)} · 共 {printable.PageCount} 页";
+                SetStatus($"打印预览：{DescribeScope(scope)} · 共 {printable.PageCount} 页");
             }
             catch (Exception ex)
             {
                 _logger?.LogError(ex, "打开阅读打卡表打印预览失败");
+                string message = $"无法打开打印预览：{ex.Message}\n请确认已安装打印机后重试。";
+                SetStatus("打印预览失败：请确认已安装打印机");
                 MessageBox.Show(
                     this,
-                    $"无法打开打印预览：{ex.Message}\n请确认已安装打印机后重试。",
+                    message,
                     "打印预览",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Warning);
