@@ -397,3 +397,14 @@ build_verify/
 /uplog/uplog.mmap
 /apm.yml
 /cert.pem
+
+# 运行时目录：需同步的数据（config/database/data/users 等）与不同步的缓存分开存放
+# 缓存/日志/会话不参与同步与入库
+**/AppCache/
+**/AppData/cache/
+**/AppData/logs/
+**/AppData/session/
+**/AppData/data/Temp/
+**/AppData/**/*.db-wal
+**/AppData/**/*.db-shm
+**/AppData/**/*.db-journal
