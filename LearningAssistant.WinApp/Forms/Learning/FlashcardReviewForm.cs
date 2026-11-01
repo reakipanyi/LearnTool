@@ -42,7 +42,7 @@ namespace LearningAssistant.Forms.Learning
 
         private readonly ISpacedRepetitionService _spacedRepetitionService;
         private readonly IEventBus? _eventBus;
-        private readonly IConversationContextService _conversationService;
+        private readonly IConversationContextService? _conversationService;
         private readonly IUserSessionService _userSessionService;
         private readonly ILogger? _logger;
 
@@ -65,13 +65,14 @@ namespace LearningAssistant.Forms.Learning
 
         public FlashcardReviewForm(
             ISpacedRepetitionService spacedRepetitionService,
-            IConversationContextService conversationService,
+            IConversationContextService? conversationService,
             IUserSessionService userSessionService,
             IEventBus? eventBus = null,
             ILogger? logger = null)
         {
             _spacedRepetitionService = spacedRepetitionService ?? throw new ArgumentNullException(nameof(spacedRepetitionService));
-            _conversationService = conversationService ?? throw new ArgumentNullException(nameof(conversationService));
+            // 对话上下文服务仅用于同步学习上下文，缺失时降级为不影响复习流程
+            _conversationService = conversationService;
             _userSessionService = userSessionService ?? throw new ArgumentNullException(nameof(userSessionService));
             _eventBus = eventBus;
             _logger = logger as ILogger;
@@ -115,6 +116,9 @@ namespace LearningAssistant.Forms.Learning
 
             mainLayout.Controls.Add(_panelHeader, 0, 0);
             mainLayout.Controls.Add(_panelCard, 0, 1);
+            // 完成态面板覆盖卡片区与按钮区（第 1~2 行），与卡片/按钮通过 Visible 与 Z 序切换
+            mainLayout.Controls.Add(_panelComplete, 0, 1);
+            mainLayout.SetRowSpan(_panelComplete, 2);
             mainLayout.Controls.Add(_panelButtons, 0, 2);
             mainLayout.Controls.Add(_panelStats, 0, 3);
 
@@ -302,8 +306,9 @@ namespace LearningAssistant.Forms.Learning
                 Dock = DockStyle.Fill
             };
 
+            // 两个统计项按第 0 行的左右两列并排（与上面的 2 列 50% 列宽保持一致）
             statsLayout.Controls.Add(_labelDueCount, 0, 0);
-            statsLayout.Controls.Add(_labelRetention, 0, 1);
+            statsLayout.Controls.Add(_labelRetention, 1, 0);
 
             _panelStats.Controls.Add(statsLayout);
         }
@@ -421,8 +426,8 @@ namespace LearningAssistant.Forms.Learning
 
             _cardShownTime = DateTime.Now;
 
-            // 设置学习上下文
-            _conversationService.SetLearningContext($"正在复习: {_currentItem.Content}");
+            // 设置学习上下文（未注入上下文服务时跳过，不影响闪卡流程）
+            _conversationService?.SetLearningContext($"正在复习: {_currentItem.Content}");
         }
 
         private void ShowAnswer()
@@ -494,6 +499,7 @@ namespace LearningAssistant.Forms.Learning
             _panelCard.Visible = false;
             _panelButtons.Visible = false;
             _panelComplete.Visible = true;
+            _panelComplete.BringToFront();
 
             var userId = _userSessionService.CurrentUserId;
             var retention = _spacedRepetitionService.CalculateRetentionRate(userId);
@@ -506,6 +512,7 @@ namespace LearningAssistant.Forms.Learning
         {
             _panelComplete.Visible = false;
             _panelCard.Visible = true;
+            _panelCard.BringToFront();
             _panelButtons.Visible = true;
 
             LoadReviewQueue();
