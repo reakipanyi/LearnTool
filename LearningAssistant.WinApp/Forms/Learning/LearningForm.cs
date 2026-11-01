@@ -156,8 +156,6 @@ namespace LearningAssistant.Forms.Learning
         private Button buttonFavorite => _buttonsView.ButtonFavorite;
         private Button buttonKnown => _buttonsView.ButtonKnown;
         private Button buttonUnknown => _buttonsView.ButtonUnknown;
-
-        private Label labelDailyGoal = new Label();
         #endregion
 
         #region === 布局控件 ===
@@ -363,11 +361,6 @@ namespace LearningAssistant.Forms.Learning
             if (labelEncouragement != null)
             {
                 labelEncouragement.ForeColor = colors.TextSecondary;
-            }
-
-            if (labelDailyGoal != null)
-            {
-                labelDailyGoal.ForeColor = colors.TextSecondary;
             }
 
             // 顶栏容器背景采用 Elevated（浅色白 / 深色 #334155），并绘制底部分隔线
@@ -845,6 +838,8 @@ namespace LearningAssistant.Forms.Learning
 
             var fields = LearningItemFormatter.BuildFields(_currentItem, _answerRevealed);
             _learningCard.SetFields(fields);
+            // 字段数量变化后立即收缩/舒展卡片高度，及时消除下方空白
+            FitLearningCardSize();
         }
 
         private string GetSubjectIcon()
@@ -1518,9 +1513,6 @@ namespace LearningAssistant.Forms.Learning
 
             _toolTip.SetToolTip(labelEncouragement,
                 "鼓励语，每隔几句学习内容自动更新一次");
-            _toolTip.SetToolTip(labelDailyGoal,
-                $"每日目标: {_settings.DailyGoal}项 | 当前进度: {_gamificationService?.TodayLearnedCount ?? 0}项\n" +
-                "快捷键: F8 开启/关闭自动播放");
         }
 
         private void ApplyRoundedStyle(Button button, int radius = 8)
@@ -1751,6 +1743,7 @@ namespace LearningAssistant.Forms.Learning
 
         private void InitializeDailyGoalProgress()
         {
+            // 每日目标进度环直接显示当前值/目标值，不再额外放一个「每日目标」文字标签，避免同一信息显示两次
             _dailyGoalProgress = new CircularProgressControl
             {
                 // 尺寸适配 74px 底部操作条（原 100x100 过大）
@@ -1762,22 +1755,24 @@ namespace LearningAssistant.Forms.Learning
                 TextColor = Color.Black
             };
 
-            // 每日目标文本（复用现有 labelDailyGoal），显示在圆环旁靠左
-            labelDailyGoal.AutoSize = true;
-            labelDailyGoal.Text = $"每日目标 {_gamificationService.TodayLearnedCount}/{_settings.DailyGoal}";
-            labelDailyGoal.ForeColor = Color.FromArgb(71, 85, 105);
-            labelDailyGoal.Margin = new Padding(8, 0, 12, 0);
-
-            // 将每日目标进度环及其文本移入底部操作条最左（不复用坐标，改由 ButtonsPanel 流式布局）
+            // 将每日目标进度环移入底部操作条最左（改由 ButtonsPanel 流式布局）
             _dailyGoalProgress.Dock = DockStyle.None;
             _dailyGoalProgress.Anchor = AnchorStyles.None;
-            _dailyGoalProgress.Margin = new Padding(12, 6, 4, 6);
+            _dailyGoalProgress.Margin = new Padding(12, 6, 12, 6);
             _buttonsView.ButtonsPanel.Controls.Add(_dailyGoalProgress);
-            _buttonsView.ButtonsPanel.Controls.Add(labelDailyGoal);
             _buttonsView.ButtonsPanel.Controls.SetChildIndex(_dailyGoalProgress, 0);
-            _buttonsView.ButtonsPanel.Controls.SetChildIndex(labelDailyGoal, 1);
+
+            _toolTip.SetToolTip(_dailyGoalProgress, BuildDailyGoalToolTip());
 
             InitializeShortcutHint();
+        }
+
+        private string BuildDailyGoalToolTip()
+        {
+            int goal = Math.Max(1, _settings.DailyGoal);
+            int today = _gamificationService?.TodayLearnedCount ?? 0;
+            int percent = Math.Min(100, (int)(today * 100.0 / goal));
+            return $"每日目标: {today}/{goal} 项（{percent}%）\n快捷键: F8 开启/关闭自动播放";
         }
 
 
@@ -1804,7 +1799,10 @@ namespace LearningAssistant.Forms.Learning
 
             _learningCard = new LearningCard
             {
-                Dock = DockStyle.Fill,
+                // 卡片按内容自适应高度并垂直居中，避免撑满整个内容区后下方留下大片空白
+                Dock = DockStyle.None,
+                Anchor = AnchorStyles.None,
+                Size = new Size(660, 420),
                 Margin = new Padding(10),
                 SpeechCoordinator = _services.SpeechCoordinator
             };
@@ -1815,8 +1813,41 @@ namespace LearningAssistant.Forms.Learning
                 panelContent.Controls.Add(centerCardTable);
                 centerCardTable.Controls.Add(_learningCard, 1, 0);
                 panelContent.Controls.SetChildIndex(centerCardTable, 0);
+                // 内容区尺寸变化时重新计算卡片宽高，保持居中且不被裁切
+                panelContent.Resize += (_, _) => FitLearningCardSize();
+                FitLearningCardSize();
             }
 
+        }
+
+        /// <summary>
+        /// 让学习卡片贴合内容高度且在内容区居中：内容少时卡片不被拉伸，内容多时用滚动承载。
+        /// </summary>
+        private void FitLearningCardSize()
+        {
+            if (_learningCard == null || _learningCard.IsDisposed) return;
+
+            int availableWidth = panelContent?.ClientSize.Width ?? 0;
+            int availableHeight = panelContent?.ClientSize.Height ?? 0;
+
+            if (availableWidth > 0)
+            {
+                int targetWidth = Math.Min(660, Math.Max(320, availableWidth - _learningCard.Margin.Horizontal));
+                if (_learningCard.Width != targetWidth)
+                {
+                    _learningCard.Width = targetWidth;
+                }
+            }
+
+            int preferredHeight = _learningCard.GetPreferredHeight();
+            if (availableHeight > 0)
+            {
+                preferredHeight = Math.Min(preferredHeight, Math.Max(160, availableHeight - _learningCard.Margin.Vertical));
+            }
+            if (_learningCard.Height != preferredHeight)
+            {
+                _learningCard.Height = preferredHeight;
+            }
         }
 
 
@@ -1824,8 +1855,9 @@ namespace LearningAssistant.Forms.Learning
         {
             if (_dailyGoalProgress != null && !_dailyGoalProgress.IsDisposed)
             {
+                _dailyGoalProgress.MaxValue = _settings.DailyGoal;
                 _dailyGoalProgress.CurrentValue = _gamificationService.TodayLearnedCount;
-                labelDailyGoal.Text = $"每日目标 {_gamificationService.TodayLearnedCount}/{_settings.DailyGoal}";
+                _toolTip.SetToolTip(_dailyGoalProgress, BuildDailyGoalToolTip());
             }
         }
 

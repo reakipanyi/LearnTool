@@ -148,13 +148,11 @@ namespace LearningAssistant.Forms.UserControls.Common
                     LineAlignment = StringAlignment.Center
                 };
 
-                Font titleFont = new Font("微软雅黑", 10F, FontStyle.Bold);
-                Font valueFont = new Font("微软雅黑", 8F);
+                // 圆环中心只显示当前值/目标值与百分比，不再绘制固定「每日目标」标题，避免与外部信息重复
+                Font valueFont = new Font("微软雅黑", 9F, FontStyle.Regular);
 
-                g.DrawString("每日目标", titleFont, brush, centerX, centerY - 18, format);
-                g.DrawString(_labelText, valueFont, brush, centerX, centerY + 5, format);
+                g.DrawString(_labelText, valueFont, brush, centerX, centerY, format);
 
-                titleFont.Dispose();
                 valueFont.Dispose();
             }
         }

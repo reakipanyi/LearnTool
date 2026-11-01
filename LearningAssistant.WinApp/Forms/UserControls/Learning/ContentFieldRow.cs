@@ -9,6 +9,11 @@ namespace LearningAssistant.Forms.UserControls.Learning
 {
     public class ContentFieldRow : Panel
     {
+        /// <summary>
+        /// 字段行标准高度；LearningCard 用它在字段变化时计算卡片自适应高度。
+        /// </summary>
+        public const int RowHeight = 40;
+
         private readonly Label _labelLabel;
         private readonly Label _valueLabel;
         private readonly Button _speakButton;
@@ -41,8 +46,8 @@ namespace LearningAssistant.Forms.UserControls.Learning
             this.BackColor = Color.Transparent;
             this.Padding = new Padding(0);
             this.Dock = DockStyle.Top;
-            // 固定紧凑行高：Panel 默认高 100px，会让多条字段撑出大量空白和滚动
-            this.Height = 32;
+            // 固定行高：Panel 默认高 100px 会让多条字段撑出大量空白和滚动；40px 保证 11pt 文本不拥挤
+            this.Height = RowHeight;
 
             _speakButton.Click += SpeakButton_Click;
             _copyButton.Click += CopyButton_Click;
@@ -53,8 +58,9 @@ namespace LearningAssistant.Forms.UserControls.Learning
             _layout.ColumnCount = 3;
             _layout.RowCount = 1;
             _layout.Dock = DockStyle.Fill;
-            _layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 24F));
-            _layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 55F));
+            // 行内按百分比填充，文本在加高后的行里保持垂直居中（原先绝对 24px 会留下底部空隙）
+            _layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+            _layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 72F));
             _layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
             _layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 55F));
 

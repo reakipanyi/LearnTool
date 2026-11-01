@@ -31,6 +31,13 @@ namespace LearningAssistant.Forms.UserControls.Learning
         private readonly Font _fontCategoryTag = new Font("微软雅黑", 12F, FontStyle.Regular, GraphicsUnit.Point, 134);
         #endregion
 
+        #region 布局常量
+        private const int HeaderIconRowHeight = 40;
+        private const int HeaderTitleRowHeight = 80;
+        // 卡片最小高度：内容很少时也保持一张可读的卡片，而不是缩成窄条
+        private const int MinCardHeight = 360;
+        #endregion
+
         public LearningCard()
         {
             this.SetStyle(ControlStyles.OptimizedDoubleBuffer
@@ -71,8 +78,8 @@ namespace LearningAssistant.Forms.UserControls.Learning
             _innerLayout.RowCount = 3;
             _innerLayout.Dock = DockStyle.Fill;
             _innerLayout.Padding = new Padding(15, 10, 15, 10);
-            _innerLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 40F));
-            _innerLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 80F));
+            _innerLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, HeaderIconRowHeight));
+            _innerLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, HeaderTitleRowHeight));
             _innerLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
 
             _iconLabel.Text = "📚";
@@ -230,6 +237,19 @@ namespace LearningAssistant.Forms.UserControls.Learning
         }
 
         public int FieldCount => _fieldRows.Count;
+
+        /// <summary>
+        /// 按当前字段数量计算卡片自适应高度，避免卡片撑满内容区后下方留下大片空白。
+        /// </summary>
+        public int GetPreferredHeight()
+        {
+            int contentHeight = _innerLayout.Padding.Vertical
+                + HeaderIconRowHeight
+                + HeaderTitleRowHeight
+                + FieldCount * ContentFieldRow.RowHeight
+                + _fieldsContainer.Padding.Vertical;
+            return Math.Max(MinCardHeight, contentHeight);
+        }
 
         public ContentField? GetField(int index)
         {
