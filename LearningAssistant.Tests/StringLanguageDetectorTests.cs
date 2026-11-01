@@ -1,6 +1,6 @@
 using Xunit;
 using FluentAssertions;
-using KidWinApp.Services;
+using LearningAssistant.Common;
 
 namespace LearningAssistant.Tests
 {
