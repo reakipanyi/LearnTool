@@ -2545,6 +2545,9 @@ namespace LearningAssistant.Forms.Pdf
             var themeService = Program.ServiceProvider?.GetService(typeof(IThemeService)) as IThemeService;
             var formLogger = Program.ServiceProvider?.GetService(typeof(ILogger<PdfReadingCheckInForm>))
                 as ILogger<PdfReadingCheckInForm>;
+            var exportService = Program.ServiceProvider?.GetService(typeof(PdfReadingCheckInExportService))
+                    as PdfReadingCheckInExportService
+                ?? new PdfReadingCheckInExportService();
 
             _readingTimeTracker?.SetActive(false);
             try
@@ -2556,7 +2559,8 @@ namespace LearningAssistant.Forms.Pdf
                     documents,
                     path => _ = _presenter?.LoadPdf(path),
                     formLogger,
-                    themeService);
+                    themeService,
+                    exportService);
                 dialog.ShowDialog(this);
             }
             finally

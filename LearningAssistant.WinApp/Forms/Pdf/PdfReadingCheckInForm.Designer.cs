@@ -40,8 +40,12 @@ namespace LearningAssistant.Forms.Pdf
         private Label labelMatrixEmpty;
         private Panel panelBottom;
         private Label labelStatus;
-        private Panel panelFooterRight;
+        private FlowLayoutPanel panelFooterRight;
         private ProgressBar progressBar;
+        private Button buttonExportExcel;
+        private Button buttonExportHtml;
+        private ComboBox comboPrintScope;
+        private Button buttonPrint;
         private Button buttonClose;
         private ToolTip toolTipMain;
 
@@ -78,8 +82,12 @@ namespace LearningAssistant.Forms.Pdf
             this.labelMatrixEmpty = new Label();
             this.panelBottom = new Panel();
             this.labelStatus = new Label();
-            this.panelFooterRight = new Panel();
+            this.panelFooterRight = new FlowLayoutPanel();
             this.progressBar = new ProgressBar();
+            this.buttonExportExcel = new Button();
+            this.buttonExportHtml = new Button();
+            this.comboPrintScope = new ComboBox();
+            this.buttonPrint = new Button();
             this.buttonClose = new Button();
             this.toolTipMain = new ToolTip();
 
@@ -295,22 +303,53 @@ namespace LearningAssistant.Forms.Pdf
             this.labelStatus.Text = "仅统计阅读器前台停留时间 · 图片不参与统计";
 
             this.progressBar.Style = ProgressBarStyle.Marquee;
-            this.progressBar.Width = 120;
+            this.progressBar.Width = 100;
             this.progressBar.Height = 16;
             this.progressBar.MarqueeAnimationSpeed = 30;
+            this.progressBar.Margin = new Padding(6, 7, 6, 0);
             this.progressBar.Visible = false;
+
+            this.buttonExportExcel.Text = "导出 Excel";
+            this.buttonExportExcel.AutoSize = false;
+            this.buttonExportExcel.Size = new Size(100, 28);
+            this.buttonExportExcel.Margin = new Padding(6, 3, 0, 0);
+            this.buttonExportExcel.Enabled = false;
+
+            this.buttonExportHtml.Text = "导出 HTML";
+            this.buttonExportHtml.AutoSize = false;
+            this.buttonExportHtml.Size = new Size(100, 28);
+            this.buttonExportHtml.Margin = new Padding(6, 3, 0, 0);
+            this.buttonExportHtml.Enabled = false;
+
+            this.comboPrintScope.DropDownStyle = ComboBoxStyle.DropDownList;
+            this.comboPrintScope.Items.AddRange(new object[] { "全部", "仅目录汇总", "仅矩阵" });
+            this.comboPrintScope.SelectedIndex = 0;
+            this.comboPrintScope.Size = new Size(104, 26);
+            this.comboPrintScope.Margin = new Padding(6, 4, 0, 0);
+            this.comboPrintScope.Enabled = false;
+
+            this.buttonPrint.Text = "打印预览";
+            this.buttonPrint.AutoSize = false;
+            this.buttonPrint.Size = new Size(88, 28);
+            this.buttonPrint.Margin = new Padding(6, 3, 0, 0);
+            this.buttonPrint.Enabled = false;
 
             this.buttonClose.Text = "关闭";
             this.buttonClose.AutoSize = true;
             this.buttonClose.MinimumSize = new Size(76, 28);
+            this.buttonClose.Margin = new Padding(6, 3, 4, 0);
 
             this.panelFooterRight.Dock = DockStyle.Right;
-            this.panelFooterRight.Width = 216;
-            this.panelFooterRight.Padding = new Padding(0, 6, 0, 0);
-            this.panelFooterRight.Controls.Add(this.progressBar);
+            this.panelFooterRight.FlowDirection = FlowDirection.RightToLeft;
+            this.panelFooterRight.WrapContents = false;
+            this.panelFooterRight.Width = 590;
+            this.panelFooterRight.Padding = new Padding(0, 1, 0, 0);
             this.panelFooterRight.Controls.Add(this.buttonClose);
-            this.progressBar.Location = new Point(0, 6);
-            this.buttonClose.Location = new Point(128, 2);
+            this.panelFooterRight.Controls.Add(this.buttonPrint);
+            this.panelFooterRight.Controls.Add(this.comboPrintScope);
+            this.panelFooterRight.Controls.Add(this.buttonExportHtml);
+            this.panelFooterRight.Controls.Add(this.buttonExportExcel);
+            this.panelFooterRight.Controls.Add(this.progressBar);
 
             this.panelBottom.Dock = DockStyle.Bottom;
             this.panelBottom.Height = 44;

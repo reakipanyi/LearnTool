@@ -26,6 +26,7 @@ namespace LearningAssistant.Forms.Pdf
 
         private readonly PdfReadingCheckInService _service;
         private readonly PdfReadingCheckInPreferenceStore _preferenceStore;
+        private readonly PdfReadingCheckInExportService _exportService;
         private readonly Action<string>? _openDocument;
         private readonly ILogger<PdfReadingCheckInForm>? _logger;
         private readonly IThemeService? _themeService;
@@ -57,6 +58,7 @@ namespace LearningAssistant.Forms.Pdf
         /// <param name="openDocument">双击文档行时由阅读器打开文件；为空则只提示路径。</param>
         /// <param name="logger">日志。</param>
         /// <param name="themeService">主题服务；为空时使用浅色主题。</param>
+        /// <param name="exportService">导出与打印服务；为空时按默认配置创建。</param>
         public PdfReadingCheckInForm(
             PdfReadingCheckInService service,
             PdfReadingCheckInPreferenceStore preferenceStore,
@@ -64,10 +66,12 @@ namespace LearningAssistant.Forms.Pdf
             IEnumerable<string>? documents,
             Action<string>? openDocument = null,
             ILogger<PdfReadingCheckInForm>? logger = null,
-            IThemeService? themeService = null)
+            IThemeService? themeService = null,
+            PdfReadingCheckInExportService? exportService = null)
         {
             _service = service ?? throw new ArgumentNullException(nameof(service));
             _preferenceStore = preferenceStore ?? throw new ArgumentNullException(nameof(preferenceStore));
+            _exportService = exportService ?? new PdfReadingCheckInExportService();
             _openDocument = openDocument;
             _logger = logger;
             _themeService = themeService;
@@ -108,6 +112,9 @@ namespace LearningAssistant.Forms.Pdf
                 StartRefresh();
             };
             buttonClose.Click += (_, _) => Close();
+            buttonExportExcel.Click += (_, _) => ExportExcel();
+            buttonExportHtml.Click += (_, _) => ExportHtml();
+            buttonPrint.Click += (_, _) => ShowPrintPreview();
 
             numericThreshold.ValueChanged += (_, _) => OnFilterChanged();
             comboScope.SelectedIndexChanged += (_, _) => OnFilterChanged();
@@ -335,6 +342,7 @@ namespace LearningAssistant.Forms.Pdf
                 UpdateEmptyState();
                 UpdateStatusText();
                 UpdateMonthDisplay();
+                UpdateActionAvailability();
             }
             catch (OperationCanceledException)
             {
@@ -351,6 +359,8 @@ namespace LearningAssistant.Forms.Pdf
                         labelMetrics.Text = "统计失败";
                         ShowEmptyHint($"统计失败：{ex.Message}");
                     }
+
+                    UpdateActionAvailability();
                 }
             }
             finally
@@ -364,6 +374,7 @@ namespace LearningAssistant.Forms.Pdf
         {
             _refreshing = refreshing;
             progressBar.Visible = refreshing;
+            UpdateActionAvailability();
 
             if (refreshing && _report == null)
             {
@@ -1143,6 +1154,188 @@ namespace LearningAssistant.Forms.Pdf
 
             labelStatus.Text = string.Join(" · ", parts);
         }
+
+        #endregion
+
+        #region 导出与打印
+
+        /// <summary>导出/打印前校验：报表可用且当前月份确实有内容。</summary>
+        private bool HasExportableReport()
+        {
+            if (_report == null)
+            {
+                labelStatus.Text = "请等待统计完成后再导出";
+                return false;
+            }
+
+            if (_report.RootUnavailable)
+            {
+                labelStatus.Text = "根目录不可用，无法导出";
+                return false;
+            }
+
+            if (_report.Folders.Count == 0)
+            {
+                labelStatus.Text = "该月份暂无阅读记录，没有可导出的内容";
+                return false;
+            }
+
+            return true;
+        }
+
+        private void UpdateActionAvailability()
+        {
+            bool ready = _report != null
+                && !_report.RootUnavailable
+                && _report.Folders.Count > 0
+                && !_refreshing;
+
+            buttonExportExcel.Enabled = ready;
+            buttonExportHtml.Enabled = ready;
+            buttonPrint.Enabled = ready;
+            comboPrintScope.Enabled = ready;
+        }
+
+        private void ExportExcel()
+        {
+            if (!HasExportableReport())
+                return;
+
+            using var dialog = new SaveFileDialog
+            {
+                Filter = "Excel 工作簿 (*.xlsx)|*.xlsx",
+                FileName = PdfReadingCheckInExportService.BuildFileName(_report!, "xlsx"),
+                DefaultExt = "xlsx",
+                Title = "导出阅读打卡表（Excel）",
+                InitialDirectory = AppPaths.ExportsDir
+            };
+            if (dialog.ShowDialog(this) != DialogResult.OK)
+                return;
+
+            try
+            {
+                string path = _exportService.ExportExcel(
+                    _report!,
+                    dialog.FileName,
+                    new PdfReadingCheckInExportOptions
+                    {
+                        UseRelativePaths = true,
+                        GeneratedAt = DateTime.Now
+                    });
+                labelStatus.Text = $"已导出 Excel：{path}";
+                MessageBox.Show(this, $"已导出到：\n{path}", "导出成功", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "导出阅读打卡表 Excel 失败");
+                MessageBox.Show(this, $"导出失败：{ex.Message}", "导出 Excel", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void ExportHtml()
+        {
+            if (!HasExportableReport())
+                return;
+
+            using var dialog = new SaveFileDialog
+            {
+                Filter = "HTML 文件 (*.html)|*.html",
+                FileName = PdfReadingCheckInExportService.BuildFileName(_report!, "html"),
+                DefaultExt = "html",
+                Title = "导出阅读打卡表（HTML）",
+                InitialDirectory = AppPaths.ExportsDir
+            };
+            if (dialog.ShowDialog(this) != DialogResult.OK)
+                return;
+
+            try
+            {
+                string path = _exportService.ExportHtml(
+                    _report!,
+                    dialog.FileName,
+                    new PdfReadingCheckInExportOptions
+                    {
+                        UseRelativePaths = true,
+                        GeneratedAt = DateTime.Now
+                    });
+                labelStatus.Text = $"已导出 HTML：{path}";
+                MessageBox.Show(this, $"已导出到：\n{path}", "导出成功", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "导出阅读打卡表 HTML 失败");
+                MessageBox.Show(this, $"导出失败：{ex.Message}", "导出 HTML", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private PdfReadingCheckInPrintScope CurrentPrintScope => comboPrintScope.SelectedIndex switch
+        {
+            1 => PdfReadingCheckInPrintScope.SummaryOnly,
+            2 => PdfReadingCheckInPrintScope.MatrixOnly,
+            _ => PdfReadingCheckInPrintScope.All
+        };
+
+        private void ShowPrintPreview()
+        {
+            if (!HasExportableReport())
+                return;
+
+            var scope = CurrentPrintScope;
+            try
+            {
+                using var printable = _exportService.CreatePrintDocument(
+                    _report!,
+                    new PdfReadingCheckInPrintOptions
+                    {
+                        Scope = scope,
+                        DisplayMode = _preferences.DisplayMode,
+                        UseRelativePaths = true,
+                        GeneratedAt = DateTime.Now
+                    });
+
+                if (printable.PageCount == 0)
+                {
+                    MessageBox.Show(
+                        this,
+                        "当前打印范围没有可打印的页面。",
+                        "打印预览",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Information);
+                    return;
+                }
+
+                using var preview = new PrintPreviewDialog
+                {
+                    Document = printable.Document,
+                    UseAntiAlias = true,
+                    ShowIcon = false,
+                    StartPosition = FormStartPosition.CenterParent,
+                    Text = "打印预览 · 阅读打卡表",
+                    Width = 1080,
+                    Height = 760
+                };
+                preview.ShowDialog(this);
+                labelStatus.Text = $"打印预览：{DescribeScope(scope)} · 共 {printable.PageCount} 页";
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "打开阅读打卡表打印预览失败");
+                MessageBox.Show(
+                    this,
+                    $"无法打开打印预览：{ex.Message}\n请确认已安装打印机后重试。",
+                    "打印预览",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+            }
+        }
+
+        private static string DescribeScope(PdfReadingCheckInPrintScope scope)
+            => scope switch
+            {
+                PdfReadingCheckInPrintScope.SummaryOnly => "仅目录汇总",
+                PdfReadingCheckInPrintScope.MatrixOnly => "仅矩阵",
+                _ => "全部"
+            };
 
         #endregion
 
