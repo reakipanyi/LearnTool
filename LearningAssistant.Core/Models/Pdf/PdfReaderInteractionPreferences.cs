@@ -7,10 +7,10 @@ namespace LearningAssistant.Models.Pdf
     public sealed class PdfReaderInteractionPreferences
     {
         /// <summary>
-        /// 画完一次标注后是否自动回到选择模式；默认开启。
-        /// 关闭后保持当前工具，等同于连续标注。
+        /// 画完一次标注后是否自动回到选择模式；默认关闭（即默认连续使用当前工具）。
+        /// 开启后每次落笔完成会回到选择模式。
         /// </summary>
-        public bool AutoReturnToSelectAfterDraw { get; set; } = true;
+        public bool AutoReturnToSelectAfterDraw { get; set; }
 
         /// <summary>把外部读入的值整理为当前版本的偏好对象。</summary>
         public PdfReaderInteractionPreferences Normalize()

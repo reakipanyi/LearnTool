@@ -271,6 +271,15 @@ namespace LearningAssistant.Forms.Pdf
         private int _sidebarHoverSwitchCandidate = -1;
         private ContextMenuStrip? _sidebarTabMenu;
 
+        // 右侧侧栏默认收起、不占 PDF 可视区域：鼠标移到窗口右边缘时展开，离开后自动收起
+        private const int SidebarEdgeHotZoneWidth = 16;
+        private const int SidebarMinExpandedWidth = 360;
+        private const int SidebarFallbackExpandedWidth = 560;
+        private System.Windows.Forms.Timer? _sidebarAutoHideTimer;
+        private bool _sidebarAutoHidden;
+        private int _sidebarExpandedWidth = SidebarFallbackExpandedWidth;
+        private DateTime _sidebarAutoHideSuspendedUntil = DateTime.MinValue;
+
         private Label _transitionLabel;
         private Panel _toolbarGroupView;
         //private ToolStrip _toolbarGroupViewZoom;
@@ -294,10 +303,11 @@ namespace LearningAssistant.Forms.Pdf
         private Button _buttonStrikethroughMode;
         private Button _buttonTextMode;
         private Button _buttonUndoAnnotation;
-        // 一级条新增按钮：选择/重做/阅读引导线（运行时创建，避免设计器文件继续膨胀）
+        // 一级条新增按钮：选择/连续使用/重做/阅读引导线（运行时创建，避免设计器文件继续膨胀）
         private Button? _buttonSelectMode;
         private Button? _buttonRedoAnnotation;
         private Button? _buttonReadingGuide;
+        private Button? _buttonContinuousUse;
         // 一级条分组竖线位置：由 LayoutAnnotationToolStrip 计算，ToolbarGroupTools_Paint 统一绘制
         private readonly List<int> _toolbarGroupSeparatorXs = new List<int>();
         private Button _buttonClearAllAnnotations;
@@ -404,9 +414,11 @@ namespace LearningAssistant.Forms.Pdf
         private readonly PdfReaderCommandRegistry _commandRegistry =
             new PdfReaderCommandRegistry(() => AppPaths.CurrentUserDir);
 
-        // 交互偏好：画完一次标注后自动回到选择模式（默认开，关闭后等同连续标注）
+        // 交互偏好：标注工具默认连续使用（画完保持当前工具）；开启“单次”后画完回到选择
         private PdfReaderInteractionPreferenceStore? _interactionPreferenceStore;
-        private bool _autoReturnToSelectAfterDraw = true;
+        private bool _autoReturnToSelectAfterDraw;
+        // 「更多 - 标注偏好」里的同一开关，需要和工具栏按钮保持同步
+        private ToolStripMenuItem? _autoReturnToSelectMenuItem;
         // 本次会话只在首次自动回退时提示“双击可锁定”，避免每次落笔都弹提示
         private bool _autoReturnHintShown;
         // 工具按钮上次左键按下时间：用间隔判断双击，比依赖 Button.DoubleClick 更稳定
@@ -588,7 +600,7 @@ namespace LearningAssistant.Forms.Pdf
 
         private void InitializeManagers()
         {
-            // 交互偏好按用户目录落盘；读取失败回退默认值（默认画完自动回到选择）
+            // 交互偏好按用户目录落盘；读取失败回退默认值（默认连续使用当前标注工具）
             var interactionStore = Program.ServiceProvider?.GetService(typeof(PdfReaderInteractionPreferenceStore))
                     as PdfReaderInteractionPreferenceStore
                 ?? new PdfReaderInteractionPreferenceStore(() => AppPaths.CurrentUserDir);
@@ -759,7 +771,7 @@ namespace LearningAssistant.Forms.Pdf
                 _buttonToggleAnnotationLayer, _buttonChecklistMode, _buttonImageEmbedMode,
                 _buttonSpotlightMode, _buttonMagnifierMode, _buttonAskAi, _buttonTranslationToggle,
                 // 一级条新增按钮（运行时创建）同样不参与 Tab 焦点切换
-                _buttonSelectMode, _buttonReadingGuide, _buttonRedoAnnotation,
+                _buttonSelectMode, _buttonContinuousUse, _buttonReadingGuide, _buttonRedoAnnotation,
                 _buttonPrev, _buttonNext, _buttonZoomOut, _buttonZoomIn, _buttonResetView,
                 _buttonRotate, _buttonLockView, _buttonNightMode, _buttonDualPage, _buttonFullscreen,
                 _buttonAddToLearningContent
@@ -892,6 +904,23 @@ namespace LearningAssistant.Forms.Pdf
             _translationBarDragOffset = new Point(
                 bounds.X - defaultBounds.X,
                 bounds.Y - defaultBounds.Y);
+        }
+
+        /// <summary>
+        /// Esc 关闭顶部译条。与点击译条上的 ✕ 一致：丢弃仍在途的翻译回包并停止点读音频。
+        /// 跟读模式下不处理，保留原有的「Esc 取消跟读」逻辑，避免一次按键同时丢弃录音和译条。
+        /// </summary>
+        private bool TryCloseTopTranslationBar()
+        {
+            if (_topTranslationBar == null || !_topTranslationBar.Visible)
+                return false;
+            if (_topTranslationBar.IsShadowingMode)
+                return false;
+
+            _topTranslationBar.HideBar();
+            ++_selectionTranslationRequestId;
+            CancelSentenceReading();
+            return true;
         }
 
         /// <summary>当前可见的底部停靠条占用的总高度。</summary>
@@ -2378,24 +2407,33 @@ namespace LearningAssistant.Forms.Pdf
 
         #region 阅读辅助（色层/护眼/引导线/时长统计）
 
-        /// <summary>护眼色层与阅读引导线：只叠加在页面位图之上，不写入标注数据。</summary>
+        /// <summary>护眼色层与阅读引导线：只叠加在画布之上，不写入标注数据。</summary>
         private void DrawReadingAidOverlay(Graphics g)
         {
-            if (_readingAidManager == null || !_readingAidManager.HasVisibleEffect || _currentPageImage == null)
+            if (_readingAidManager == null || !_readingAidManager.HasVisibleEffect)
+                return;
+
+            // 色层覆盖整个画布可视区域：页面外的容器空白处也随护眼预设一起变色，
+            // 避免只有 PDF 图片变黄/变绿、周围仍然是刺眼的白底
+            if (_readingAidManager.HasTint && _pictureBoxPdf != null)
+                _readingAidManager.DrawTint(g, _pictureBoxPdf.ClientRectangle);
+
+            // 引导线只作用于页面区域，没有页面位图时不绘制
+            if (!_readingAidManager.IsGuideEnabled || _currentPageImage == null)
                 return;
 
             if (_isDualPage)
             {
                 var (leftRect, rightRect) = GetDualPageRects();
-                _readingAidManager.Draw(g, leftRect);
+                _readingAidManager.DrawGuide(g, leftRect);
                 if (_secondPageImage != null)
-                    _readingAidManager.Draw(g, rightRect);
+                    _readingAidManager.DrawGuide(g, rightRect);
                 return;
             }
 
             var singleRect = ToRectangle(GetImageDisplayRect());
             if (singleRect.Width > 0 && singleRect.Height > 0)
-                _readingAidManager.Draw(g, singleRect);
+                _readingAidManager.DrawGuide(g, singleRect);
         }
 
         /// <summary>鼠标移动时让引导线跟随指针；位置被限制在当前可见页内。</summary>
@@ -2490,19 +2528,10 @@ namespace LearningAssistant.Forms.Pdf
             };
             autoReturnItem.Click += (_, _) =>
             {
-                _autoReturnToSelectAfterDraw = !_autoReturnToSelectAfterDraw;
-                autoReturnItem.Checked = _autoReturnToSelectAfterDraw;
-
-                // 立即落盘：下次启动沿用同一交互习惯
-                _interactionPreferenceStore?.Save(new PdfReaderInteractionPreferences
-                {
-                    AutoReturnToSelectAfterDraw = _autoReturnToSelectAfterDraw
-                });
-
-                ShowToast(_autoReturnToSelectAfterDraw
-                    ? "画完标注后自动回到选择模式"
-                    : "画完标注保持当前工具（连续标注）");
+                // 与工具栏「连续使用」按钮共用同一偏好，切换后两边状态同步
+                SetAutoReturnToSelectAfterDraw(!_autoReturnToSelectAfterDraw);
             };
+            _autoReturnToSelectMenuItem = autoReturnItem;
             root.DropDownItems.Add(autoReturnItem);
 
             return root;
@@ -2866,13 +2895,8 @@ namespace LearningAssistant.Forms.Pdf
             button.SizeChanged += ToolbarButton_SizeChanged;
             UpdateToolbarButtonRegion(button);
 
-            // AI 入口常驻品牌强调色：登记为“开启态”，悬停与夜间批量配色都会跳过它
-            if (ReferenceEquals(button, _buttonAskAi))
-            {
-                _activeToolButtons.Add(button);
-                button.BackColor = PdfSidebarTheme.PaletteFor(button).BrandSoft;
-                button.ForeColor = ToolbarBrandTextColor;
-            }
+            // AI 问答只是入口菜单，不具备开启态：默认与其它工具栏按钮一致的中性配色，
+            // 不再常驻品牌强调色，避免看起来“已选中/已开启”
         }
 
         private void ToolbarButton_SizeChanged(object? sender, EventArgs e)
@@ -3122,6 +3146,7 @@ namespace LearningAssistant.Forms.Pdf
             _navigationManager?.SetPenWidth(3f);
             UpdateDashStyleButtonState();
             UpdatePenTypeButtonState();
+            InitializeSidebarAutoHide();
         }
 
         /// <summary>
@@ -3141,6 +3166,11 @@ namespace LearningAssistant.Forms.Pdf
                 StopAllTtsPlayback();
                 return true;
             }
+
+            // 译条可见时 Esc 优先关闭译条（跟读模式仍走原有取消逻辑），
+            // 否则全屏阶段的 Esc 会先退出全屏，用户按一次看不到译条消失
+            if (keyData == Keys.Escape && !shortcutsSuspended && TryCloseTopTranslationBar())
+                return true;
 
             if (keyData == Keys.Escape && !shortcutsSuspended && isFullscreenSurface)
             {
@@ -3199,6 +3229,7 @@ namespace LearningAssistant.Forms.Pdf
                 // 工作台快捷入口：Ctrl+Shift+T 切换翻译模块，Ctrl+Shift+L 切换联动
                 if (e.Control && e.Shift && e.KeyCode == Keys.T)
                 {
+                    ExpandSidebar();
                     if (_tabControlLeft != null && _tabPageStudy != null)
                         _tabControlLeft.SelectedTab = _tabPageStudy;
                     _workbench?.ToggleModule(PdfWorkbenchModule.Translate);
@@ -3238,6 +3269,7 @@ namespace LearningAssistant.Forms.Pdf
                 if (e.Control && e.KeyCode >= Keys.D1 && e.KeyCode <= Keys.D4)
                 {
                     int tabIndex = e.KeyCode - Keys.D1;
+                    ExpandSidebar();
                     if (tabIndex < _tabControlLeft.TabPages.Count)
                         _tabControlLeft.SelectedIndex = tabIndex;
                     e.Handled = e.SuppressKeyPress = true;
@@ -3360,6 +3392,13 @@ namespace LearningAssistant.Forms.Pdf
                         e.Handled = true;
                         break;
                     case Keys.Escape:
+                        // 译条可见时 Esc 优先关闭译条，不必等到退出标注工具/全屏
+                        if (TryCloseTopTranslationBar())
+                        {
+                            e.Handled = e.SuppressKeyPress = true;
+                            break;
+                        }
+
                         if (_isFullscreen)
                         {
                             ToggleFullscreen();
@@ -7207,6 +7246,8 @@ namespace LearningAssistant.Forms.Pdf
             }
 
             BuildAiSidebarTab();
+            // 侧栏默认收起，通过命令/按钮打开 AI 页时先展开，避免用户看不到结果
+            ExpandSidebar();
             if (_tabControlLeft != null && _tabPageAi != null)
                 _tabControlLeft.SelectedTab = _tabPageAi;
 
@@ -7375,6 +7416,10 @@ namespace LearningAssistant.Forms.Pdf
                 _navigationManager?.SetPenColor(color);
                 UpdateAnnotationColorSelection(color);
             }
+
+            // 连续使用时颜色已经记住，选完立即收起浮层，不再遮挡 PDF 可视区域
+            if (!_autoReturnToSelectAfterDraw)
+                HideAnnotationOptionsDropDown();
         }
 
         private void UpdateAnnotationColorSelection(Color color)
@@ -7489,6 +7534,10 @@ namespace LearningAssistant.Forms.Pdf
 
             UpdateHighlightColorSelection(color);
             _pictureBoxPdf?.Invalidate();
+
+            // 连续使用时颜色已经记住，选完立即收起浮层，不再遮挡 PDF 可视区域
+            if (!_autoReturnToSelectAfterDraw)
+                HideAnnotationOptionsDropDown();
         }
 
         private void UpdateHighlightColorSelection(HighlightColor color)
@@ -7746,7 +7795,7 @@ namespace LearningAssistant.Forms.Pdf
         }
 
         /// <summary>
-        /// 创建一级条新增按钮：选择、阅读引导线、重做。
+        /// 创建一级条新增按钮：选择、连续使用、阅读引导线、重做。
         /// 运行时创建并复用现有工具栏按钮的圆角/悬停样式，避免 Designer 文件继续膨胀。
         /// </summary>
         private void EnsurePrimaryToolbarButtons()
@@ -7755,17 +7804,22 @@ namespace LearningAssistant.Forms.Pdf
 
             _buttonSelectMode ??= CreateToolbarGlyphButton(
                 "🖱", "选择/浏览 (S)：单击选中标注，双击文字可编辑", ButtonSelectMode_Click, 10F);
+            _buttonContinuousUse ??= CreateToolbarGlyphButton(
+                "🔁", "连续使用：画完保持当前工具；再次点击当前工具可展开颜色/粗细选项（关闭后每画完一次回到选择）",
+                ButtonContinuousUse_Click, 10F);
             _buttonReadingGuide ??= CreateToolbarGlyphButton(
                 "📏", "阅读引导线：横向高亮带跟随鼠标（与聚光灯互斥）", ButtonReadingGuide_Click, 10F);
             _buttonRedoAnnotation ??= CreateToolbarGlyphButton(
                 "↻", "重做 (Ctrl+Y)", ButtonRedoAnnotation_Click, 10F);
 
-            foreach (var button in new[] { _buttonSelectMode, _buttonReadingGuide, _buttonRedoAnnotation })
+            foreach (var button in new[] { _buttonSelectMode, _buttonContinuousUse, _buttonReadingGuide, _buttonRedoAnnotation })
             {
                 if (button != null && button.Parent == null)
                     _toolbarGroupTools.Controls.Add(button);
             }
 
+            // 按钮开启态 = 连续使用（即“画完不回到选择”）
+            UpdateToolButtonState(_buttonContinuousUse, !_autoReturnToSelectAfterDraw);
             UpdateRedoButtonState();
         }
 
@@ -7955,8 +8009,9 @@ namespace LearningAssistant.Forms.Pdf
             // 分组竖线随重排结果动态计算，交给 ToolbarGroupTools_Paint 统一绘制
             _toolbarGroupSeparatorXs.Clear();
 
-            // 组1：选择/浏览（不产生标注，阅读时的默认态）
-            x = PlaceInToolStrip(_buttonSelectMode, x, y, size, groupGap);
+            // 组1：选择/浏览（不产生标注，阅读时的默认态）与“连续使用/单次使用”开关
+            x = PlaceInToolStrip(_buttonSelectMode, x, y, size, gap);
+            x = PlaceInToolStrip(_buttonContinuousUse, x, y, size, groupGap);
             AddToolbarGroupSeparator(x);
 
             // 组2：阅读标注（高亮/文字/马赛克是阅读时最高频的标注）
@@ -8144,8 +8199,10 @@ namespace LearningAssistant.Forms.Pdf
         /// <summary>
         /// 工具切换后更新二级选项浮层：只放当前工具需要的分组，并按可见顺序紧凑重排，
         /// 避免出现「控件还在但被隐藏」造成的空洞与错位；无选项的工具则收起浮层。
+        /// <paramref name="autoShow"/> 为 false 时只更新内容、不自动弹出，避免连续使用时
+        /// 每次选工具都弹出调色板遮挡 PDF。
         /// </summary>
-        private void UpdateAnnotationOptions(AnnotationToolMode mode)
+        private void UpdateAnnotationOptions(AnnotationToolMode mode, bool autoShow = true)
         {
             if (_panelAnnotationOptions == null) return;
 
@@ -8205,7 +8262,17 @@ namespace LearningAssistant.Forms.Pdf
             if (panel2 != null) panel2.Visible = showPenTypes;
 
             LayoutAnnotationOptionsHost(showOptions, showPenTypes);
-            ShowAnnotationOptionsDropDown(mode);
+            if (autoShow)
+                ShowAnnotationOptionsDropDown(mode);
+            else
+                HideAnnotationOptionsDropDown();
+        }
+
+        /// <summary>该工具是否带有可调整的颜色/粗细/虚实线/笔型选项。</summary>
+        private static bool HasToolOptions(AnnotationToolMode mode)
+        {
+            var groups = GetOptionGroups(mode);
+            return groups.color || groups.thickness || groups.dash;
         }
 
         /// <summary>按当前需要的分组调整浮层尺寸：选项面板在左，画笔笔型面板紧随其后</summary>
@@ -8380,6 +8447,37 @@ namespace LearningAssistant.Forms.Pdf
         private void ButtonSelectMode_Click(object? sender, EventArgs e)
         {
             SetAnnotationToolMode(AnnotationToolMode.Select);
+        }
+
+        /// <summary>一级条「连续使用」：切换画完标注后保持当前工具，还是回到选择模式。</summary>
+        private void ButtonContinuousUse_Click(object? sender, EventArgs e)
+        {
+            SetAutoReturnToSelectAfterDraw(!_autoReturnToSelectAfterDraw);
+        }
+
+        /// <summary>
+        /// 统一设置“画完是否回到选择”的行为开关：
+        /// 同步工具栏按钮开启态、更多菜单勾选状态，并立即落盘供下次启动沿用。
+        /// </summary>
+        private void SetAutoReturnToSelectAfterDraw(bool autoReturn)
+        {
+            if (_autoReturnToSelectAfterDraw == autoReturn)
+                return;
+
+            _autoReturnToSelectAfterDraw = autoReturn;
+            UpdateToolButtonState(_buttonContinuousUse, !autoReturn);
+            if (_autoReturnToSelectMenuItem != null)
+                _autoReturnToSelectMenuItem.Checked = autoReturn;
+
+            // 立即落盘：下次启动沿用同一交互习惯
+            _interactionPreferenceStore?.Save(new PdfReaderInteractionPreferences
+            {
+                AutoReturnToSelectAfterDraw = autoReturn
+            });
+
+            ShowToast(autoReturn
+                ? "单次使用：每次画完标注后回到选择模式"
+                : "连续使用：画完保持当前工具，颜色沿用上次选择");
         }
 
         /// <summary>一级条「阅读引导线」：复用「更多 - 阅读辅助」的开关逻辑，状态同步回显到按钮。</summary>
@@ -8865,6 +8963,8 @@ namespace LearningAssistant.Forms.Pdf
 
         private void SetAnnotationToolMode(AnnotationToolMode mode, bool isOneTime = false)
         {
+            // 记录切换前的工具：连续使用模式下再次点击当前工具，视为“想调整选项”
+            var previousMode = _navigationManager?.CurrentToolMode ?? AnnotationToolMode.Select;
             _navigationManager?.SetToolMode(mode, isOneTime);
 
             // 画笔子类型按钮在 Pen 和 TemporaryPen 模式下可见
@@ -8874,8 +8974,15 @@ namespace LearningAssistant.Forms.Pdf
             if (_buttonPenTypePen != null) _buttonPenTypePen.Visible = isPenMode;
             if (_buttonPenTypeMarker != null) _buttonPenTypeMarker.Visible = isPenMode;
 
-            // 二级选项：按需在对应工具下方弹出浮层，并重新紧凑排布分组
-            UpdateAnnotationOptions(mode);
+            // 连续使用（默认）：选工具时不自动弹调色板，颜色/粗细沿用上次选择；
+            // 再次点击同一个工具、或切到“单次使用”模式时，才按需展开二级选项。
+            bool continuousUse = !_autoReturnToSelectAfterDraw;
+            bool sameToolClickedAgain = previousMode == mode && mode != AnnotationToolMode.Select;
+            bool autoShowOptions = !continuousUse
+                || isOneTime
+                || !HasToolOptions(mode)
+                || sameToolClickedAgain;
+            UpdateAnnotationOptions(mode, autoShowOptions);
 
             UpdateToolButtonState(_buttonEraserMode, mode == AnnotationToolMode.Eraser);
             UpdateToolButtonState(_buttonHighlightMode, mode == AnnotationToolMode.Highlight);
@@ -11669,6 +11776,9 @@ namespace LearningAssistant.Forms.Pdf
                 ShowWorkbenchModule(PdfWorkbenchModule.Highlight);
                 return;
             }
+
+            // 侧栏默认收起；抽屉依附在侧栏上，打开前先让侧栏可见
+            ExpandSidebar();
             if (mode == AudioDrawerMode.Translate)
             {
                 ShowWorkbenchModule(PdfWorkbenchModule.Translate);
@@ -11697,6 +11807,7 @@ namespace LearningAssistant.Forms.Pdf
         private void ShowWorkbenchModule(PdfWorkbenchModule module)
         {
             HideAudioDrawer();
+            ExpandSidebar();
 
             if (_tabControlLeft != null && _tabPageStudy != null)
                 _tabControlLeft.SelectedTab = _tabPageStudy;
@@ -11998,6 +12109,8 @@ namespace LearningAssistant.Forms.Pdf
                 _pageTransitionTimer?.Dispose();
                 _sidebarTipTimer?.Stop();
                 _sidebarTipTimer?.Dispose();
+                _sidebarAutoHideTimer?.Stop();
+                _sidebarAutoHideTimer?.Dispose();
 
                 // 暂停跟读：先解除事件订阅并停止录音，避免回调进入已释放控件
                 _shadowingRecording = false;
@@ -12252,6 +12365,193 @@ namespace LearningAssistant.Forms.Pdf
                 _tabControlLeft.SelectedTab = page;
                 return;
             }
+        }
+
+        /// <summary>
+        /// 初始化右侧侧栏的自动收起行为：
+        /// 默认把侧栏折叠，使 PDF 画布占满窗口；鼠标移入窗口右边缘时展开，离开侧栏后自动收起。
+        /// 侧栏内有焦点（输入翻译/AI 内容）或打开了菜单时保持展开，避免交互中途消失。
+        /// </summary>
+        private void InitializeSidebarAutoHide()
+        {
+            if (_splitContainerMain == null) return;
+
+            // 允许完全折叠：不留下空白分隔条，也不给展开宽度设硬下限
+            _splitContainerMain.Panel2MinSize = 0;
+            if (!_splitContainerMain.Panel2Collapsed && _splitContainerMain.Panel2.Width >= SidebarMinExpandedWidth)
+                _sidebarExpandedWidth = _splitContainerMain.Panel2.Width;
+
+            _splitContainerMain.SplitterMoving += SidebarSplitterMoving;
+            _splitContainerMain.SplitterMoved += SidebarSplitterMoved;
+
+            // 画布上按下鼠标（拖选高亮、画标注）期间同样暂停自动收起：
+            // 侧栏折叠会在拖动过程中改变画布宽度，拖动起点与当前显示区域不再一致，
+            // 高亮位置偏移且取词/OCR 落到空白处，取不到文字时顶部译条就不会出现
+            if (_pictureBoxPdf != null)
+            {
+                _pictureBoxPdf.MouseDown += (_, _) =>
+                    _sidebarAutoHideSuspendedUntil = DateTime.UtcNow.AddSeconds(5);
+                _pictureBoxPdf.MouseUp += (_, _) =>
+                    _sidebarAutoHideSuspendedUntil = DateTime.UtcNow.AddMilliseconds(500);
+            }
+
+            _sidebarAutoHideTimer = new System.Windows.Forms.Timer { Interval = 160 };
+            _sidebarAutoHideTimer.Tick += SidebarAutoHideTimer_Tick;
+            _sidebarAutoHideTimer.Start();
+
+            CollapseSidebar();
+        }
+
+        private void SidebarSplitterMoving(object? sender, SplitterCancelEventArgs e)
+        {
+            // 拖动分隔条期间暂停自动收起，避免鼠标离开侧栏就触发折叠
+            _sidebarAutoHideSuspendedUntil = DateTime.UtcNow.AddSeconds(1);
+        }
+
+        private void SidebarSplitterMoved(object? sender, SplitterEventArgs e)
+        {
+            if (_splitContainerMain != null && !_sidebarAutoHidden)
+            {
+                int width = _splitContainerMain.Panel2.Width;
+                if (width >= SidebarMinExpandedWidth)
+                    _sidebarExpandedWidth = width;
+            }
+
+            _sidebarAutoHideSuspendedUntil = DateTime.UtcNow.AddMilliseconds(600);
+        }
+
+        private void SidebarAutoHideTimer_Tick(object? sender, EventArgs e)
+        {
+            if (_splitContainerMain == null || !IsHandleCreated || IsDisposed) return;
+            if (WindowState == FormWindowState.Minimized || !Visible) return;
+            // 模态对话框/其他窗口在前台时不要自动展开或收起
+            if (Form.ActiveForm != this) return;
+            if (DateTime.UtcNow < _sidebarAutoHideSuspendedUntil) return;
+
+            // 鼠标按键按下期间（拖选文字、画标注、拖分隔条）不展开/收起侧栏：
+            // 折叠会改变 PDF 画布宽度，拖动中的选区坐标与显示区域错位，
+            // 高亮能落下但取不到文字，顶部译条也就不出现
+            if (Control.MouseButtons != MouseButtons.None) return;
+
+            var client = _splitContainerMain.PointToClient(Cursor.Position);
+            int width = _splitContainerMain.ClientSize.Width;
+            int height = _splitContainerMain.ClientSize.Height;
+            bool inRightEdgeHotZone = client.X >= width - SidebarEdgeHotZoneWidth
+                && client.X < width
+                && client.Y >= 0
+                && client.Y < height;
+
+            if (_sidebarAutoHidden)
+            {
+                if (inRightEdgeHotZone)
+                    ExpandSidebar();
+                return;
+            }
+
+            // 已展开时：停留在侧栏、右边缘或正在使用侧栏内的控件都不收起
+            if (inRightEdgeHotZone || IsPointerInSidebar() || SidebarKeepsOpen())
+                return;
+
+            CollapseSidebar();
+        }
+
+        /// <summary>鼠标是否仍停留在展开后的侧栏（含音频抽屉与分隔条）。</summary>
+        private bool IsPointerInSidebar()
+        {
+            var position = Cursor.Position;
+
+            if (_panelLeftContainer != null)
+            {
+                var panelRect = _panelLeftContainer.RectangleToScreen(_panelLeftContainer.ClientRectangle);
+                if (panelRect.Contains(position)) return true;
+            }
+
+            if (_audioDrawer != null && _audioDrawer.Visible)
+            {
+                var drawerRect = _audioDrawer.RectangleToScreen(_audioDrawer.ClientRectangle);
+                if (drawerRect.Contains(position)) return true;
+            }
+
+            if (_splitContainerMain != null)
+            {
+                var splitterRect = _splitContainerMain.SplitterRectangle;
+                if (splitterRect.Contains(_splitContainerMain.PointToClient(position))) return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// 侧栏是否应保持展开：只有输入型焦点（文本框/可编辑下拉）与打开中的菜单、抽屉才阻止收起。
+        /// 页签条、目录树、列表等在点击后会长期持有焦点，若也据此保持，
+        /// 鼠标离开侧栏后就再也收不起来（这也是“点了上面的 tab 后收不起来”的原因）。
+        /// </summary>
+        private bool SidebarKeepsOpen()
+        {
+            return IsSidebarTextEditingFocused()
+                || _audioDrawer?.Visible == true
+                || _contextMenuFiles?.Visible == true
+                || _sidebarTabMenu?.Visible == true;
+        }
+
+        /// <summary>焦点是否落在侧栏内的文本输入控件上，避免输入过程中侧栏被收起。</summary>
+        private bool IsSidebarTextEditingFocused()
+        {
+            if (_panelLeftContainer == null || !_panelLeftContainer.ContainsFocus)
+                return false;
+
+            return IsTextEditingFocused();
+        }
+
+        /// <summary>展开右侧侧栏；供鼠标悬停右边缘以及命令/快捷键入口复用。</summary>
+        private void ExpandSidebar()
+        {
+            if (_splitContainerMain == null || !_sidebarAutoHidden) return;
+
+            int minPanelWidth = Math.Max(1, _splitContainerMain.Panel1MinSize);
+            int available = Math.Max(SidebarMinExpandedWidth,
+                _splitContainerMain.ClientSize.Width - minPanelWidth - _splitContainerMain.SplitterWidth);
+            int targetWidth = Math.Clamp(_sidebarExpandedWidth, SidebarMinExpandedWidth, available);
+
+            _splitContainerMain.Panel2Collapsed = false;
+            try
+            {
+                _splitContainerMain.SplitterDistance = Math.Max(
+                    minPanelWidth,
+                    _splitContainerMain.ClientSize.Width - targetWidth - _splitContainerMain.SplitterWidth);
+            }
+            catch (ArgumentOutOfRangeException)
+            {
+                // 窗口刚创建/尺寸极小时 SplitterDistance 可能越界，交给布局使用默认宽度即可
+            }
+
+            _sidebarAutoHidden = false;
+            // 展开后侧栏宽度才生效，延迟一次重算页签宽度，避免页签仍按 0 宽布局
+            BeginInvoke(new Action(() =>
+            {
+                if (!IsDisposed) UpdateSidebarTabItemSize();
+            }));
+        }
+
+        /// <summary>收起右侧侧栏，让 PDF 画布占满整个窗口。</summary>
+        private void CollapseSidebar()
+        {
+            if (_splitContainerMain == null) return;
+
+            if (!_sidebarAutoHidden)
+            {
+                int width = _splitContainerMain.Panel2.Width;
+                if (width >= SidebarMinExpandedWidth)
+                    _sidebarExpandedWidth = width;
+            }
+
+            // 焦点若还停在即将隐藏的侧栏控件（页签条、目录树等）上，先收回到窗体，
+            // 避免隐藏控件继续持有焦点、吞掉之后的快捷键
+            if (_panelLeftContainer?.ContainsFocus == true)
+                ResetKeyboardFocusToForm();
+
+            _splitContainerMain.Panel2Collapsed = true;
+            _sidebarAutoHidden = true;
         }
 
         private static string SidebarStatePath => Path.Combine(AppPaths.ConfigDir, SidebarStateFileName);

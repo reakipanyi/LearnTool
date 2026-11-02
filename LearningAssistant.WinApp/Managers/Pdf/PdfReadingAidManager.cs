@@ -51,6 +51,9 @@ namespace LearningAssistant.Managers
         /// <summary>是否会产生可见的叠加效果。</summary>
         public bool HasVisibleEffect => Preset != ReadingOverlayPreset.None || IsGuideEnabled;
 
+        /// <summary>当前是否启用了护眼色层（需要覆盖整个可视区域，而不只是页面本身）。</summary>
+        public bool HasTint => Preset != ReadingOverlayPreset.None;
+
         /// <summary>切换色层预设；返回是否发生变化。</summary>
         public bool SetPreset(ReadingOverlayPreset preset)
         {
@@ -96,21 +99,31 @@ namespace LearningAssistant.Managers
             return true;
         }
 
-        /// <summary>在指定页面矩形内绘制色层与引导线。</summary>
-        public void Draw(Graphics g, Rectangle pageRect)
+        /// <summary>
+        /// 在指定可视区域内绘制色层。
+        /// 阅读器会把整个画布（含页面外的容器空白区）传入，避免只有页面位图变色。
+        /// </summary>
+        public void DrawTint(Graphics g, Rectangle viewportRect)
+        {
+            if (viewportRect.Width <= 0 || viewportRect.Height <= 0)
+                return;
+
+            if (Preset == ReadingOverlayPreset.None)
+                return;
+
+            var tint = GetTint(Preset);
+            if (tint.A <= 0)
+                return;
+
+            using var brush = new SolidBrush(tint);
+            g.FillRectangle(brush, viewportRect);
+        }
+
+        /// <summary>在指定页面矩形内绘制阅读引导线（亮带 + 页外压暗）。</summary>
+        public void DrawGuide(Graphics g, Rectangle pageRect)
         {
             if (pageRect.Width <= 0 || pageRect.Height <= 0)
                 return;
-
-            if (Preset != ReadingOverlayPreset.None)
-            {
-                var tint = GetTint(Preset);
-                if (tint.A > 0)
-                {
-                    using var brush = new SolidBrush(tint);
-                    g.FillRectangle(brush, pageRect);
-                }
-            }
 
             if (!IsGuideEnabled || GuideCenterY < 0)
                 return;
@@ -142,6 +155,13 @@ namespace LearningAssistant.Managers
             using var edge = new Pen(Color.FromArgb(150, 255, 196, 0), 1f);
             g.DrawLine(edge, pageRect.Left, top, pageRect.Right - 1, top);
             g.DrawLine(edge, pageRect.Left, bandBottom - 1, pageRect.Right - 1, bandBottom - 1);
+        }
+
+        /// <summary>兼容入口：在页面矩形内同时绘制色层与引导线。</summary>
+        public void Draw(Graphics g, Rectangle pageRect)
+        {
+            DrawTint(g, pageRect);
+            DrawGuide(g, pageRect);
         }
 
         private static Color GetTint(ReadingOverlayPreset preset)
