@@ -419,6 +419,10 @@ namespace LearningAssistant.Forms.Pdf
         private bool _autoReturnToSelectAfterDraw;
         // 「更多 - 标注偏好」里的同一开关，需要和工具栏按钮保持同步
         private ToolStripMenuItem? _autoReturnToSelectMenuItem;
+        // 「更多 - 阅读辅助」里的跟随类工具：勾选态与当前工具模式保持同步
+        private ToolStripMenuItem? _readingGuideMenuItem;
+        private ToolStripMenuItem? _spotlightMenuItem;
+        private ToolStripMenuItem? _magnifierMenuItem;
         // 本次会话只在首次自动回退时提示“双击可锁定”，避免每次落笔都弹提示
         private bool _autoReturnHintShown;
         // 工具按钮上次左键按下时间：用间隔判断双击，比依赖 Button.DoubleClick 更稳定
@@ -643,7 +647,6 @@ namespace LearningAssistant.Forms.Pdf
             _navigationManager.IsHighlightModeCallback = () => _highlightManager?.IsHighlightMode ?? true;
             _navigationManager.AddHighlightCallback = rect => _highlightManager?.AddHighlight(rect);
             _navigationManager.AddTextCallback = point => ShowTextAnnotationDialog(point);
-            _navigationManager.ShowMagnifierCallback = point => ShowMagnifier(point);
             _navigationManager.UpdateHighlightLayerCallback = () => _highlightManager?.UpdateHighlightLayer();
 
             // 录音过程中创建的标注自动关联当前录音（时间戳 + 录音 Id），供「我的录音」页跳转回放
@@ -682,6 +685,8 @@ namespace LearningAssistant.Forms.Pdf
                 _pictureBoxPdf.MouseDown += _navigationManager.MouseDown;
                 _pictureBoxPdf.MouseMove += _navigationManager.MouseMove;
                 _pictureBoxPdf.MouseMove += OnReadingGuideMouseMove;
+                // 放大镜跟随鼠标：离开画布时收起透镜，避免停在画布外留下冻结的圆窗
+                _pictureBoxPdf.MouseLeave += (_, _) => _navigationManager?.ClearMagnifier();
                 _pictureBoxPdf.MouseUp += PictureBoxPdf_MouseUp;
             }
 
@@ -2498,7 +2503,26 @@ namespace LearningAssistant.Forms.Pdf
                 Checked = _readingAidManager?.IsGuideEnabled == true
             };
             guideItem.Click += (_, _) => ToggleReadingGuide(guideItem);
+            _readingGuideMenuItem = guideItem;
             root.DropDownItems.Add(guideItem);
+
+            // 聚光灯与放大镜同属“跟随鼠标的阅读辅助层”，与引导线放在同一菜单层级，
+            // 避免它们散落在「更多」一级菜单里，和引导线的入口离得太远。
+            var spotlightItem = new ToolStripMenuItem("聚光灯")
+            {
+                Checked = _navigationManager?.CurrentToolMode == AnnotationToolMode.Spotlight
+            };
+            spotlightItem.Click += (_, _) => ToggleReadingAidTool(AnnotationToolMode.Spotlight);
+            _spotlightMenuItem = spotlightItem;
+            root.DropDownItems.Add(spotlightItem);
+
+            var magnifierItem = new ToolStripMenuItem("放大镜")
+            {
+                Checked = _navigationManager?.CurrentToolMode == AnnotationToolMode.Magnifier
+            };
+            magnifierItem.Click += (_, _) => ToggleReadingAidTool(AnnotationToolMode.Magnifier);
+            _magnifierMenuItem = magnifierItem;
+            root.DropDownItems.Add(magnifierItem);
 
             root.DropDownItems.Add(new ToolStripSeparator());
 
@@ -2548,9 +2572,21 @@ namespace LearningAssistant.Forms.Pdf
             bool enabled = _readingAidManager.ToggleGuide();
             if (menuItem != null)
                 menuItem.Checked = enabled;
+            // 从一级条按钮切换时菜单项不在调用栈里，这里统一同步勾选态
+            if (_readingGuideMenuItem != null)
+                _readingGuideMenuItem.Checked = enabled;
 
             // 一级条按钮同步开启态，避免菜单与工具栏显示不一致
             UpdateToolButtonState(_buttonReadingGuide, enabled);
+
+            // 引导线、聚光灯、放大镜同属跟随鼠标的阅读辅助层：
+            // 开启引导线时先退出另外两个工具，避免两层跟随效果叠在一起
+            if (enabled
+                && (_navigationManager?.CurrentToolMode == AnnotationToolMode.Spotlight
+                    || _navigationManager?.CurrentToolMode == AnnotationToolMode.Magnifier))
+            {
+                SetAnnotationToolMode(AnnotationToolMode.Select);
+            }
 
             if (enabled && _readingAidManager.GuideCenterY < 0)
             {
@@ -2565,6 +2601,30 @@ namespace LearningAssistant.Forms.Pdf
             _pictureBoxPdf?.Invalidate();
             if (showToast)
                 ShowToast(enabled ? "阅读引导线已开启，移动鼠标可跟随" : "阅读引导线已关闭");
+        }
+
+        /// <summary>
+        /// 在「更多 - 阅读辅助」中切换聚光灯 / 放大镜：
+        /// 再次点击已激活的项就回到选择模式，交互与阅读引导线开关一致。
+        /// </summary>
+        private void ToggleReadingAidTool(AnnotationToolMode mode)
+        {
+            var current = _navigationManager?.CurrentToolMode ?? AnnotationToolMode.Select;
+            SetAnnotationToolMode(current == mode ? AnnotationToolMode.Select : mode);
+        }
+
+        /// <summary>
+        /// 同步「阅读辅助」菜单的勾选态：工具模式变化、引导线开关变化后都调用，
+        /// 保证菜单、一级条按钮与画布当前状态显示一致。
+        /// </summary>
+        private void UpdateReadingAidMenuState(AnnotationToolMode mode)
+        {
+            if (_readingGuideMenuItem != null)
+                _readingGuideMenuItem.Checked = _readingAidManager?.IsGuideEnabled == true;
+            if (_spotlightMenuItem != null)
+                _spotlightMenuItem.Checked = mode == AnnotationToolMode.Spotlight;
+            if (_magnifierMenuItem != null)
+                _magnifierMenuItem.Checked = mode == AnnotationToolMode.Magnifier;
         }
 
         /// <summary>展示今日 / 近 7 天 / 本文档 / 累计阅读时长。</summary>
@@ -7693,7 +7753,7 @@ namespace LearningAssistant.Forms.Pdf
 
             _commandRegistry.Register(new PdfCommandDefinition("edit.moreTools", "更多工具", PdfCommandGroup.Edit)
             {
-                Hint = "低频工具下拉：删除线、聚光灯、放大镜、检查清单等",
+                Hint = "低频工具下拉：阅读辅助（引导线/聚光灯/放大镜）、检查清单、插入图片等",
                 Surfaces = PdfCommandSurfaces.Toolbar | PdfCommandSurfaces.MoreMenu
             });
 
@@ -7870,7 +7930,8 @@ namespace LearningAssistant.Forms.Pdf
 
 
 
-            AddMoreMenuItem(moreMenu, "删除线", _buttonStrikethroughMode, () => ButtonStrikethroughMode_Click(this, EventArgs.Empty));
+            // 临时画笔与删除线本质上都是「自由手绘 + 预设颜色/粗细」，与一级条「画笔」高度重叠；
+            // 箭头承担了独立的“指向重点”形状，因此三个入口合并为箭头一个，不再放进「更多」。
             AddMoreMenuItem(moreMenu, "标注图层显隐", _buttonToggleAnnotationLayer, () => ButtonToggleAnnotationLayer_Click(this, EventArgs.Empty));
             AddMoreMenuItem(moreMenu, "导出标注为图片", _buttonExportAnnotationsAsImage, () => ExportAnnotationsAsImage_Click(this, EventArgs.Empty));
 
@@ -7892,9 +7953,7 @@ namespace LearningAssistant.Forms.Pdf
             moreMenu.Items.Add(CreateAnnotationBehaviorMenu());
             AddMoreMenuItem(moreMenu, "检查清单", _buttonChecklistMode, () => ButtonChecklistMode_Click(this, EventArgs.Empty));
             AddMoreMenuItem(moreMenu, "插入图片", _buttonImageEmbedMode, () => ButtonImageEmbedMode_Click(this, EventArgs.Empty));
-            AddMoreMenuItem(moreMenu, "聚光灯", _buttonSpotlightMode, () => ButtonSpotlightMode_Click(this, EventArgs.Empty));
-            AddMoreMenuItem(moreMenu, "放大镜", _buttonMagnifierMode, () => ButtonMagnifierMode_Click(this, EventArgs.Empty));
-            AddMoreMenuItem(moreMenu, "临时画笔", _buttonTemporaryPenMode, () => ButtonTemporaryPenMode_Click(this, EventArgs.Empty));
+            // 聚光灯 / 放大镜已并入上面的「阅读辅助」子菜单，与阅读引导线保持同一菜单层级
 
 
             // 低频工具按钮退出一级图标条
@@ -7995,7 +8054,7 @@ namespace LearningAssistant.Forms.Pdf
         }
 
         /// <summary>
-        /// 按分组顺序重排一级图标条：选择 → 阅读标注 → 绘制 → 阅读辅助 → 智能 → 编辑 → 显示。
+        /// 按分组顺序重排一级图标条：选择 → 阅读标注 → 绘制 → 低频工具（宽屏时）→ 阅读辅助 → 智能 → 编辑 → 显示。
         /// 每组之间留出更宽的间距并绘制短竖线，用空间换清晰，避免 14 个图标连成一片。
         /// </summary>
         private void LayoutAnnotationToolStrip()
@@ -8028,6 +8087,28 @@ namespace LearningAssistant.Forms.Pdf
             x = PlaceInToolStrip(_buttonEraserMode, x, y, size, groupGap);
             AddToolbarGroupSeparator(x);
 
+            // 组3b：低频工具（检查清单/插入图片/标注层显隐/导出图片）。
+            // 右侧栏收起或窗口足够宽时，这些工具从「更多」回到一级条；窄窗口仍只保留在「更多」，
+            // 避免图标挤压右侧的缩放/页码分组。
+            // 低频组占 4 个图标 + 组尾间距；组4~组7 还要占约 280px；
+            // 右侧至少要能保持“加载指示 + 紧凑视图组 + 紧凑页码组”的布局（缩放滑块收起），
+            // 满足这三点才显示，保证补出入口的同时不会把视图/页码按钮挤掉。
+            int optionalWidth = 4 * size + 3 * gap + groupGap;
+            const int subsequentGroupsWidth = 280;
+            int rightCompactWidth = 2 + 38 + 6 + 230 + 12 + (_isDualPage ? 262 : 207) + 6;
+            bool showOptionalTools = _toolbarGroupTools.ClientSize.Width
+                >= x + optionalWidth + subsequentGroupsWidth + rightCompactWidth;
+            SetOptionalToolbarToolsVisible(showOptionalTools);
+
+            if (showOptionalTools)
+            {
+                x = PlaceInToolStrip(_buttonChecklistMode, x, y, size, gap);
+                x = PlaceInToolStrip(_buttonImageEmbedMode, x, y, size, gap);
+                x = PlaceInToolStrip(_buttonToggleAnnotationLayer, x, y, size, gap);
+                x = PlaceInToolStrip(_buttonExportAnnotationsAsImage, x, y, size, groupGap);
+                AddToolbarGroupSeparator(x);
+            }
+
             // 组4：阅读辅助（阅读引导线提升为一级开关，与聚光灯互斥）
             x = PlaceInToolStrip(_buttonReadingGuide, x, y, size, groupGap);
             AddToolbarGroupSeparator(x);
@@ -8049,6 +8130,23 @@ namespace LearningAssistant.Forms.Pdf
 
             // 视图组、页码组的位置同样不能在设计器里写死，否则会与上面重排后的图标条相互压盖
             LayoutToolbarGroups(toolsEndX);
+        }
+
+        /// <summary>
+        /// 低频工具在一级条上的显隐：宽屏时显示为快捷入口，窄屏时只保留「更多」菜单入口。
+        /// </summary>
+        private void SetOptionalToolbarToolsVisible(bool visible)
+        {
+            var optionalButtons = new[]
+            {
+                _buttonChecklistMode, _buttonImageEmbedMode,
+                _buttonToggleAnnotationLayer, _buttonExportAnnotationsAsImage
+            };
+            foreach (var button in optionalButtons)
+            {
+                if (button != null)
+                    button.Visible = visible;
+            }
         }
 
         /// <summary>
@@ -8483,9 +8581,11 @@ namespace LearningAssistant.Forms.Pdf
         /// <summary>一级条「阅读引导线」：复用「更多 - 阅读辅助」的开关逻辑，状态同步回显到按钮。</summary>
         private void ButtonReadingGuide_Click(object? sender, EventArgs e)
         {
-            // 与聚光灯互斥：开启引导线前若正处于聚光灯模式，先回到选择模式，避免两套跟随层叠加
+            // 与聚光灯/放大镜互斥：开启引导线前若正处于这两个跟随类工具，先回到选择模式，
+            // 避免两套跟随层叠加（ToggleReadingGuide 内部也会做同样的兜底）
             if (_readingAidManager?.IsGuideEnabled != true
-                && _navigationManager?.CurrentToolMode == AnnotationToolMode.Spotlight)
+                && (_navigationManager?.CurrentToolMode == AnnotationToolMode.Spotlight
+                    || _navigationManager?.CurrentToolMode == AnnotationToolMode.Magnifier))
             {
                 SetAnnotationToolMode(AnnotationToolMode.Select);
             }
@@ -9012,9 +9112,16 @@ namespace LearningAssistant.Forms.Pdf
                 UpdateAnnotationColorSelection(_navigationManager.TemporaryPenColor);
             }
 
-            // 阅读引导线与聚光灯互斥：进入聚光灯时自动收起引导线，避免两套跟随层叠加
-            if (mode == AnnotationToolMode.Spotlight && _readingAidManager?.IsGuideEnabled == true)
+            // 阅读引导线与聚光灯/放大镜互斥：进入这两个跟随类工具时自动收起引导线，
+            // 避免两套跟随层叠加、鼠标附近同时出现高亮带与透镜。
+            if ((mode == AnnotationToolMode.Spotlight || mode == AnnotationToolMode.Magnifier)
+                && _readingAidManager?.IsGuideEnabled == true)
+            {
                 ToggleReadingGuide(showToast: false);
+            }
+
+            // 菜单勾选态与当前工具同步（键盘 K / 菜单点击都会走这里）
+            UpdateReadingAidMenuState(mode);
 
             // 本地使用计数：只用于「最近使用」与频次校准，不联网、不参与业务判断
             string? commandId = ResolveToolCommandId(mode);
@@ -9129,27 +9236,6 @@ namespace LearningAssistant.Forms.Pdf
                     _logger.LogError(ex, "Error adding text annotation");
                 }
             }
-        }
-
-        private void ShowMagnifier(Point location)
-        {
-            if (_currentPageImage == null) return;
-
-            var imgRect = ToRectangle(GetImageDisplayRect());
-            float relX = (float)(location.X - imgRect.X) / imgRect.Width;
-            float relY = (float)(location.Y - imgRect.Y) / imgRect.Height;
-
-            relX = Math.Clamp(relX, 0, 1);
-            relY = Math.Clamp(relY, 0, 1);
-
-            int imgX = (int)(relX * _currentPageImage.Width);
-            int imgY = (int)(relY * _currentPageImage.Height);
-
-            var magnifier = new MagnifierForm(_currentPageImage, new Point(imgX, imgY));
-            magnifier.Location = new Point(
-                Math.Max(0, Math.Min(location.X - magnifier.Width / 2, Screen.PrimaryScreen.WorkingArea.Width - magnifier.Width)),
-                Math.Max(0, Math.Min(location.Y + 30, Screen.PrimaryScreen.WorkingArea.Height - magnifier.Height)));
-            magnifier.Show(this);
         }
 
         #endregion
@@ -9457,16 +9543,18 @@ namespace LearningAssistant.Forms.Pdf
                 {
                     _navigationManager.DrawAnnotations(g, rightRect, _currentPageIndex + 1);
                 }
-                // 聚光灯覆盖层绘制在双页之上
+                // 聚光灯 / 放大镜覆盖层绘制在双页之上
                 var totalRect = Rectangle.Union(leftRect, rightRect);
                 _navigationManager.DrawSpotlightOverlay(g, totalRect);
+                _navigationManager.DrawMagnifierOverlay(g, totalRect);
             }
             else
             {
                 var singleRect = ToRectangle(GetImageDisplayRect());
                 _navigationManager.DrawAnnotations(g, singleRect, _currentPageIndex);
-                // 聚光灯覆盖层绘制在单页之上
+                // 聚光灯 / 放大镜覆盖层绘制在单页之上
                 _navigationManager.DrawSpotlightOverlay(g, singleRect);
+                _navigationManager.DrawMagnifierOverlay(g, singleRect);
             }
         }
 

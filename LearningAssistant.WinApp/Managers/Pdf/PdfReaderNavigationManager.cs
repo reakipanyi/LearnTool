@@ -88,6 +88,15 @@ namespace LearningAssistant.Managers
         private bool _annotationLayerVisible = true;
         private bool _spotlightActive = false;
         private Point _spotlightPosition = Point.Empty;
+        // 放大镜：跟随鼠标的圆形透镜。直接从当前页位图截取光标附近区域放大绘制，
+        // 不再弹独立窗口；移动时只重绘旧/新透镜包围盒，避免整页重绘影响性能。
+        private bool _magnifierActive = false;
+        private Point _magnifierPosition = Point.Empty;
+        private bool _hasMagnifierPosition = false;
+        private Point _lastMagnifierPoint = Point.Empty;
+        private bool _hasLastMagnifierPoint = false;
+        private const int MagnifierRadius = 110;
+        private const float MagnifierZoom = 2f;
         private bool _favoriteToolbarActive = false;
 
         private readonly Stack<AnnotationStroke> _strokeUndoStack = new Stack<AnnotationStroke>();
@@ -195,8 +204,6 @@ namespace LearningAssistant.Managers
         public Func<bool>? IsHighlightModeCallback { get; set; }
         public Action<Rectangle>? AddHighlightCallback { get; set; }
         public Action<Point>? AddTextCallback { get; set; }
-        /// <summary>放大镜模式下点击时触发，携带点击位置</summary>
-        public Action<Point>? ShowMagnifierCallback { get; set; }
         public Action<AnnotationText, int>? EditTextCallback { get; set; }
         /// <summary>拖拽高亮时触发，通知外部刷新高亮图层渲染</summary>
         public Action? UpdateHighlightLayerCallback { get; set; }
@@ -279,6 +286,14 @@ namespace LearningAssistant.Managers
             _toolHandler.CurrentStrokePoints = null;
             _isLaserPointerActive = (mode == AnnotationToolMode.LaserPointer);
             _spotlightActive = (mode == AnnotationToolMode.Spotlight);
+            // 放大镜在切到该模式后即随鼠标出现；切走时清掉位置，避免下次进入残留旧透镜
+            _magnifierActive = (mode == AnnotationToolMode.Magnifier);
+            if (!_magnifierActive)
+            {
+                _magnifierPosition = Point.Empty;
+                _hasMagnifierPosition = false;
+                _hasLastMagnifierPoint = false;
+            }
             _selectionManager.ClearSelection();
             ClearTemporaryPen();
 
@@ -546,8 +561,10 @@ namespace LearningAssistant.Managers
                             break;
                         case AnnotationToolMode.Magnifier:
                             _logger.LogInformation("MouseDown Left: Magnifier at {X},{Y}", e.Location.X, e.Location.Y);
-                            ShowMagnifierCallback?.Invoke(e.Location);
-                            return;
+                            // 透镜本身跟随鼠标移动，点击只重新定位并刷新，不再弹出独立放大窗口
+                            _magnifierActive = true;
+                            UpdateMagnifierPosition(e.Location);
+                            break;
                     }
                     return;
                 }
@@ -833,6 +850,12 @@ namespace LearningAssistant.Managers
                 {
                     _spotlightPosition = e.Location;
                     _form.PictureBoxPdf.Invalidate();
+                }
+
+                // 放大镜模式：透镜随鼠标移动，只重绘旧/新透镜包围盒
+                if (_currentToolMode == AnnotationToolMode.Magnifier && _magnifierActive)
+                {
+                    UpdateMagnifierPosition(e.Location);
                 }
             }
             catch (Exception ex)
@@ -1553,6 +1576,157 @@ namespace LearningAssistant.Managers
             // 内圈光晕
             using var innerGlow = new Pen(Color.FromArgb(60, 255, 255, 200), 1f);
             g.DrawEllipse(innerGlow, pt.X - spotlightRadius + 5, pt.Y - spotlightRadius + 5, (spotlightRadius - 5) * 2, (spotlightRadius - 5) * 2);
+        }
+
+        /// <summary>
+        /// 绘制跟随鼠标的放大镜透镜：以光标所在页的位图为源，裁成圆形并按倍率放大。
+        /// 单页/双页都通过 <see cref="IPdfReaderFormAccess.GetPageAtPoint"/> 取当前页，
+        /// 夜间模式下用颜色矩阵反色，与页面显示保持一致。
+        /// </summary>
+        public void DrawMagnifierOverlay(Graphics g, Rectangle totalRect)
+        {
+            if (_currentToolMode != AnnotationToolMode.Magnifier || !_magnifierActive || !_hasMagnifierPosition)
+                return;
+
+            var pt = _magnifierPosition;
+            // 鼠标不在页面区域时不绘制，避免在空白处留下一个放大的空白圆
+            if (!totalRect.Contains(pt))
+                return;
+
+            var (_, pageRect, pageImage) = _form.GetPageAtPoint(pt);
+            if (pageImage == null || pageRect.Width <= 0 || pageRect.Height <= 0)
+                return;
+
+            var lensRect = new Rectangle(
+                pt.X - MagnifierRadius, pt.Y - MagnifierRadius,
+                MagnifierRadius * 2, MagnifierRadius * 2);
+
+            // 页面显示矩形 -> 原始位图坐标，反推透镜内应截取的源区域
+            float scaleX = (float)pageImage.Width / pageRect.Width;
+            float scaleY = (float)pageImage.Height / pageRect.Height;
+            float srcRadiusX = MagnifierRadius / MagnifierZoom * scaleX;
+            float srcRadiusY = MagnifierRadius / MagnifierZoom * scaleY;
+            float cx = (pt.X - pageRect.X) * scaleX;
+            float cy = (pt.Y - pageRect.Y) * scaleY;
+
+            float rawX = cx - srcRadiusX;
+            float rawY = cy - srcRadiusY;
+            float rawWidth = srcRadiusX * 2;
+            float rawHeight = srcRadiusY * 2;
+
+            // 靠近页面边缘时源区域会越界：按比例缩小目标矩形，保证放大内容不变形
+            float srcX = Math.Max(0, rawX);
+            float srcY = Math.Max(0, rawY);
+            float srcWidth = Math.Min(pageImage.Width, rawX + rawWidth) - srcX;
+            float srcHeight = Math.Min(pageImage.Height, rawY + rawHeight) - srcY;
+            if (rawWidth <= 0 || rawHeight <= 0 || srcWidth <= 0 || srcHeight <= 0)
+                return;
+
+            var imageRect = new RectangleF(
+                lensRect.X + (srcX - rawX) / rawWidth * lensRect.Width,
+                lensRect.Y + (srcY - rawY) / rawHeight * lensRect.Height,
+                srcWidth / rawWidth * lensRect.Width,
+                srcHeight / rawHeight * lensRect.Height);
+
+            // 柔和阴影：让透镜浮在页面上，但不使用独立窗口的硬边框
+            using (var shadowBrush = new SolidBrush(Color.FromArgb(50, 0, 0, 0)))
+            {
+                g.FillEllipse(shadowBrush, lensRect.X + 3, lensRect.Y + 5, lensRect.Width, lensRect.Height);
+            }
+
+            var state = g.Save();
+            var interpolation = g.InterpolationMode;
+            try
+            {
+                using var clipPath = new GraphicsPath();
+                clipPath.AddEllipse(lensRect);
+                g.SetClip(clipPath, CombineMode.Intersect);
+                g.InterpolationMode = InterpolationMode.HighQualityBilinear;
+
+                // 目标矩形取整：GDI+ 对应重载的目标是 Rectangle，源坐标可保持浮点精度
+                var destRectInt = Rectangle.Round(imageRect);
+                if (destRectInt.Width <= 0 || destRectInt.Height <= 0)
+                    return;
+
+                // 先铺页面底色：光标靠近页边时，越界部分保持页面底色而不是透出下层内容
+                bool isNight = _form.IsNightMode;
+                using (var backgroundBrush = new SolidBrush(isNight ? Color.FromArgb(20, 20, 20) : Color.White))
+                {
+                    g.FillEllipse(backgroundBrush, lensRect);
+                }
+
+                if (isNight)
+                {
+                    using var attributes = new System.Drawing.Imaging.ImageAttributes();
+                    var matrix = new System.Drawing.Imaging.ColorMatrix(new float[][]
+                    {
+                        new float[] { -1, 0, 0, 0, 0 },
+                        new float[] { 0, -1, 0, 0, 0 },
+                        new float[] { 0, 0, -1, 0, 0 },
+                        new float[] { 0, 0, 0, 1, 0 },
+                        new float[] { 1, 1, 1, 0, 1 }
+                    });
+                    attributes.SetColorMatrix(matrix);
+                    g.DrawImage(pageImage, destRectInt, srcX, srcY, srcWidth, srcHeight, GraphicsUnit.Pixel, attributes);
+                }
+                else
+                {
+                    g.DrawImage(pageImage, destRectInt, srcX, srcY, srcWidth, srcHeight, GraphicsUnit.Pixel);
+                }
+            }
+            finally
+            {
+                g.Restore(state);
+                g.InterpolationMode = interpolation;
+            }
+
+            // 细描边：只用于看清透镜边界，不遮挡内容
+            using var ringPen = new Pen(Color.FromArgb(140, 70, 70, 70), 1.5f);
+            g.DrawEllipse(ringPen, lensRect);
+            using var innerRingPen = new Pen(Color.FromArgb(180, 255, 255, 255), 1f);
+            g.DrawEllipse(innerRingPen, lensRect.X + 1, lensRect.Y + 1, lensRect.Width - 2, lensRect.Height - 2);
+        }
+
+        /// <summary>透镜包围盒：含描边与阴影偏移的余量，供局部重绘使用。</summary>
+        private static Rectangle GetMagnifierBounds(Point center)
+        {
+            int half = MagnifierRadius + 6;
+            return new Rectangle(center.X - half, center.Y - half, half * 2, half * 2);
+        }
+
+        /// <summary>更新透镜位置，并把旧/新位置包围盒标记为脏区，避免整页重绘。</summary>
+        private void UpdateMagnifierPosition(Point position)
+        {
+            var pictureBox = _form.PictureBoxPdf;
+            if (pictureBox == null) return;
+            // 同一位置的重复移动直接跳过，减少无意义的重绘
+            if (_hasLastMagnifierPoint && position == _lastMagnifierPoint) return;
+
+            var oldBounds = _hasMagnifierPosition ? GetMagnifierBounds(_magnifierPosition) : Rectangle.Empty;
+            _magnifierPosition = position;
+            _hasMagnifierPosition = true;
+            _lastMagnifierPoint = position;
+            _hasLastMagnifierPoint = true;
+
+            var newBounds = GetMagnifierBounds(position);
+            var dirty = oldBounds.IsEmpty ? newBounds : Rectangle.Union(oldBounds, newBounds);
+            if (dirty.Width > 0 && dirty.Height > 0)
+                pictureBox.Invalidate(dirty);
+        }
+
+        /// <summary>收起透镜并擦除旧位置；鼠标离开画布或切换工具时调用。</summary>
+        public void ClearMagnifier()
+        {
+            if (!_hasMagnifierPosition) return;
+
+            var oldBounds = GetMagnifierBounds(_magnifierPosition);
+            _magnifierPosition = Point.Empty;
+            _hasMagnifierPosition = false;
+            _hasLastMagnifierPoint = false;
+
+            var pictureBox = _form.PictureBoxPdf;
+            if (pictureBox != null && oldBounds.Width > 0 && oldBounds.Height > 0)
+                pictureBox.Invalidate(oldBounds);
         }
 
         /// <summary>
