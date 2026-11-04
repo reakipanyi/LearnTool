@@ -162,6 +162,16 @@ public class AudioTimelineStoreTests : IDisposable
     }
 
     [Fact]
+    public void 参数签名_切换分析器会产生不同签名()
+    {
+        var energy = new AudioTimelineOptions();
+        var external = new AudioTimelineOptions { AnalyzerName = "silero-vad" };
+
+        AudioTimelineStore.ComputeOptionsSignature(energy)
+            .Should().NotBe(AudioTimelineStore.ComputeOptionsSignature(external));
+    }
+
+    [Fact]
     public void 指纹计算_包含大小修改时间与时长()
     {
         var file = Path.Combine(_directory, "a.mp3");

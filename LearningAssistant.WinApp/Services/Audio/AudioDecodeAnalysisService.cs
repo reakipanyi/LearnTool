@@ -1,3 +1,4 @@
+using LearningAssistant.Abstractions.Audio;
 using LearningAssistant.Models.Audio;
 using LearningAssistant.Services.Shadowing;
 using NAudio.Wave;
@@ -13,6 +14,9 @@ public sealed class AudioVadAnalysisResult
 
     public IReadOnlyList<VadSegment> Fine { get; init; } = Array.Empty<VadSegment>();
 
+    /// <summary>实际使用的分析器名，写入时间轴 Engine。</summary>
+    public string Engine { get; init; } = "energy-vad";
+
     /// <summary>是否只分析了空洞。</summary>
     public bool UsedHoleScan { get; init; }
 
@@ -21,7 +25,8 @@ public sealed class AudioVadAnalysisResult
 }
 
 /// <summary>
-/// 音频解码分析：流式解码为单声道，同时喂给粗/细两遍能量 VAD。
+/// 音频解码分析：流式解码为单声道，同时喂给粗/细两遍分析器。
+/// 默认使用能量 VAD；注册 <see cref="IAudioSegmentAnalyzerFactory"/> 后可换成 WebRTC/Silero。
 /// 支持整轨扫描与空洞扫描；空洞前后扩展 1.5 秒用于噪声估计，但只保留完全落在洞内的句子。
 /// </summary>
 public sealed class AudioDecodeAnalysisService
@@ -29,6 +34,18 @@ public sealed class AudioDecodeAnalysisService
     private const int BlockSize = 8192;
     private const int HoleExpansionMs = 1500;
     private const int SeekToleranceMs = 250;
+
+    private readonly IAudioSegmentAnalyzerFactory? _analyzerFactory;
+
+    public AudioDecodeAnalysisService()
+    {
+    }
+
+    /// <summary>使用外部分析器工厂；工厂名需与参数中的 AnalyzerName 一致才会生效。</summary>
+    public AudioDecodeAnalysisService(IAudioSegmentAnalyzerFactory analyzerFactory)
+    {
+        _analyzerFactory = analyzerFactory;
+    }
 
     public Task<AudioVadAnalysisResult> AnalyzeAsync(
         string audioPath,
@@ -63,12 +80,13 @@ public sealed class AudioDecodeAnalysisService
             return new AudioVadAnalysisResult
             {
                 DurationMs = durationMs,
+                Engine = ResolveEngine(options),
                 UsedHoleScan = false
             };
         }
 
         if (holes == null || holes.Count == 0)
-            return AnalyzeFull(reader, durationMs, coarseOptions, fineOptions, progress, cancellationToken);
+            return AnalyzeFull(reader, durationMs, options, coarseOptions, fineOptions, progress, cancellationToken);
 
         var coarseAll = new List<VadSegment>();
         var fineAll = new List<VadSegment>();
@@ -90,17 +108,18 @@ public sealed class AudioDecodeAnalysisService
             }
             catch (Exception)
             {
-                return AnalyzeFullAfterFallback(reader, durationMs, coarseOptions, fineOptions, progress, cancellationToken);
+                return AnalyzeFullAfterFallback(reader, durationMs, options, coarseOptions, fineOptions, progress, cancellationToken);
             }
 
             if (Math.Abs(landedMs - expandStart) > SeekToleranceMs)
-                return AnalyzeFullAfterFallback(reader, durationMs, coarseOptions, fineOptions, progress, cancellationToken);
+                return AnalyzeFullAfterFallback(reader, durationMs, options, coarseOptions, fineOptions, progress, cancellationToken);
 
             int index = i;
             var range = DecodeRange(
                 reader,
                 landedMs,
                 expandEnd,
+                options,
                 coarseOptions,
                 fineOptions,
                 1.0 / holeCount,
@@ -117,6 +136,7 @@ public sealed class AudioDecodeAnalysisService
             DurationMs = durationMs,
             Coarse = Sort(coarseAll),
             Fine = Sort(fineAll),
+            Engine = ResolveEngine(options),
             UsedHoleScan = true
         };
     }
@@ -124,6 +144,7 @@ public sealed class AudioDecodeAnalysisService
     private AudioVadAnalysisResult AnalyzeFull(
         AudioFileReader reader,
         int durationMs,
+        AudioTimelineOptions options,
         SilenceVadOptions coarseOptions,
         SilenceVadOptions fineOptions,
         IProgress<double>? progress,
@@ -134,6 +155,7 @@ public sealed class AudioDecodeAnalysisService
             reader,
             startMs,
             durationMs,
+            options,
             coarseOptions,
             fineOptions,
             1.0,
@@ -149,6 +171,7 @@ public sealed class AudioDecodeAnalysisService
             DurationMs = durationMs,
             Coarse = Sort(coarse),
             Fine = Sort(fine),
+            Engine = ResolveEngine(options),
             UsedHoleScan = false
         };
     }
@@ -156,6 +179,7 @@ public sealed class AudioDecodeAnalysisService
     private AudioVadAnalysisResult AnalyzeFullAfterFallback(
         AudioFileReader reader,
         int durationMs,
+        AudioTimelineOptions options,
         SilenceVadOptions coarseOptions,
         SilenceVadOptions fineOptions,
         IProgress<double>? progress,
@@ -170,12 +194,13 @@ public sealed class AudioDecodeAnalysisService
             // 无法回零时仍按当前位置继续，最多少分析开头一小段
         }
 
-        var result = AnalyzeFull(reader, durationMs, coarseOptions, fineOptions, progress, cancellationToken);
+        var result = AnalyzeFull(reader, durationMs, options, coarseOptions, fineOptions, progress, cancellationToken);
         return new AudioVadAnalysisResult
         {
             DurationMs = result.DurationMs,
             Coarse = result.Coarse,
             Fine = result.Fine,
+            Engine = result.Engine,
             UsedHoleScan = false,
             FellBackToFullScan = true
         };
@@ -189,18 +214,20 @@ public sealed class AudioDecodeAnalysisService
     }
 
     /// <summary>从当前位置解码到 endMs，分别喂入粗/细分析器。</summary>
-    private static DecodedRange DecodeRange(
+    private DecodedRange DecodeRange(
         AudioFileReader reader,
         int startMs,
         int endMs,
+        AudioTimelineOptions options,
         SilenceVadOptions coarseOptions,
         SilenceVadOptions fineOptions,
         double progressScale,
         Action<double>? report,
         CancellationToken cancellationToken)
     {
-        var coarse = new SilenceVadAnalyzer(reader.WaveFormat.SampleRate, coarseOptions);
-        var fine = new SilenceVadAnalyzer(reader.WaveFormat.SampleRate, fineOptions);
+        int sampleRate = reader.WaveFormat.SampleRate;
+        var coarse = CreateAnalyzer(sampleRate, coarseOptions, options.AnalyzerName);
+        var fine = CreateAnalyzer(sampleRate, fineOptions, options.AnalyzerName);
 
         var buffer = new float[BlockSize];
         var mono = new float[BlockSize];
@@ -237,6 +264,32 @@ public sealed class AudioDecodeAnalysisService
             Coarse = coarse.Complete(),
             Fine = fine.Complete()
         };
+    }
+
+    /// <summary>按 AnalyzerName 选择分析器；未匹配到工厂时回退能量 VAD。</summary>
+    private IAudioSegmentAnalyzer CreateAnalyzer(int sampleRate, SilenceVadOptions options, string? analyzerName)
+    {
+        if (_analyzerFactory != null
+            && !string.IsNullOrWhiteSpace(_analyzerFactory.Name)
+            && string.Equals(_analyzerFactory.Name, analyzerName, StringComparison.OrdinalIgnoreCase))
+        {
+            return _analyzerFactory.Create(sampleRate, options);
+        }
+
+        return new SilenceVadAnalyzer(sampleRate, options);
+    }
+
+    /// <summary>实际使用的引擎名，用于时间轴审计字段。</summary>
+    private string ResolveEngine(AudioTimelineOptions options)
+    {
+        if (_analyzerFactory != null
+            && !string.IsNullOrWhiteSpace(_analyzerFactory.Name)
+            && string.Equals(_analyzerFactory.Name, options.AnalyzerName, StringComparison.OrdinalIgnoreCase))
+        {
+            return _analyzerFactory.Name;
+        }
+
+        return "energy-vad";
     }
 
     private static SilenceVadOptions CreateAnalyzerOptions(AudioTimelineOptions options, int gapMs)

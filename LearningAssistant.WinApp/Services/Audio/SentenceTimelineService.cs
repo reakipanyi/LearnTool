@@ -261,7 +261,7 @@ public sealed class SentenceTimelineService : IDisposable
 
                 vadSpans = SentenceBoundaryBuilder.Build(
                     analysis.Coarse, analysis.Fine, workingDuration, options);
-                engine = "energy-vad";
+                engine = analysis.Engine;
                 SaveVadCache(trackKey, workingFingerprint, workingDuration, options, vadSpans, engine);
             }
 

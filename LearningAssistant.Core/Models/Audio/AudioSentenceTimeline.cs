@@ -67,6 +67,12 @@ public sealed class AudioTimelineOptions
 
     public double MinAbsoluteRms { get; set; } = 0.0005;
 
+    /// <summary>
+    /// 分析器名：默认能量 VAD；接入 WebRTC/Silero 时改为对应工厂名。
+    /// 参与缓存参数签名，切换分析器会重新分析。
+    /// </summary>
+    public string AnalyzerName { get; set; } = "energy-vad";
+
     public AudioTimelineOptions Clone() => (AudioTimelineOptions)MemberwiseClone();
 }
 

@@ -80,7 +80,8 @@ public sealed class AudioTimelineStore
             options.MaxSentenceMs,
             options.PaddingMs,
             options.NoiseMultiplier.ToString("R"),
-            options.MinAbsoluteRms.ToString("R"));
+            options.MinAbsoluteRms.ToString("R"),
+            options.AnalyzerName);
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(raw)));
     }
 

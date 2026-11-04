@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using LearningAssistant.Abstractions.Audio;
 
 namespace LearningAssistant.Services.Shadowing
 {
@@ -43,7 +44,7 @@ namespace LearningAssistant.Services.Shadowing
     /// 流式能量 VAD：逐块喂入单声道采样，完成时按帧能量给出语音区间。
     /// 只保存每帧的 RMS，不保留整段音频，适合长音频与在线分析。
     /// </summary>
-    public sealed class SilenceVadAnalyzer
+    public sealed class SilenceVadAnalyzer : IAudioSegmentAnalyzer
     {
         private readonly SilenceVadOptions _options;
         private readonly int _frameMilliseconds;
@@ -64,6 +65,9 @@ namespace LearningAssistant.Services.Shadowing
 
         /// <summary>已分析的整帧数，用于估算进度。</summary>
         public int FrameCount => _frameRms.Count;
+
+        /// <summary>能量 VAD 的引擎名，与时间轴 Engine 保持一致。</summary>
+        public string Name => "energy-vad";
 
         /// <summary>喂入单声道采样；不足一帧的尾部数据保留到下次。</summary>
         public void Push(ReadOnlySpan<float> samples)
