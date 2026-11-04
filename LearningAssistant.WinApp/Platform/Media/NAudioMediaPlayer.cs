@@ -1,4 +1,5 @@
 using LearningAssistant.Abstractions.Media;
+using LearningAssistant.Services.Audio;
 using LearningAssistant.Services.Media;
 using NAudio.CoreAudioApi;
 using NAudio.Wave;
@@ -17,6 +18,7 @@ public class NAudioMediaPlayer : IMediaPlayer
     private NAudio.Wave.SampleProviders.SmbPitchShiftingSampleProvider? _pitchShift;
     private System.Windows.Forms.Timer? _timer;
     private readonly AbLoopState _abLoop = new();
+    private readonly PlaybackRangeState _playbackRange = new();
     private bool _manualStop;
     private double _speed = 1.0;
     private double _volume = 1.0;
@@ -31,6 +33,8 @@ public class NAudioMediaPlayer : IMediaPlayer
     public event EventHandler? PlaybackFinished;
     /// <summary>系统默认播放设备变化（拔插/切换默认设备）时触发</summary>
     public event EventHandler? OutputDeviceChanged;
+    /// <summary>区间播放结束（UI 线程）</summary>
+    public event EventHandler<PlaybackRangeCompletedEventArgs>? PlaybackRangeCompleted;
 
     public MediaPlaybackState State { get; private set; } = MediaPlaybackState.Idle;
     public TimeSpan Position => _reader?.CurrentTime ?? TimeSpan.Zero;
@@ -136,9 +140,10 @@ public class NAudioMediaPlayer : IMediaPlayer
         _varispeed = null;
         _pitchShift = null;
         SubtitleCues = null;
-        // 换曲时清除上一曲的 A-B 循环，避免沿用旧区间
+        // 换曲时清除上一曲的 A-B 循环与播放区间，避免沿用旧区间
         _abLoop.A = null;
         _abLoop.B = null;
+        _playbackRange.Disarm();
 
         try
         {
@@ -237,14 +242,75 @@ public class NAudioMediaPlayer : IMediaPlayer
 
     public void Pause() { _waveOut?.Pause(); SetState(MediaPlaybackState.Paused); }
     public void Resume() { _ = PlayAsync(); }
-    public void Stop() { _manualStop = true; _waveOut?.Stop(); _reader?.Seek(0, System.IO.SeekOrigin.Begin); _varispeed?.Reset(); SetState(MediaPlaybackState.Stopped); }
+    public void Stop() { _manualStop = true; _playbackRange.Disarm(); _waveOut?.Stop(); _reader?.Seek(0, System.IO.SeekOrigin.Begin); _varispeed?.Reset(); SetState(MediaPlaybackState.Stopped); }
     public void Seek(TimeSpan position)
+    {
+        if (_reader == null || position < TimeSpan.Zero || position > _reader.TotalTime) return;
+
+        // 外部 Seek 视为用户接管：原区间作废并通知 UI
+        bool hadRange = _playbackRange.IsArmed;
+        TimeSpan rangeEnd = _playbackRange.End ?? TimeSpan.Zero;
+        if (hadRange) _playbackRange.Disarm();
+
+        SeekCore(position);
+
+        if (hadRange)
+        {
+            PlaybackRangeCompleted?.Invoke(this, new PlaybackRangeCompletedEventArgs
+            {
+                Reason = PlaybackRangeEndReason.SeekedAway,
+                End = rangeEnd
+            });
+        }
+    }
+
+    /// <summary>播放器内部定位，不触发 SeekedAway（供区间起点与到点对齐使用）。</summary>
+    private void SeekCore(TimeSpan position)
     {
         if (_reader == null || position < TimeSpan.Zero || position > _reader.TotalTime) return;
         _reader.CurrentTime = position;
         // 变速缓冲里可能残留定位前的采样，必须丢弃
         _varispeed?.Reset();
     }
+
+    public bool SetPlaybackRange(TimeSpan start, TimeSpan end)
+    {
+        if (_reader == null) return false;
+
+        var duration = _reader.TotalTime;
+        if (start < TimeSpan.Zero) start = TimeSpan.Zero;
+        if (end > duration) end = duration;
+        if (start >= end) return false;
+
+        if (_playbackRange.IsArmed)
+        {
+            var replacedEnd = _playbackRange.End ?? TimeSpan.Zero;
+            _playbackRange.Disarm();
+            PlaybackRangeCompleted?.Invoke(this, new PlaybackRangeCompletedEventArgs
+            {
+                Reason = PlaybackRangeEndReason.Replaced,
+                End = replacedEnd
+            });
+        }
+
+        SeekCore(start);
+        _playbackRange.Arm(end);
+        return true;
+    }
+
+    public void ClearPlaybackRange()
+    {
+        if (!_playbackRange.IsArmed) return;
+
+        var end = _playbackRange.End ?? TimeSpan.Zero;
+        _playbackRange.Disarm();
+        PlaybackRangeCompleted?.Invoke(this, new PlaybackRangeCompletedEventArgs
+        {
+            Reason = PlaybackRangeEndReason.Cancelled,
+            End = end
+        });
+    }
+
 
     public void FadeOut(int milliseconds, bool blocking = false) => FadeTo(0d, milliseconds, blocking);
 
@@ -324,6 +390,21 @@ public class NAudioMediaPlayer : IMediaPlayer
     private void OnTick()
     {
         if (_abLoop.ShouldLoopBack(Position, out var target)) Seek(target);
+
+        // 区间命中：先清区间，再暂停并对齐到 end，最后通知 UI（顺序见设计 §8.1）
+        if (_playbackRange.ShouldStop(Position, out var snapTo))
+        {
+            _playbackRange.Disarm();
+            _waveOut?.Pause();
+            SetState(MediaPlaybackState.Paused);
+            SeekCore(snapTo);
+            PlaybackRangeCompleted?.Invoke(this, new PlaybackRangeCompletedEventArgs
+            {
+                Reason = PlaybackRangeEndReason.Completed,
+                End = snapTo
+            });
+        }
+
         PositionChanged?.Invoke(this, Position);
     }
 
@@ -353,6 +434,7 @@ public class NAudioMediaPlayer : IMediaPlayer
         CancelFade();
         _timer?.Stop();
         _timer?.Dispose();
+        _playbackRange.Disarm();
         Stop();
         _waveOut?.Dispose();
         _reader?.Dispose();
