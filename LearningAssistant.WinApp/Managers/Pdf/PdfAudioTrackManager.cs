@@ -21,6 +21,8 @@ public class PdfAudioTrackManager : IDisposable
     private readonly AudioBoundaryOverlayStore? _overlayStore;
     private readonly ShadowingBoundaryApplyService? _shadowingApplyService;
     private readonly ShadowingSliceAppendService? _sliceAppendService;
+    private readonly AudioWaveformService? _waveformService;
+    private int _waveformGeneration;
     private AudioMatchResult? _result;
     private AudioTrack? _loadedTrack;
     private PdfAudioProfile? _profile;
@@ -40,6 +42,12 @@ public class PdfAudioTrackManager : IDisposable
     public int CurrentPlaylistIndex => _playlistIndex;
     public AudioTrack? CurrentTrack => _loadedTrack;
     public bool IsPlaying => _playback.Player.State == MediaPlaybackState.Playing;
+
+    /// <summary>当前曲目的波形包络（0..1），未加载完成时为 null。</summary>
+    public IReadOnlyList<float>? Waveform { get; private set; }
+
+    /// <summary>波形加载完成或清空时触发。</summary>
+    public event EventHandler? WaveformChanged;
 
     /// <summary>跟读打点期间锁定的页码；非空时翻页只提示、不切换音频。</summary>
     public int? PageLock { get; set; }
@@ -226,7 +234,8 @@ public class PdfAudioTrackManager : IDisposable
         SentenceTimelineService? timelineService = null,
         AudioBoundaryOverlayStore? overlayStore = null,
         ShadowingBoundaryApplyService? shadowingApplyService = null,
-        ShadowingSliceAppendService? sliceAppendService = null)
+        ShadowingSliceAppendService? sliceAppendService = null,
+        AudioWaveformService? waveformService = null)
     {
         _logger = logger;
         _matcher = matcher;
@@ -236,6 +245,7 @@ public class PdfAudioTrackManager : IDisposable
         _overlayStore = overlayStore;
         _shadowingApplyService = shadowingApplyService;
         _sliceAppendService = sliceAppendService;
+        _waveformService = waveformService;
         _playback = new PdfAudioPlaybackService(new NAudioMediaPlayer(subtitleParser));
         _playback.Player.PlaybackFinished += OnPlaybackFinished;
         _playback.Player.OutputDeviceChanged += OnOutputDeviceChanged;
@@ -268,6 +278,7 @@ public class PdfAudioTrackManager : IDisposable
         // 扫描期间不沿用上一份文档的匹配结果，避免翻页播放错音频
         _result = null;
         _loadedTrack = null;
+        ClearWaveform();
         _currentPageIndex = -1;
 
         var directory = Path.GetDirectoryName(pdfPath) ?? "";
@@ -308,6 +319,7 @@ public class PdfAudioTrackManager : IDisposable
         _pageAnchors = Array.Empty<AudioPageAnchor>();
         _playback.Stop();
         _loadedTrack = null;
+        ClearWaveform();
         _result = null;
         _playlistIndex = -1;
         _currentPageIndex = -1;
@@ -536,6 +548,7 @@ public class PdfAudioTrackManager : IDisposable
                 ResetTimeline();
                 _playback.Stop();
                 _loadedTrack = null;
+                ClearWaveform();
                 _playlistIndex = -1;
                 SetPageHint($"P{pageIndex + 1} 无音频 · 去绑定");
                 break;
@@ -589,6 +602,7 @@ public class PdfAudioTrackManager : IDisposable
         _playback.Load(track);
         _loadedTrack = track;
         _playlistIndex = IndexOfTrack(track);
+        BeginWaveformLoad(track);
 
         if (_profile != null)
         {
@@ -896,6 +910,38 @@ public class PdfAudioTrackManager : IDisposable
             _timeline?.DurationMs ?? 0,
             plan,
             cancellationToken);
+    }
+
+    /// <summary>后台加载波形包络；换曲后旧结果自动丢弃。</summary>
+    private async void BeginWaveformLoad(AudioTrack track)
+    {
+        int generation = ++_waveformGeneration;
+        Waveform = null;
+        WaveformChanged?.Invoke(this, EventArgs.Empty);
+
+        if (_waveformService == null) return;
+
+        try
+        {
+            var peaks = await _waveformService.LoadAsync(track).ConfigureAwait(true);
+            if (generation != _waveformGeneration) return;
+
+            Waveform = peaks;
+            WaveformChanged?.Invoke(this, EventArgs.Empty);
+        }
+        catch (Exception)
+        {
+            // 波形只是辅助显示，失败时保持空包络
+        }
+    }
+
+    private void ClearWaveform()
+    {
+        _waveformGeneration++;
+        if (Waveform == null) return;
+
+        Waveform = null;
+        WaveformChanged?.Invoke(this, EventArgs.Empty);
     }
 
     /// <summary>当前播放位置所在（或最近）的句子，供修正菜单定位。</summary>

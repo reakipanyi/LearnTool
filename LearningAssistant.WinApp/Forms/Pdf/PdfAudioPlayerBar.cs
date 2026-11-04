@@ -538,6 +538,7 @@ public sealed class PdfAudioPlayerBar : UserControl
         _manager.TimelineProgressChanged += OnTimelineProgressChanged;
         _manager.PreviewChanged += OnPreviewChanged;
         _manager.BoundaryOverlayChanged += OnBoundaryOverlayChanged;
+        _manager.WaveformChanged += OnWaveformChanged;
         _manager.Playback.Player.PositionChanged += OnPositionChanged;
         _manager.Playback.Player.StateChanged += OnStateChanged;
         PdfSidebarTheme.ThemeChanged += OnThemeChanged;
@@ -832,6 +833,11 @@ public sealed class PdfAudioPlayerBar : UserControl
         }
     }
 
+    private void OnWaveformChanged(object? sender, EventArgs e)
+    {
+        _track.Waveform = _manager.Waveform;
+    }
+
     private void OnBoundaryOverlayChanged(object? sender, EventArgs e)
     {
         if (_boundaryHintShown) return;
@@ -1015,6 +1021,7 @@ public sealed class PdfAudioPlayerBar : UserControl
             _track.Duration = TimeSpan.Zero;
             _track.Position = TimeSpan.Zero;
             _track.Sentences = Array.Empty<AudioSentenceSpan>();
+            _track.Waveform = null;
         }
         else
         {
@@ -1027,6 +1034,7 @@ public sealed class PdfAudioPlayerBar : UserControl
         UpdateLoopChecks();
         UpdateTransport();
         RefreshTrack();
+        _track.Waveform = _manager.Waveform;
         UpdateSessionControls();
     }
 
@@ -1619,6 +1627,7 @@ public sealed class PdfAudioPlayerBar : UserControl
             _manager.TimelineProgressChanged -= OnTimelineProgressChanged;
             _manager.PreviewChanged -= OnPreviewChanged;
             _manager.BoundaryOverlayChanged -= OnBoundaryOverlayChanged;
+            _manager.WaveformChanged -= OnWaveformChanged;
             _manager.Playback.Player.PositionChanged -= OnPositionChanged;
             _manager.Playback.Player.StateChanged -= OnStateChanged;
             PdfSidebarTheme.ThemeChanged -= OnThemeChanged;

@@ -46,6 +46,7 @@ namespace LearningAssistant.Common.UI
 
         private IReadOnlyList<AudioSentenceSpan> _sentences = Array.Empty<AudioSentenceSpan>();
         private IReadOnlyList<AudioPageAnchor> _pageAnchors = Array.Empty<AudioPageAnchor>();
+        private IReadOnlyList<float>? _waveform;
         private TimeSpan _duration;
         private TimeSpan _position;
         private double _analysisProgress = -1;
@@ -119,6 +120,19 @@ namespace LearningAssistant.Common.UI
 
         /// <summary>修正模式下 Ctrl+Z 请求撤销。</summary>
         public event EventHandler? UndoRequested;
+
+        /// <summary>波形包络（0..1，按整轨等分桶）；null 时不绘制。</summary>
+        [Browsable(false)]
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        public IReadOnlyList<float>? Waveform
+        {
+            get => _waveform;
+            set
+            {
+                _waveform = value;
+                Invalidate();
+            }
+        }
 
         /// <summary>
         /// 修正模式：显示边界手柄、禁用点句预览，拖动最近边界。
@@ -311,12 +325,14 @@ namespace LearningAssistant.Common.UI
             if (!ShowMarkers || _duration <= TimeSpan.Zero)
             {
                 DrawPlayedFill(g, palette, trackRect, trackHeight);
+                DrawWaveform(g, palette, trackRect, trackHeight);
                 DrawPlayhead(g, palette, trackCenter);
                 return;
             }
 
             DrawCurrentSentenceOverlay(g, palette, trackRect, trackHeight);
             DrawPlayedFill(g, palette, trackRect, trackHeight);
+            DrawWaveform(g, palette, trackRect, trackHeight);
             DrawSentenceTicks(g, palette, trackCenter);
             DrawBoundaryHandles(g, palette, trackCenter);
             if (ShowPageLayer && _pageAnchors.Count > 0)
@@ -326,6 +342,31 @@ namespace LearningAssistant.Common.UI
         }
 
         #region 绘制
+
+        private void DrawWaveform(Graphics g, PdfSidebarPalette palette, Rectangle trackRect, int trackHeight)
+        {
+            var peaks = _waveform;
+            if (peaks == null || peaks.Count == 0 || DurationMs <= 0) return;
+
+            int width = trackRect.Width;
+            if (width <= 1 || trackHeight <= 2) return;
+
+            using var pen = new Pen(Color.FromArgb(96, palette.Muted), 1);
+            int center = trackRect.Y + trackHeight / 2;
+            int maxHalf = Math.Max(1, trackHeight / 2 - 1);
+
+            for (int x = 0; x < width; x++)
+            {
+                int index = (int)((long)x * peaks.Count / width);
+                if (index >= peaks.Count) index = peaks.Count - 1;
+
+                float peak = peaks[index];
+                if (peak <= 0.004f) continue;
+
+                int half = Math.Max(1, (int)Math.Round(Math.Min(1f, peak) * maxHalf));
+                g.DrawLine(pen, trackRect.X + x, center - half, trackRect.X + x, center + half);
+            }
+        }
 
         private void DrawCurrentSentenceOverlay(Graphics g, PdfSidebarPalette palette, Rectangle trackRect, int trackHeight)
         {
