@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Globalization;
+using System.Text;
 using LearningAssistant.Abstractions.Media;
 using LearningAssistant.Common.UI;
 using LearningAssistant.Managers;
@@ -60,6 +61,7 @@ public sealed class PdfAudioPlayerBar : UserControl
     private readonly ToolStripMenuItem _menuAutoSegment = new("自动断句（建议切片）");
     private readonly ToolStripMenuItem _menuPointSentence = new("点句模式（点位置预览最近一句）");
     private readonly ToolStripMenuItem _menuOpenSentenceList = new("句子列表…");
+    private readonly ToolStripMenuItem _menuExportSrt = new("导出字幕 (.srt)…");
     private readonly ToolStripMenuItem _menuPageLayer = new("页码刻度");
     private readonly ToolStripMenuItem _menuSetPageStart = new("设为当前页起点");
     private readonly ToolStripMenuItem _menuCorrection = new("修正断句（拖动边界）");
@@ -315,6 +317,7 @@ public sealed class PdfAudioPlayerBar : UserControl
             _menuPageLayer.Click += (_, _) => TogglePageLayer();
             _menuSetPageStart.Click += (_, _) => SetCurrentPageStart();
             _menuOpenSentenceList.Click += (_, _) => _form.ShowSentenceList();
+            _menuExportSrt.Click += (_, _) => ExportSrt();
             _menuPresetFine.Click += (_, _) => ApplySentencePreset(0);
             _menuPresetStandard.Click += (_, _) => ApplySentencePreset(1);
             _menuPresetLoose.Click += (_, _) => ApplySentencePreset(2);
@@ -332,6 +335,7 @@ public sealed class PdfAudioPlayerBar : UserControl
             _menuApplySlices.Click += (_, _) => ApplyBoundariesToSlices();
             _loopMenu.Items.Add(_menuPointSentence);
             _loopMenu.Items.Add(_menuOpenSentenceList);
+            _loopMenu.Items.Add(_menuExportSrt);
             _loopMenu.Items.Add(_menuPageLayer);
             _loopMenu.Items.Add(_menuSensitivity);
             _loopMenu.Items.Add(new ToolStripSeparator());
@@ -705,6 +709,47 @@ public sealed class PdfAudioPlayerBar : UserControl
             : "本句没有手动修正");
     }
 
+    private void ExportSrt()
+    {
+        var timeline = _manager.Timeline;
+        if (timeline == null || timeline.Sentences.Count == 0)
+        {
+            _form.ShowToast("当前没有可导出的句子");
+            return;
+        }
+
+        string srt = SentenceSrtExporter.Format(timeline.Sentences);
+        string? audioPath = _manager.CurrentTrack?.FilePath;
+        using var dialog = new SaveFileDialog
+        {
+            Title = "导出字幕",
+            Filter = "字幕文件 (*.srt)|*.srt",
+            FileName = audioPath != null
+                ? Path.ChangeExtension(Path.GetFileName(audioPath), ".srt")
+                : "sentences.srt",
+            OverwritePrompt = true
+        };
+        if (audioPath != null)
+            dialog.InitialDirectory = Path.GetDirectoryName(audioPath);
+
+        if (dialog.ShowDialog(FindForm()) != DialogResult.OK) return;
+
+        try
+        {
+            File.WriteAllText(dialog.FileName, srt, new UTF8Encoding(true));
+            _form.ShowToast("字幕已导出");
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                FindForm(),
+                "导出字幕失败：" + ex.Message,
+                "导出字幕",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
+        }
+    }
+
     private void UndoBoundaryEdit()
     {
         _form.ShowToast(_manager.UndoBoundaryEdit() ? "已撤销上一步修正" : "没有可撤销的修正");
@@ -785,6 +830,8 @@ public sealed class PdfAudioPlayerBar : UserControl
         _menuUndoSentence.Enabled = hasTimeline && _manager.CurrentTrack != null;
         _menuClearSentence.Enabled = hasTimeline && _manager.CurrentTrack != null;
         _menuApplySlices.Enabled = hasTimeline && _manager.CurrentTrack != null;
+        _menuExportSrt.Enabled = hasTimeline
+                                 && _manager.Timeline?.Sentences.Count > 0;
 
         bool analyzing = _manager.TimelineProgress >= 0;
         _menuSensitivity.Enabled = !analyzing && _manager.CurrentTrack != null;
