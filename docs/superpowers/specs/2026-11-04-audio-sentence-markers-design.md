@@ -1,6 +1,6 @@
 # 音频进度条「静音断句」打点与点击预览 — 技术方案
 
-- 状态：设计待评审（本文只定方案，不含实现）
+- 状态：设计定稿（评审通过，2026-11-04；待实现，代码未改动）
 - 日期：2026-11-04
 - 范围：`PdfAudioPlayerBar` 的进度条升级为「句子刻度时间轴」，支持点句/点刻度预览单句；整本音频增加页码刻度层
 - 关联代码：
@@ -20,9 +20,12 @@
 | 1 | 点句默认「播完暂停」 | 单句预览是主行为；`Shift+单击` 才连续播放 |
 | 2 | 无字幕时只显示「第 N 句 + 时间」 | 不强制做 OCR/文本对齐；文本为可选增强 |
 | 3 | 粒度按精听短句 3–8 秒 | `MaxSentenceMs = 8000`，长段强制切分；默认预设改为「精听」 |
-| 4 | P0 需要最小手动修正（建议） | P0 提供「拖一个边界 / 合并 / 拆分 / 撤销」，不提供完整编辑器；手动数据存用户目录 |
-| 5 | 与现有跟读切片共用边界 | 跟读切片作为**高优先级边界来源**；P0 只读复用，写回跟读切片放 P1（见 §7.3 风险） |
-| 6 | 整本书音频叠一层「页码起点」 | 新增页码刻度层；页码时间点必须有来源（切片/手动/插值），不能凭空按页数均分 |
+| 4 | P0 做最小手动修正（已确认） | P0 提供「拖一个边界 / 合并 / 拆分 / 撤销」；P1 增加「在此处插入边界」；不做「删除整句」（属于跟读语义）；手动数据存用户目录 |
+| 5 | 与现有跟读切片共用边界 | 跟读切片作为**高优先级边界来源**；P0 只读复用，P1 人工确认写回（见 §7.3 风险） |
+| 6 | 整本书音频叠一层「页码起点」 | 新增页码刻度层；页码时间点必须有来源（切片/手动），不能凭空按页数均分 |
+| 7 | 共用边界的写回范围 | P0 只读、P1 人工确认写回、P2 双向；P0 保存修正后提示一次「跟读切片仍是旧边界」 |
+| 8 | 页码锚点缺失 | 默认不画；插值只作为显式开关（默认关）的灰色虚线层，`Confidence < 0.5` |
+| 9 | 页码层来源 | 切片最早句 / 手动锚点；字幕对齐不参与页码锚点（P1 再评估） |
 
 ---
 
@@ -124,7 +127,7 @@
 | 刻度（marker） | 画在进度条上的句子**起点**；不是静音中点 |
 | 时间轴（`AudioSentenceTimeline`） | 一条曲目的全部句子区间 + 分析元信息 |
 | 点句模式（point-sentence） | 单击轨道任意位置 → 取最近句子并预览；拖动/Alt 单击才是普通 seek |
-| 页码锚点（`AudioPageAnchor`） | 整本音频中「第 N 页从哪个时间开始」；来源必须是切片/手动/字幕，不能均分 |
+| 页码锚点（`AudioPageAnchor`） | 整本音频中「第 N 页从哪个时间开始」；来源只能是切片/手动，不能均分，也不做字幕推断 |
 | 预览（preview） | 从句子起点播放，到终点自动暂停一次 |
 | 边界来源 | `manual`（用户修正）> `shadowing`（跟读切片）> `subtitle`（字幕）> `vad`（静音检测） |
 | 指纹（fingerprint） | 源文件大小 + 修改时间 + 时长，用于缓存失效（沿用 `ShadowingSegmentStore.BuildFingerprint`） |
@@ -153,10 +156,11 @@ Previewing ──用户拖动/Alt seek/切歌/取消──▶ Cancelled(Idle)
 | `gapPx >= 6` | 全部刻度 + 圆点 | 最近句（点句模式）；关闭点句模式时按 ±5px 命中刻度 |
 | `3 <= gapPx < 6` | 全部刻度，只画 1px 细线，不画圆点 | 同上；点句模式仍是最近句 |
 | `gapPx < 3` | 抽稀：按像素桶只保留每桶第一个 + 当前句 + 首末句 | **不依赖命中刻度**；点句模式取最近句 |
-| `N > 2000`（整本） | 句子层只渲染当前页时间范围；页码层全量 | 句子层只画当前页窗口，但**命中仍取全局最近句**（点句模式）；页码层 ±6px 可点 |
+| `N > 2000`（整本） | 有页码锚点：句子层只渲染 `[当前页起点, 下一页起点)`；**无锚点**：退化为「播放头前后各 50 句 + 其余句首淡刻度」；页码层全量 | 句子层窗口内命中；点句仍取全局最近句；页码层 ±6px 可点 |
 | 关闭点句模式 | 按上面的绘制规则；空白处单击 seek | 只有 ±5px 命中刻度才预览，否则 seek |
 
 - 抽稀只影响**绘制**，不影响“最近句”计算（按 `StartMs` 有序二分/线性扫描）。
+- **整本模式不能假设“知道当前页属于哪一段”**：页→时间只有页码锚点一个来源。锚点缺失时句子层退化为“播放头前后各 50 句 + 其余句首淡刻度”，绝不按页数均分（§11.4）；页码层此时为空，属预期。
 - 页码刻度是**独立上层**，命中优先于句子刻度；页码层不参与抽稀（整本书通常几十到几百页，可全画）。
 - 点句模式下，悬停任意位置都显示最近句的高亮与 tooltip，用户不需要“瞄准”。
 
@@ -186,7 +190,7 @@ Previewing ──用户拖动/Alt seek/切歌/取消──▶ Cancelled(Idle)
 │ Common/UI/AudioTimelineBar.cs          双层刻度 + 点句命中 + 悬停         │
 │ Forms/Pdf/PdfAudioPlayerBar.cs         装配、tooltip、菜单、点句开关      │
 │ Forms/Pdf/AudioSentenceListPanel.cs    P1 句子列表                       │
-│ Platform/Media/NAudioMediaPlayer.cs     StopAt 实现                      │
+│ Platform/Media/NAudioMediaPlayer.cs     SetPlaybackRange 实现              │
 └──────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -240,7 +244,7 @@ public sealed class AudioTimelineOptions
 
 public sealed class AudioSentenceSpan
 {
-    public int Index { get; set; }                 // 1-based，显示用
+    [JsonIgnore] public int Index { get; set; }    // 1-based，运行期按 StartMs 排序后赋值，不落盘
     public int StartMs { get; set; }
     public int EndMs { get; set; }
     public int? PageIndex { get; set; }            // 来自跟读切片/单页音频时，便于页码层与页面同步
@@ -259,8 +263,10 @@ public sealed class AudioPageAnchor
 {
     public int PageIndex { get; set; }
     public int StartMs { get; set; }
-    public string Source { get; set; } = "shadowing"; // shadowing / manual / subtitle
-    public double Confidence { get; set; } = 1.0;     // 插值/推测必须 < 0.5，UI 不画或不强调
+    public string Source { get; set; } = "shadowing"; // shadowing / manual
+    /// <summary>起点是按“最早切片 - PaddingMs”估算的（切片从本页第 2 句才开始打点时会漏页首）</summary>
+    public bool IsStartEstimated { get; set; }
+    public double Confidence { get; set; } = 1.0;     // 插值层才 < 0.5，且默认不生成
 }
 ```
 
@@ -270,8 +276,8 @@ public sealed class AudioPageAnchor
 
 | 数据 | 位置 | 是否可重建 | 说明 |
 | --- | --- | --- | --- |
-| 自动断句缓存 | `AppPaths.CurrentUserCacheDir/audio_timelines/{pdfHash}/{trackKeyHash}.timeline.json` | 是 | 清缓存只丢自动结果 |
-| 手动修正 | `AppPaths.CurrentUserDir/audio_boundaries/{pdfHash}/{trackKeyHash}.manual.json` | 否 | 用户数据；拖边界/合并/拆分/页码锚点 |
+| 自动断句缓存 | `AppPaths.CurrentUserCacheDir/audio_timelines/{fingerprint}.timeline.json` | 是 | 清缓存只丢自动结果 |
+| 手动修正 | `AppPaths.CurrentUserDir/audio_boundaries/{pdfHash}/{trackKeyHash}.manual.json` | 否 | 用户数据；按书存，mtime 变化不会丢；拖边界/合并/拆分/页码锚点 |
 | 跟读切片 | 既有 `Shadowings/{user}/{pdfHash}/p{page}.segments.json` | 否 | **P0 只读**；P1 才允许“应用边界到切片” |
 
 ```csharp
@@ -290,16 +296,16 @@ public sealed class AudioSentenceEdit
     public string Id { get; set; } = "";        // 稳定 ID，优先用 SegmentId / anchorKey
     public int StartMs { get; set; }
     public int EndMs { get; set; }
-    public bool IsDeleted { get; set; }
-    public string Kind { get; set; } = "adjust"; // adjust / merge / split / pageAnchor
+    public string Kind { get; set; } = "adjust"; // adjust / merge / split（页码锚点单独存在 PageAnchors）
 }
 ```
 
 - 读取时校验 `SchemaVersion`、`Fingerprint`、`Options` 签名；任一不一致 → 自动缓存视为未命中并后台重分析，**但手动覆盖层保留**（若指纹变化，提示“源音频已变化，手动边界可能偏移”，仍允许用户选择复用或清空）。
-- JSON 采用 `.part` + 原子改名；进程内按 `user + pdf + trackKey` 加锁串行写。
+- JSON 采用 `.part` + 原子改名；自动缓存按 `user + fingerprint` 加锁，手动覆盖层按 `user + pdf + trackKey` 加锁，串行写。
 - `Text`/`TextSource` 标记 `[JsonIgnore]`，运行期从 `SubtitleParser` 或跟读切片叠加；新增字幕不需要重跑分析。
 - 分析失败写一个 `status=failed` 的短 TTL 负缓存，避免每次播放都重试；网络/格式问题提示一次即可。
-- `trackKeyHash` 用稳定曲目键（相对路径）的 SHA-256 前 12 位；同一条音频被多本书引用时会重复分析，P1 可改内容指纹级缓存（非 P0 必需）。
+- **自动缓存键统一用音频指纹**（`fingerprint = 大小|mtime|时长`），同一 MP3 被多本书引用或换目录只分析一次；`TrackKey` 仍写进 JSON，仅用于展示与排错。
+- **手动覆盖层不跟指纹走**，仍按 `pdfHash + trackKeyHash` 存：它是按书的用户数据，源文件 mtime 变化（复制/导出）不应让修正丢失；读取时指纹不一致只提示“可能偏移”，不迁移、不删除。
 
 ### 6.3 缓存容量
 
@@ -344,7 +350,7 @@ IReadOnlyList<AudioSentenceSpan> SentenceBoundaryBuilder.Build(
    - 精听默认 `MaxSentenceMs = 8000`；3–8 秒目标下，超过 8 秒的连续朗读必须切。
 4. **短句归并**：`Duration < MinSentenceMs` 的段并入「间隔更小」的相邻句（首段并入后一句、末段并入前一句），**不直接丢弃**；若前后间隔都很大且时长 `>= MinSpeechMs`，也允许保留为独立短句（例如 "Yes."），避免误并到下一句。
 5. **加留白**：每段前后各加 `PaddingMs`，裁剪到 `[0,durationMs]`。
-6. **消重叠**：相邻段若重叠，按间隔中点回退，保证 `prev.End <= next.Start`；回退后若某段 < 300ms，则与前段合并。
+6. **消重叠**：相邻段若重叠，按间隔中点回退，保证 `prev.End <= next.Start`；回退后若某段 `< MinSentenceMs`，优先与前段合并；若合并后会超过 `MaxSentenceMs`，则保留该段并把 `Confidence` 降 0.1（不再用“< 300ms 才合并”这种与 `MinSentenceMs` 重复的魔法数）。
 7. **兜底**：结果为空，或整轨只有 0–1 句时，返回 `[0, durationMs]` 单句并标记 `Confidence < 0.5`（UI 不画刻度，但可「点任意位置」）。
 8. **自评**：统计句长分布；精听目标 3–8 秒，若 `> 40%` 句子 < 1s、或 `> 30%` 句子 > 8s、或中位数 > 10s，`Confidence` 降级，UI 提示「断句效果可能不佳，试试灵敏度 / 手动修正」。
 9. **标记来源**：`SentenceBoundaryBuilder` 只产出 VAD 段并写 `BoundarySource = "vad"` / `vad-hard`；切片、字幕、手动来源由 `SentenceBoundaryResolver` 在合并阶段写入对应值，并保留 `Confidence`。
@@ -382,7 +388,7 @@ VAD 段（兜底） ──┘    缺失区间用 VAD 补 → 重叠处按优先�
 | 宽松 | 700ms | 250ms | 1000ms | 15000ms | 有背景音乐、长句 |
 
 - `MaxSentenceMs` 只影响超过上限的段；自然停顿优先。
-- 参数存在档案（`PdfAudioProfile`）与时间轴 JSON 中；切换预设触发重分析，**手动覆盖层保留**，由用户选择“重新断句并清空手动修正 / 仅重分析未修改段”。
+- 参数存在档案（`PdfAudioProfile`）与时间轴 JSON 中；切换预设触发重分析，**默认保留手动覆盖层**；要丢弃手动边界时走独立菜单项「清除本曲目手动修正」，不把“清不清手动修正”塞进每次重分析的弹窗。
 
 ### 7.5 质量升级路线
 
@@ -401,31 +407,158 @@ VAD 段（兜底） ──┘    缺失区间用 VAD 补 → 重叠处按优先�
 
 ### 8.1 播放器能力扩展
 
-`IMediaPlayer` 增加一个**一次性的停止点**（只有 `NAudioMediaPlayer` 一个实现，改动面小）：
+`IMediaPlayer` 增加**区间播放接口**（只有 `NAudioMediaPlayer` 一个实现，改动面小）。P0 用 100ms tick 判定，P1 换成采样限位器时**调用方一行不改**：
 
 ```csharp
-/// <summary>播放到该源时间后自动暂停并清除；null 表示不限制。用于单句预览。</summary>
-TimeSpan? StopAt { get; set; }
+/// <summary>
+/// 设定并启动一次播放区间：内部 Seek 到 start、武装 end 停止点。
+/// start/end 为源时间；end 超过 Duration 时按 Duration 处理；start >= end 返回 false。
+/// 已有区间时按 Replace 处理：先清旧区间（旧区间收到 Replaced），再武装新区间。
+/// </summary>
+bool SetPlaybackRange(TimeSpan start, TimeSpan end);
 
-/// <summary>到达 StopAt 并已暂停后触发（UI 线程）。</summary>
-event EventHandler? PlaybackRangeCompleted;
+/// <summary>取消当前区间（Esc / 切曲 / 离开预览）。</summary>
+void ClearPlaybackRange();
+
+/// <summary>区间结束（UI 线程）。</summary>
+event EventHandler<PlaybackRangeCompletedEventArgs>? PlaybackRangeCompleted;
 ```
 
-- 在 `NAudioMediaPlayer.OnTick`（当前 100ms）里，先判 `StopAt` 再触发 `PositionChanged`；命中时先**取出并清空** `StopAt` → `Pause()` → `Seek(StopAt)` 对齐 → 触发 `PlaybackRangeCompleted`。
+```csharp
+public enum PlaybackRangeEndReason { Completed, Cancelled, SeekedAway, Replaced }
+
+public sealed class PlaybackRangeCompletedEventArgs
+{
+    public PlaybackRangeEndReason Reason { get; init; }
+    public TimeSpan End { get; init; }
+}
+```
+
+- **为什么把 `start` 放进接口**：避免旧设计里“先设停止点再 Seek 到句首”的顺序依赖。`SetPlaybackRange` 内部完成 `Seek(start) → 武装(end)`，调用方只调一个方法；P1 把 tick 换成 `RangeLimitSampleProvider` 时，manager / `PdfAudioPlaybackService` / 播放条都不需要改签名。
+- 在 `NAudioMediaPlayer.OnTick`（当前 100ms）里，先判区间再触发 `PositionChanged`；命中时**先清除区间** → `Pause()` → `Seek(End)` 对齐 → 触发 `Completed`。
 - **清理规则必须写清（否则预览直接坏掉）**：
-  - `Load` / `Stop` / `CancelPreview` 清空 `StopAt`；
-  - **`Seek` 不清空 `StopAt`**（预览流程是“先设 StopAt，再 Seek 到句首”，Seek 清空会把停止点弄丢）；
-  - `Pause` 保留 `StopAt`，允许用户暂停后继续预览到句尾。
-- 把判定抽成 Core 纯类 `PlaybackRangeState`（类似 `AbLoopState`），便于单测：
+  - `Load` / `Stop` / `Dispose` → 清除区间，不触发事件；
+  - **外部 `Seek(pos)` 视为用户接管**：自动清除区间并触发 `SeekedAway`，UI 不再需要“记得清停止点”；`SetPlaybackRange` 内部的 `Seek(start)` 不触发；
+  - `Pause` / `Resume` 保留区间，允许用户暂停后继续预览到句尾。
+- 把判定抽成 Core 纯类 `PlaybackRangeState`（类似 `AbLoopState`），只负责“到没到”，区间由播放器持有：
   ```csharp
   public sealed class PlaybackRangeState
   {
-      public TimeSpan? StopAt { get; set; }
+      public TimeSpan? End { get; }
+      public bool IsArmed { get; }
+      public void Arm(TimeSpan end);
+      public void Disarm();
       public bool ShouldStop(TimeSpan position, out TimeSpan snapTo);
   }
   ```
-- 不修改全局计时器间隔（100ms 对所有播放器行为生效，改成 50ms 影响面大）；接受 ≤100ms 过冲，到点 `Pause` 后 `Seek(EndMs)` 对齐播放头。句尾硬停如出现爆音，再考虑 20–30ms 淡出（可选）。
-- `PlaybackRangeCompleted` 必须由 WinForms 定时器线程（UI 线程）触发；`StopAt` 的读写只在 UI 线程/播放器内部进行，避免跨线程竞态。
+- 不修改全局计时器间隔（100ms 对所有播放器行为生效，改成 50ms 影响面大）；接受 ≤100ms 过冲，到点 `Pause` 后 `Seek(End)` 对齐播放头。句尾硬停如出现爆音，再考虑 20–30ms 淡出（可选）。
+- `PlaybackRangeCompleted` 必须由 WinForms 定时器线程（UI 线程）触发；区间的读写只在 UI 线程/播放器内部进行，避免跨线程竞态。
+
+### 8.1.1 P1：采样级精确停止（`RangeLimitSampleProvider`）
+
+P0 的 tick 方案是“最多 100ms 越界再回跳”。P1 在播放链里插一个采样限位器，把停止误差降到 **1 帧**，并且不会放出下一句的音频。P0 的 tick 判定保留为兜底，两条路径同时存在。
+
+**链条位置（放错就白做）**
+
+当前 `BuildOutputChain()`（`NAudioMediaPlayer.cs:177`）是：
+
+```
+AudioFileReader(_reader) → [VarispeedSampleProvider → SmbPitchShifting] → WaveOutEvent
+```
+
+改为：
+
+```
+AudioFileReader(_reader) → RangeLimitSampleProvider → [变速/变调链] → WaveOutEvent
+```
+
+必须放在**解码器之后、变速之前**：
+
+- 限位按**源采样帧**计数，0.5x/2.0x 不会改变停止点；放到变速之后就必须按输出域换算，倍速一变停止点就漂。
+- 变速器/变调器的内部缓冲只会吐出“限位以内”的样本，**下一句的开头不会被提前解码送出**。
+- `WaveOutEvent` 队列里已排入的也是限位内、且做过淡出的样本，所以**可听停止点就在 EndMs**；延迟的只是“完成事件”（最多一个设备缓冲，默认 300ms），那是 UI 延迟，不是音频越界。
+
+**限位器实现要点**
+
+```csharp
+internal sealed class RangeLimitSampleProvider : ISampleProvider
+{
+    private readonly ISampleProvider _source;
+    private readonly int _channels;   // = WaveFormat.Channels
+    private long _framesRead;         // Arm 之后已读帧数
+    private long _framesLimit;        // 0 = 未限位
+    private int _fadeFrames;          // 尾部淡出帧数（默认 30ms）
+    private bool _reached;
+
+    public WaveFormat WaveFormat => _source.WaveFormat;
+
+    /// <summary>在 WaveOut 线程触发；只允许置标志，禁止在回调里 Pause/Seek。</summary>
+    public event Action? LimitReached;
+
+    public void Arm(TimeSpan length, int fadeMs);  // frames = length * WaveFormat.SampleRate
+    public void Disarm();
+
+    public int Read(float[] buffer, int offset, int count)
+    {
+        // 1) 未限位 → 直通
+        // 2) 剩余帧 = _framesLimit - _framesRead；把本次请求截到剩余帧（count 是样本数，帧 = count / _channels）
+        // 3) 对落在最后 _fadeFrames 内的样本，按“剩余帧 / _fadeFrames”线性降到 0
+        // 4) 源提前 EOF（Read 返回 0）→ 返回已写入量，并保证事件只触发一次
+        // 5) 到达限位后返回已写入量；下次 Read 直接返回 0，不再读源
+    }
+}
+```
+
+容易写错的 5 个点：
+
+1. `count` 单位是**样本**不是帧；立体声漏除 `Channels` 会正好提前一倍停止（或声道错位）。
+2. 淡出增益必须用“距限位还剩几帧”当场算，**不能预读**：预读会多解码，还可能跨过限位。
+3. 触发后只返回 `0`，绝不能“再读一小段收尾”，否则限位失效。
+4. `_reached` 必须幂等：`WaveOutEvent` 在 EOF 后仍可能继续调 `Read`。
+5. `Read` 里不能分配、不能用 LINQ、不能加锁（音频线程每个缓冲都调）。
+
+**线程与状态机（最大的坑）**
+
+`LimitReached` 跑在 WaveOut 回调线程上，在那里直接 `Pause()`/`Seek()` 会和正在进行的 `Read` 重入，轻则卡死、重则崩。正确做法是**只置标志，回 UI 线程再动手**：
+
+```
+Read() 到限位
+  → Interlocked.Exchange(ref _rangeReached, 1)
+  → 仅置标志（不碰播放状态）
+
+UI 线程（SynchronizationContext.Post；或现有 100ms OnTick 轮询）
+  → 若 !_rangeReached 直接返回
+  → ClearPlaybackRange() / rangeLimit.Disarm()
+  → Pause()（走“不保存进度”的路径，见 §8.3）
+  → Seek(End) 对齐播放头
+  → Raise PlaybackRangeCompleted(Completed)
+```
+
+- `OnPlaybackStopped` 必须区分两种情况：`_rangeReached != 0` 是**句尾**，不是曲终，不能触发自动下一句/循环；否则最后一句会连播下一曲。
+- 保留 §8.1 的 tick 兜底：若 150ms 后 `PlaybackRangeCompleted` 仍没发出（设备卡住 / `Read` 没被调），tick 按 `position >= End` 强停。精确停止是优化，不是唯一路径。
+
+**生命周期（和现有 Seek 语义配合）**
+
+| 动作 | 处理 |
+| --- | --- |
+| `SetPlaybackRange(start, end)`（P0 已定义，P1 只换内部实现） | 先 `Seek(start)` → `varispeed.Reset()` → `rangeLimit.Arm(end - start, 30)`（淡出 30ms 为内部常量，不进公开签名） |
+| 外部 `Seek(newPos)` | 视为用户接管：`Disarm()` + 触发 `SeekedAway`（与 P0 行为一致，调用方无感） |
+| `Pause` | 保留 armed 状态；`Resume` 继续计数，不重新 Arm |
+| `Load` / `Stop` / `ClearPlaybackRange` | 先 `Disarm()`；其中 `ClearPlaybackRange` 额外触发 `Cancelled`，`Load/Stop` 不触发事件 |
+| 倍速切换重建链（`RebuildOutputChain`） | 旧限位器 `Disarm()`，新链按 `end - _reader.CurrentTime` 重新 `Arm()`；漏这步会让预览“永远停不下来” |
+| 最后一句 `End >= Duration` | `Arm(Duration - start)`；源 EOF 与限位同时发生，按“句尾”处理（不用再 `-50ms`） |
+| 输出设备变化 | 现有逻辑会重载并取消预览；重载后不恢复限位 |
+
+**为什么不直接放进 P0**：它要改播放链、处理倍速重建、EOF 与限位同刻、UI 线程回投，任何一条没做对都会“停不下来 / 停两次 / 最后一句直接跳下一曲”。P0 先交付 tick 方案，P1 带单测再替换。
+
+**测试（`RangeLimitSampleProviderTests`，纯类，不碰设备）**
+
+- 假源输出确定性 ramp，`Arm(0.5s @ 8kHz = 4000 帧)` → 累计恰好 4000 帧，之后恒 0，`LimitReached` 恰好一次。
+- 淡出：最后 30ms 增益从 1 单调降到 0，淡出前恒为 1。
+- 立体声：`count` 不是 `Channels` 整数倍时按整帧截断，左右声道不串位。
+- 重复 Arm：读一半 → `Arm` → 从 0 重新计数；`Disarm` 后恢复直通。
+- 源提前 EOF：返回已读量、不抛异常、事件仍只触发一次。
+- 集成（`NAudioMediaPlayer` + 短 WAV）：计划 `[1.0s, 1.4s]`、2.0x 倍速，断言最终位置 ≈1.4s（±1 帧），且 `OnPlaybackStopped` 不被当作曲终。
 
 ### 8.2 管理层 API（`PdfAudioTrackManager`）
 
@@ -441,6 +574,14 @@ public bool PreviewNearest(TimeSpan position, bool continueAfter = false);
 public bool PreviewSentence(AudioSentenceSpan span, bool continueAfter = false);
 public void CancelSentencePreview();
 public AudioSentenceSpan? CurrentSentence { get; }  // 由 Position 计算，供 UI 高亮
+public IReadOnlyList<AudioPageAnchor> CurrentPageAnchors { get; } // 与 TimelineChanged 一起发布（P0b）
+
+/// <summary>整本模式：跳到某页起点并同步 PDF 页码；该页无锚点返回 false（不伪造）。</summary>
+public bool SeekToPageStart(int pageIndex);
+
+/// <summary>最小手动修正：把 position 设为第 pageIndex 页起点（写覆盖层，P0b）。</summary>
+public void SetPageStart(int pageIndex, TimeSpan position);
+
 public void SetTimelineOptions(AudioTimelineOptions options); // 触发重分析，保留手动覆盖层
 ```
 
@@ -458,14 +599,14 @@ public void SetTimelineOptions(AudioTimelineOptions options); // 触发重分析
  → 记住当前 A-B 设置、LoopMode、播放状态
  → player.AbLoop = null（暂停 AB）
  → player.LoopMode = None（防止最后一句触发循环）
- → player.StopAt = span.EndMs
- → player.Seek(span.StartMs)
+ → player.SetPlaybackRange(span.Start, span.End)   // 内部 Seek(start) + 武装 end
  → player.Resume()（无加载时先 Load）
- → 到达 StopAt → Pause（内部路径，不保存进度） + Seek(EndMs) + 事件
+ → PlaybackRangeCompleted(Completed) → Pause（不保存进度）+ Seek(End)
  → 恢复 A-B、LoopMode（不恢复播放位置）
 ```
 
-- 若 `span.EndMs >= player.Duration`，把 `StopAt` 设为 `Duration - 50ms`，并依赖 `PlaybackFinished` 兜底取消预览，避免“最后一句”被循环逻辑接管。
+- 若 `span.EndMs >= player.Duration`，直接 `SetPlaybackRange(start, Duration)`（接口内部按 Duration 截断），并依赖 `PlaybackFinished` 兜底取消预览，避免“最后一句”被循环逻辑接管；P1 是 `Arm(Duration - start)`，不再需要 `-50ms`（见 §8.1.1）。
+- 预览结束的判定看 `PlaybackRangeCompletedEventArgs.Reason`，不是“位置到了就算”：`Completed` 才弹“播完暂停”提示；`Cancelled` / `SeekedAway` / `Replaced` 只做清理与恢复，不提示。
 - 预览结束调用 `PdfAudioPlaybackService.Pause()`（不经过 `PdfAudioTrackManager.Pause()`），或给 manager 加 `_suppressProgressSave` 标志；否则会把句尾位置写成 `LastPositionSeconds`。
 
 ### 8.4 与现有功能冲突
@@ -476,11 +617,11 @@ public void SetTimelineOptions(AudioTimelineOptions options); // 触发重分析
 | 单曲/列表循环 | 预览期间 `LoopMode = None`，结束/取消后恢复原值；最后一句走 `PlaybackFinished` 兜底 |
 | 倍速 0.5–2.0 | 时间戳始终是**源时间**，`VarispeedSampleProvider` 不改变 `_reader.CurrentTime`，无需换算 |
 | 打点/跟读会话（若恢复） | 会话期间禁用刻度点击与预览，避免抢占播放 |
-| 用户拖动 seek / Alt 单击 | 立即取消预览并清空 `StopAt` |
-| 用户按空格暂停 | 保持 `StopAt`；再按继续预览；退出预览（Esc/切曲）才清空 |
+| 用户拖动 seek / Alt 单击 | 播放器自动清区间并触发 `SeekedAway`；manager 收到后取消预览、恢复 A-B/LoopMode，无需手动清停止点 |
+| 用户按空格暂停 | 保留区间；再按继续预览；退出预览（Esc/切曲）才 `ClearPlaybackRange()` → `Cancelled` |
 | 切曲 / 翻页切曲 | 取消预览 + 取消分析 + 清空刻度 |
 | 系统输出设备变化 | `OnOutputDeviceChanged` 重载会 `Load` 并清空 A/B；若正在预览，直接取消预览并提示，不尝试跨重载恢复（实现更稳） |
-| 关闭窗口 | `Dispose` 中取消 CTS、清除事件、清空 `StopAt` |
+| 关闭窗口 | `Dispose` 中取消 CTS、清除事件、`ClearPlaybackRange()`（`Load/Stop` 不触发事件） |
 | 进度保存 | 预览期间 `SavePlaybackState` 必须被抑制；只有正常播放/用户退出预览后的暂停才保存 |
 
 ---
@@ -518,9 +659,10 @@ public void SetTimelineOptions(AudioTimelineOptions options); // 触发重分析
 
 | 图层 | 规格 |
 | --- | --- |
+| 垂直布局（24px，DSF 缩放） | 页码刻度 `y=2..10`；轨道底 `y=10..14`；句子刻度 `y=14..20`；播放头圆心 `y=12`。无页码层时句子刻度加长到 `y=6..20`，避免轨道看起来偏上 |
 | 轨道底 | 圆角矩形，高 4px，`palette.SurfaceAlt`，左右各留 9px 防滑块裁切 |
 | 已播放 | 同轨道，`Brand`，圆角 |
-| 当前句区间 | 轨道下方 2px 细带，`BrandSoft` 60% 透明；悬停句加深 |
+| 当前句区间 | 不额外占高度：在轨道上以 `BrandSoft` 60% 覆盖该句时间跨度，句子层对应刻度加粗；悬停句加深 |
 | 句子刻度（下层） | 1px 宽、6px 高竖线，`palette.Muted` 60%；当前句/悬停句为 `Brand` 且高 8px |
 | 页码刻度（上层） | 1.5px 宽、8px 高竖线 + 2px 顶部圆点，`palette.Accent`/`Brand` 70%；当前页加粗 |
 | 悬停圆点 | 3px 圆点（仅 `gapPx >= 6` 时画），`Brand` |
@@ -528,9 +670,10 @@ public void SetTimelineOptions(AudioTimelineOptions options); // 触发重分析
 | 分析中 | 轨道上方 1px 进度线，`Brand` 半透明；**不要占用 `_labelDuration`**，用轨道内右侧 40px 的迷你文字「43%」或状态栏 |
 | 低置信 | 刻度用 `palette.Warn`（若调色板没有，用 60% `Muted` + 悬停提示文案） |
 
-- 双层布局：控件上半区（`y < Height/2`）画页码层，下半区画句子层；播放头贯穿两层。没有页码层时，句子层占满高度，避免“轨道偏上”。
+- 双层布局：页码层占 `y < 12`（轨道上沿以上），句子层占 `y >= 14`；播放头贯穿两层。没有页码层时，句子刻度向下/向上加长，不额外增高控件（保持 24px 与 26px 行高兼容）。
 - 全部用 `Graphics.SmoothingMode.AntiAlias`；整数像素对齐避免竖线糊成 2px。
 - 主题切换：`PdfSidebarTheme.ThemeChanged` 时刷新 `PaletteFor(this)` 并 `Invalidate()`。
+- **绘制按像素桶预聚合**：宽度或句子变化时建一次桶数组（每列记代表句首 / 最近句 / 是否当前句），`OnPaint` 只遍历可视列，不再每帧扫全量；命中仍用全量二分。整本 12000 句时这是重绘能否稳定的关键。
 - 无障碍：`AccessibleName = "音频进度与句子刻度"`；`TabStop=true`，支持 `←/→` 5 秒、`Shift+←/→` 1 秒、`,`/`.` 上下句；P1 再实现 `AccessibleRole.Slider` 的 RangeValue 模式。不要把“只有 AccessibleName”当成完成无障碍。
 
 ### 9.3 命中测试
@@ -538,7 +681,7 @@ public void SetTimelineOptions(AudioTimelineOptions options); // 触发重分析
 ```csharp
 int TrackX(int ms) => EdgePadding + (int)Math.Round(ms / (double)PlayerDuration * TrackWidth);
 
-// 1) 先判 Y 是否在页码层（上半区），且 ShowPageLayer；是 → 最近页码锚点（±6px）
+// 1) 先判 Y：ShowPageLayer && y < 12（轨道上沿）→ 最近页码锚点（±6px）
 // 2) 否则按 X 取最近句子（有序列表二分/线性扫描），不设“必须点中刻度”的阈值
 // 3) PointSentenceMode=true：MouseUp 且未拖动 → PreviewRequested(nearest)
 //    PointSentenceMode=false：命中刻度 ±5px → PreviewRequested；否则 SeekRequested
@@ -591,11 +734,13 @@ What are you going to do this weekend?
 断句刻度 [✓]
  ├─ 点句模式 [✓]          // 关闭后：点刻度预览、点空白 seek
  ├─ 页码刻度 [✓]          // 仅整本单音频时可用
+ ├─ 推测页码（默认关）     // 无锚点页用相邻页插值，灰色虚线；仅显式开启
  ├─ 重新断句
  ├─ 灵敏度：精听短句（默认） / 标准 / 宽松
- ├─ 修正断句（P0：撤销 / 合并下一句 / 拆分本句）
+ ├─ 修正断句（P0：拖边界 / 撤销 / 合并下一句 / 拆分本句；P1：在此处插入边界）
  ├─ 应用边界到跟读切片（P1）
  ├─ 打开句子列表（P1）
+ ├─ 清除本曲目手动修正     // 只清覆盖层，不动自动缓存
  └─ 清除本曲目断句缓存（不动手动修正）
 ```
 
@@ -616,6 +761,13 @@ What are you going to do this weekend?
 | 撤销 | `Ctrl+Z`（会话内栈，最多 20 步） | 重写覆盖层 |
 | 设为当前页起点 | 停在目标位置，`⋯` → 设为第 N 页起点 | `PageAnchors` |
 
+**不在 P0 的修正动作**（避免范围膨胀）：
+
+- 「在此处插入边界」放 P1：它能覆盖“中间漏掉一小句”的长尾场景，但优先级低于拖边界/合并/拆分（这三个已能通过“先拆后拖”达成同样结果）。
+- 「删除整句」不做：句子的删除属于跟读/学习语义（删掉一句会连带 `SegmentId`、takes、练琴计划），不应由播放条的边界编辑器承担。
+
+**其余约束**：
+
 - 修正模式必须显式开启，避免普通点句误拖边界。
 - 每条覆盖记录带稳定 ID（优先 `SegmentId`，否则 `PageIndex + 起始时间` 的哈希）；重分析后按 ID 重新套用，找不到对应句的覆盖标记为“待确认”，不静默丢弃。
 - 覆盖层只影响展示与预览；**P0 不写回 `segments.json`**（见 §7.3 风险）。
@@ -632,8 +784,10 @@ What are you going to do this weekend?
 | `Core/Models/Audio/AudioSentenceTimeline.cs` | 实体、选项、SchemaVersion、页码锚点、手动覆盖模型 |
 | `Core/Services/Audio/SentenceBoundaryBuilder.cs` | 纯函数：切短（3–8s）/短句归并/补白/消重叠/兜底/自评 |
 | `Core/Services/Audio/SentenceBoundaryResolver.cs` | 手动 > 切片 > 字幕 > VAD 的来源合并与空洞填充 |
-| `Core/Services/Audio/AudioPageAnchorBuilder.cs` | 页→时间锚点：切片最早句/手动锚点；**不做页数均分** |
-| `Core/Services/Audio/AudioTimelineStore.cs` | 自动缓存路径、指纹校验、原子写、进程锁 |
+| `Core/Services/Audio/AudioPageAnchorBuilder.cs` | 页→时间锚点：切片最早句/手动锚点（起点减 Padding 并标 `IsStartEstimated`）；**不做页数均分** |
+| `Core/Services/Audio/AudioTimelineStore.cs` | 自动缓存路径（**指纹键**）、校验、原子写、进程锁 |
+| `Core/Services/Audio/AnalysisCoveragePlan.cs` | 覆盖率 → `None/Partial(holes)/Full`，纯函数 |
+| `Core/Services/Audio/AudioSentenceMarkerBinner.cs` | 句子 → 像素桶预聚合（宽度/列表变化重建） |
 | `Core/Services/Audio/AudioBoundaryOverlayStore.cs` | 手动修正/页码锚点（用户数据，不随缓存清理） |
 | `Core/Services/Audio/PlaybackRangeState.cs` | 「播到 B 停一次」纯判定 |
 | `Core/Abstractions/Audio/IAudioSegmentAnalyzer.cs` | 流式分析器接口（P1 接 WebRTC/Silero）；P0 可不实现，直接复用 `SilenceVadAnalyzer` |
@@ -652,9 +806,10 @@ What are you going to do this weekend?
 
 | 文件 | 改动 |
 | --- | --- |
-| `Core/Abstractions/Media/IMediaPlayer.cs` | 增加 `StopAt`、`PlaybackRangeCompleted` |
-| `WinApp/Platform/Media/NAudioMediaPlayer.cs` | `OnTick` 判定 StopAt；**`Load/Stop` 清空，`Seek` 不清空**；事件 |
-| `WinApp/Services/Pdf/Audio/PdfAudioPlaybackService.cs` | 透传 `PreviewRange(start,end)` / `CancelRange()`；预览结束暂停不保存进度 |
+| `Core/Abstractions/Media/IMediaPlayer.cs` | 增加 `SetPlaybackRange/ClearPlaybackRange`、`PlaybackRangeCompleted(+Reason)` |
+| `WinApp/Platform/Media/NAudioMediaPlayer.cs` | `OnTick` 判定区间；`Load/Stop` 清除；外部 `Seek` 触发 `SeekedAway`；事件 |
+| `WinApp/Platform/Media/RangeLimitSampleProvider.cs` | P1：采样级限位 + 尾部淡出；插在解码器之后、变速之前 |
+| `WinApp/Services/Pdf/Audio/PdfAudioPlaybackService.cs` | 透传 `SetPlaybackRange(start,end)` / `ClearPlaybackRange()`；预览结束暂停不保存进度 |
 | `WinApp/Services/Shadowing/VadSegmentService.cs` | 抽出双分析器解码入口；保留原 API 供 `VadSegmentReviewForm` 使用，避免破坏现有审查流程 |
 | `WinApp/Managers/Pdf/PdfAudioTrackManager.cs` | 时间轴加载/取消/事件/点句预览；构造函数新增 `SentenceTimelineService` 参数；预览期间抑制 `SavePlaybackState` |
 | `WinApp/Forms/Pdf/PdfAudioPlayerBar.cs` | 换控件、事件接线、点句开关、菜单、分析状态、悬停提示、快捷键 |
@@ -663,8 +818,8 @@ What are you going to do this weekend?
 | `WinApp/Common/ServiceCollectionExtensions.cs` | 注册 `SentenceTimelineService`/`AudioTimelineStore`/`AudioBoundaryOverlayStore`（管理器本身仍由窗体手工构造） |
 | `WinApp/Forms/Pdf/PdfHiddenFeatures.cs` | 新增 `EnableSentenceTimeline` |
 | `Core/Common/AppPaths.cs` | 新增 `AudioTimelinesDir`（`CurrentUserCacheDir/audio_timelines`）与 `AudioBoundariesDir`（`CurrentUserDir/audio_boundaries`）+ 确保目录 |
-| `Core/Models/Pdf/PdfAudioProfile.cs` | 必加：按书保存 `SentenceTimelineEnabled`、`PointSentenceMode`、`ShowPageLayer`、`AudioTimelineOptions` 预设 |
-| `WinApp/Services/Shadowing/ShadowingSegmentStore.cs` | P0 暴露只读查询「按曲目/页取已对齐边界 + 指纹」；`GetDocumentHash` 目前是 private，需新增公共查询入口或复制哈希逻辑；不改 Schema；P1 再增加写回方法 |
+| `Core/Models/Pdf/PdfAudioProfile.cs` | 必加：按书保存 `SentenceTimelineEnabled`、`PointSentenceMode`、`ShowPageLayer`、`AudioTimelinePreset`（**只存预设名，不存 8 个阈值**，阈值唯一真源在 §7.4 预设表） |
+| `WinApp/Services/Shadowing/ShadowingSegmentStore.cs` | P0 暴露只读查询「按曲目/页取已对齐边界 + 指纹」，并新增**批量只读入口**（整本扫描一次取完、不逐页抢写锁）；`GetDocumentHash` 目前是 private，需新增公共查询入口或复制哈希逻辑；不改 Schema；P1 再增加写回方法 |
 
 ### 10.3 不建议的改动
 
@@ -684,18 +839,28 @@ What are you going to do this weekend?
 LoadCore(track)
   → manager.ResetTimeline()
   → 读取同曲目/同页的跟读切片边界（只读，校验 TrackPath + Fingerprint）
-  → 读取手动覆盖层（audio_boundaries/...manual.json）
-  → timelineService.TryLoadCache(pdf, track)   // 校验 fingerprint/schema/options
+     · 整本音频：批量只读入口一次取完所有页，不逐页抢写锁
+  → 读取手动覆盖层（audio_boundaries/{pdfHash}/{trackKeyHash}.manual.json）
+  → timelineService.TryLoadCache(fingerprint)      // 指纹级缓存，跨书/跨目录复用
       ├─ 命中 → boundaryResolver 合并切片/字幕/手动/VAD → TimelineChanged
-      └─ 未命中 → 后台 AnalyzeAsync(progress, ct)
-             ├─ AudioFileReader 解码 + 混单声道（8192 采样块）
-             ├─ 同时 Push 到 coarse / fine 两个 SilenceVadAnalyzer
-             │    （MinSegmentMilliseconds = MinSpeechMs = 150）
-             ├─ Complete() → SentenceBoundaryBuilder.Build（3–8s）
-             ├─ store.Save（.part → 原子改名）
-             └─ boundaryResolver 合并切片/字幕/手动/VAD → 代际校验 → TimelineChanged
-  → pageAnchorBuilder 用切片最早句/手动锚点算页码层；无来源的页不画
+      └─ 未命中 → 先算切片覆盖率 coverage = 合并去重后的切片/手动时长 ÷ Duration
+             ├─ coverage ≥ 90% → **不跑 VAD**，直接用切片+手动发布（SourceCounts 里 vad=0）
+             ├─ 30% ≤ coverage < 90% → 只对空洞区间解码分析
+             │     · AudioFileReader.CurrentTime 跳段，前后各外扩 1–2s 供噪声底校准
+             │     · 结果做时间偏移后，只保留完全落在空洞内的句；跨空洞边界的丢弃（切片优先）
+             ├─ coverage < 30% → 整轨 AnalyzeAsync(progress, ct)
+             │     ├─ AudioFileReader 解码 + 混单声道（8192 采样块）
+             │     ├─ 同时 Push 到 coarse / fine 两个 SilenceVadAnalyzer
+             │     │    （MinSegmentMilliseconds = MinSpeechMs = 150）
+             │     ├─ Complete() → SentenceBoundaryBuilder.Build（3–8s）
+             │     ├─ store.Save（.part → 原子改名）
+             │     └─ boundaryResolver 合并 → 代际校验 → TimelineChanged
+  → AudioPageAnchorBuilder 用切片最早句/手动锚点算页码层；无来源的页不画
 ```
+
+- 覆盖率按**合并去重后**的时长算，不是把各页 `EndMs-StartMs` 直接相加（跟读切片可能跨页重叠）。
+- 覆盖率判定抽成 Core 纯函数 `AnalysisCoveragePlan.Plan(slices, manual, duration)` → `None / Partial(holes) / Full`，便于单测；`Partial` 的空洞列表按“已合并去重”的区间求补集。
+- 跳段分析必须校验 `reader.CurrentTime` 是否真的落点成功（VBR MP3 seek 粗略），失败就退回整轨分析，别产出错位边界。
 
 ### 11.2 点句 / 点页码 → 预览
 
@@ -703,8 +868,8 @@ LoadCore(track)
 AudioTimelineBar.PreviewRequested(nearestSpan) / PageClicked(pageAnchor)
   → PdfAudioPlayerBar: manager.PreviewNearest(position, shift) 或 SeekToPageStart(page)
       → 保存 A/B + LoopMode → 清 AbLoop → LoopMode=None
-      → StopAt = span.End → Seek(span.Start) → Resume
-      → OnTick 到 End → Pause（不保存进度） + Seek(End) → PlaybackRangeCompleted
+      → SetPlaybackRange(span.Start, span.End) → Resume
+      → PlaybackRangeCompleted(Completed) → Pause（不保存进度） + Seek(End)
       → 恢复 A/B、LoopMode → UI 高亮当前句 3s
 ```
 
@@ -713,7 +878,7 @@ AudioTimelineBar.PreviewRequested(nearestSpan) / PageClicked(pageAnchor)
 ```
 TrackChanged(newTrack)
   → CTS.Cancel()（分析中）
-  → 清空 CurrentTimeline / PageAnchors / StopAt / 当前句
+  → 清空 CurrentTimeline / PageAnchors / ClearPlaybackRange() / 当前句
   → 重新 EnsureTimelineAsync
 ```
 
@@ -721,14 +886,17 @@ TrackChanged(newTrack)
 
 ```
 整本单音频 + ShowPageLayer：
-  → 后台批量扫描 p{page}.segments.json 的最早 StartMs（校验 TrackPath/Fingerprint）
-     · 300 页 = 300 次小文件读取，必须放到后台任务 + 进度，不能在建 UI 时同步做
-     · 扫描结果落一份页锚点索引缓存（pdfHash + trackFingerprint + mtime），下次直接命中
+  → 后台**批量只读**扫描 p{page}.segments.json 的最早 StartMs（校验 TrackPath/Fingerprint）
+     · 用只读批量入口一次取完，不逐页抢写锁；300 页不能在建 UI 时同步做
+     · 锚点 = max(0, earliest.StartMs - PaddingMs)；earliest > 0 时标 IsStartEstimated
+       （用户从本页第 2 句才打点时，页首会被漏掉，减留白是保守修正）
+     · 扫描结果落页锚点索引缓存（fingerprint + mtime），下次直接命中
   → 有手动页码锚点 → 覆盖切片锚点
   → 无锚点的页 → 默认不生成、不画（推荐，诚实）
   → 可选「推测锚点」层（默认关，显式开关才启用）：
      相邻两页都有锚点时按线性插值补中间页，Confidence < 0.5，画成灰色虚线
   → UI：上半区画页码刻度；点页码 → seek + 同步 PDF 页码
+     · IsStartEstimated 的锚点 tooltip 追加“起点为估算”
 PerPage 模式：
   → 页码层置灰（每页独立曲目，页码层无意义）
 ```
@@ -757,10 +925,10 @@ PerPage 模式：
 | 缓存损坏/版本升级 | JSON 解析失败 → 删除并重分析；`SchemaVersion` 不符 → 重分析 |
 | 分析失败 | 负缓存短 TTL（如 10 分钟）+ 可手动重试；不无限重试 |
 | 分析取消 | 丢弃结果，不写盘；下一次重新开始 |
-| 预览时用户拖拽/Alt 单击 | 立即取消预览、清 `StopAt`，以用户 seek 为准 |
+| 预览时用户拖拽/Alt 单击 | 播放器触发 `SeekedAway`，manager 取消预览并以用户 seek 为准 |
 | 预览时切曲 | 取消并清空，不跨曲目恢复 |
-| 预览最后一句 | `EndMs >= Duration` 时 `StopAt = Duration - 50ms`，`PlaybackFinished` 兜底取消预览 |
-| 空格键 | 保持现有播放/暂停；若在预览中按空格 → 暂停/继续该句，保留 `StopAt` |
+| 预览最后一句 | `EndMs >= Duration` 时 `SetPlaybackRange(start, Duration)`，`PlaybackFinished` 兜底取消预览 |
+| 空格键 | 保持现有播放/暂停；若在预览中按空格 → 暂停/继续该句，保留区间 |
 | `Esc` 冲突 | 只有播放条焦点或 `Previewing` 状态才拦截 Esc；否则交给现有翻译条/全屏逻辑 |
 | 打点/跟读会话 | 会话期间禁用预览与刻度点击；刻度仍可显示 |
 | 点句密度 | 3–8s 下刻度 1–3px：点句模式取最近句，不要求命中刻度；关闭点句才要求 ±5px 命中 |
@@ -774,12 +942,13 @@ PerPage 模式：
 
 | 项目 | 估算 | 措施 |
 | --- | --- | --- |
-| MP3 解码 + RMS | 10 分钟音频约 1–3s；1 小时约 8–20s（NAudio，普通桌面 CPU；以实测为准） | 后台线程、进度、缓存；不阻塞播放 |
+| MP3 解码 + RMS | 10 分钟音频约 1–3s；1 小时约 8–20s（NAudio，普通桌面 CPU；以实测为准） | 后台线程、进度、缓存；**切片覆盖 ≥90% 直接跳过 VAD**，30–90% 只解空洞（§11.1） |
 | 内存 | 两个分析器只存帧 RMS：1 小时约 2.9 MB；解码缓冲固定 32KB | 不保留 PCM |
-| UI 重绘 | 3–8s 粒度下 1 小时约 450–1200 句；整本模式句子层只画当前页窗口 | 双缓冲、抽稀、按页窗口化 |
+| UI 重绘 | 3–8s 粒度下 1 小时约 450–1200 句；整本模式句子层只画窗口 | 双缓冲 + 像素桶预聚合（§9.2）；整本无锚点时退化为播放头 ±50 句 |
 | 悬停命中 | 句首按 `StartMs` 有序，二分查找；N ≤ 9000 时可忽略 | 用二分；页码层单独数组 |
+| 停止精度 | P0：tick 判定 ≤100ms 过冲 + Seek 回跳；P1：采样限位 ≤1 帧 | P0 保交付；P1 `RangeLimitSampleProvider`（§8.1.1）+ tick 兜底 |
 | 磁盘 | 1 小时约 75 KB JSON；手动覆盖层通常 < 10 KB | 30 天 LRU 清理自动缓存（P1）；手动层不清理 |
-| 页锚点扫描 | 300 页 = 300 次小文件 JSON 读取（通常 < 100ms，机械盘/网络盘可能 > 1s） | 后台任务 + 进度；页锚点索引缓存（pdfHash + fingerprint + mtime）；缺失页不影响句子层显示 |
+| 页锚点扫描 | 300 页小文件 JSON，通常 < 100ms，机械盘/网络盘可能 > 1s | 后台任务 + 进度；**批量只读入口**；索引缓存（fingerprint + mtime）；缺失页不影响句子层 |
 
 ---
 
@@ -802,18 +971,26 @@ PerPage 模式：
 
 `SentenceBoundaryResolverTests`：切片/字幕/VAD 优先级、重叠取高、空洞填充、切片只覆盖部分页、切片指纹不匹配。
 
-`AudioPageAnchorBuilderTests`：有切片锚点、手动覆盖、无锚点不生成、相邻锚点倒序丢弃、**禁止页数均分**。
+`AudioPageAnchorBuilderTests`：有切片锚点、手动覆盖、无锚点不生成、相邻锚点倒序丢弃、**禁止页数均分**；`earliest > 0` 时减 `PaddingMs` 并标 `IsStartEstimated`，`earliest = 0` 时不标。
 
-`AudioTimelineStoreTests`：写入-读取 round-trip、指纹变化失效、Schema 版本失效、并发写不损坏、损坏 JSON 自愈、负缓存 TTL。
+`AudioTimelineStoreTests`：写入-读取 round-trip、指纹变化失效、Schema 版本失效、并发写不损坏、损坏 JSON 自愈、负缓存 TTL；**同一指纹 + 不同 `TrackKey` 命中同一缓存文件**。
+
+`CoveragePlanTests`：覆盖率 ≥90% → 不分析；30–90% → 只列空洞区间；<30% → 整轨；重叠切片去重后时长正确；空洞边界恰好衔接时不产生非法区间。
+
+`MarkerBinnerTests`：每像素桶只保留代表句；当前句与首末句强制保留；宽度变化重建；12000 句时桶数等于可视列数。
 
 `PlaybackRangeStateTests`：未设置不停止；到达/超过停止点返回 true 并给出 snap 目标；清除后不再触发；Seek 不清除停止点（由集成测试保证）。
+
+`RangeLimitSampleProviderTests`（P1）：恰好 N 帧后返回 0；尾部 30ms 淡出单调到 0；立体声按帧截断；重复 `Arm` 从 0 计数；源提前 EOF 只触发一次事件；`Disarm` 恢复直通。
 
 ### 14.2 WinApp 集成
 
 - 用合成 WAV/MP3（正弦 burst + 静音）跑 `AudioDecodeAnalysisService`，断言句数与边界。
 - 命中测试抽成纯函数 `MarkerHitTester.Nearest(x, width, duration, sentences)` 后单测：任意 x 都返回最近句；页码层 Y 优先；拖拽阈值判定。
-- 预览集成：`StopAt` 到点暂停、`Seek` 后仍保留、`Load/Stop` 清空、A-B/LoopMode 恢复、预览不写 `LastPositionSeconds`。
-- 页码层：整本模式只画有锚点的页；PerPage 模式置灰；页锚点索引缓存命中 / fingerprint 变化失效 / 缺失页不阻塞句子层。
+- 预览集成：区间到点暂停、外部 `Seek` 触发 `SeekedAway`、`Load/Stop` 清除、A-B/LoopMode 恢复、预览不写 `LastPositionSeconds`。
+- 页码层：整本模式只画有锚点的页；PerPage 模式置灰；页锚点索引缓存命中 / fingerprint 变化失效 / 缺失页不阻塞句子层；估起点锚点 tooltip 带“起点为估算”。
+- 覆盖率：整轨切片已对齐时 VAD 分析器调用次数为 0；30–90% 时只解码空洞区间（用可注入的假解码器断言解码范围）；跳段落点失败时回退整轨。
+- 批量只读：整本 300 页扫描期间，跟读窗口的写操作不被阻塞。
 
 ### 14.3 手工回归矩阵
 
@@ -836,25 +1013,30 @@ PerPage 模式：
 
 ## 15. 分期实施
 
-### P0（可用闭环，约 4–5 人日；含最小手动修正与页码层则 5–6 人日）
+### P0（可用闭环，拆成两个可独立验收的子阶段；合计约 5–6 人日）
 
-1. Core：实体 + `SentenceBoundaryBuilder`（3–8s）+ `SentenceBoundaryResolver` + `AudioPageAnchorBuilder` + `AudioTimelineStore` + `AudioBoundaryOverlayStore` + `PlaybackRangeState` + 单测。
-2. WinApp：`AudioDecodeAnalysisService`（双阈值、`MinSpeechMs`）、`SentenceTimelineService`（缓存/取消/代际/去重）。
-3. `IMediaPlayer.StopAt` + `NAudioMediaPlayer`（Load/Stop 清、Seek 不清）+ `PlaybackRangeCompleted`。
-4. `AudioTimelineBar`：双层刻度/播放头/悬停/**点句模式**/拖动/键盘，替换 `TrackBar`。
-5. `PdfAudioPlayerBar`：接线、tooltip、`⋯` 菜单（点句模式/页码层/重分析/灵敏度）、分析状态。
+#### P0a — 「点句 + 播完暂停」主闭环（约 2–3 人日）
+
+1. Core：实体 + `SentenceBoundaryBuilder`（3–8s）+ `SentenceBoundaryResolver` + `AudioTimelineStore`（**指纹键**）+ `PlaybackRangeState` + 单测。
+2. WinApp：`AudioDecodeAnalysisService`（双阈值、`MinSpeechMs`、**覆盖率计划 + 空洞跳段**）、`SentenceTimelineService`（缓存/取消/代际/去重）。
+3. `IMediaPlayer.SetPlaybackRange/ClearPlaybackRange`（+`PlaybackRangeCompleted.Reason`）+ `NAudioMediaPlayer`（Load/Stop 清除、外部 Seek 触发 `SeekedAway`）。
+4. `AudioTimelineBar`：句子层刻度/播放头/悬停/**点句模式**/拖动/键盘/**像素桶绘制**，替换 `TrackBar`（页码层接口先留空）。
+5. `PdfAudioPlayerBar`：接线、tooltip、`⋯` 菜单（点句模式/重新断句/灵敏度）、分析状态。
 6. `PdfAudioTrackManager`：时间轴生命周期、`PreviewNearest`、A-B/LoopMode/进度保存抑制、切曲/设备变化。
-7. 共享边界只读接入 + 页码层（有锚点时）+ 最小手动修正（拖一个边界/合并/拆分/撤销）。
-8. 功能开关 + 手工回归。
+7. 共享边界只读接入 + 功能开关 + 手工回归。
 
-> **建议拆成两个可独立验收的子阶段**（P0 把播放器接口、自绘控件、手动修正、页码层 4 个子系统绑在一个里程碑里，风险高、验收口径也容易糊）：
->
-> - **P0a（约 2–3 人日）**：Core 模型 + 构建/合并 + 缓存 + `StopAt` + `AudioTimelineBar` 点句命中 + 预览 + 共享边界只读。验收：§1.3 的 1/2/3/4/6 条。
-> - **P0b（约 2–3 人日）**：最小手动修正 + 页码层 + 覆盖率提示。验收：§1.3 的 5/7 条 + §9.7。
->
-> 这样即使 P0b 延期，用户也能先拿到「点句 + 播完暂停」主行为。
+> 验收：§1.3 的 1/2/3/4/6 条。**这一阶段完成后用户已能“点一句、听一句、自动停”。**
 
-> 如果排期只能保 2–3 人日：砍掉手动修正和页码层，保留“点句 + 预览 + 共享边界只读 + 缓存”，但要在验收里明确“自动断句可能需重跑灵敏度，不能手动纠错”。不建议再砍点句模式，否则 3–8s 下点击不可用。
+#### P0b — 页码层 + 最小手动修正（约 2–3 人日）
+
+8. Core：`AudioPageAnchorBuilder` + `AudioBoundaryOverlayStore` + 单测。
+9. 页码层（有锚点时；推测层默认关）+ 页码覆盖率提示 + `SetPageStart`。
+10. 最小手动修正：拖一个边界 / 合并下一句 / 拆分本句 / `Ctrl+Z` 撤销；保存后提示“跟读切片仍是旧边界”。
+11. 回归：DPI/主题/整本音频/切片缺失（§14.3）。
+
+> 验收：§1.3 的 5/7 条 + §9.7。**P0b 延期不影响 P0a 交付。**
+
+> 如果排期只能保 2–3 人日：只做 P0a，砍掉 P0b；并在验收里明确“自动断句可能需重跑灵敏度，不能手动纠错”。不建议再砍点句模式，否则 3–8s 下点击不可用。
 
 ### P1（可学习使用，约 2–3 人日）
 
@@ -863,7 +1045,9 @@ PerPage 模式：
 3. 键盘 `,`/`.`/`[`/`]` 上下一句；`Shift+单击` 连续播放；`Esc` 优先级整理。
 4. 悬停卡片（替代 ToolTip）与「+N」抽稀提示。
 5. “应用边界到跟读切片”（写回 `segments.json`，takes 保护 + 确认）。
-6. 缓存 LRU 清理。
+6. 「在此处插入边界」（修正模式的长尾补充）。
+7. 采样级精确停止 `RangeLimitSampleProvider`（§8.1.1；含 30ms 淡出、倍速重建重武装、tick 兜底）。
+8. 缓存 LRU 清理。
 
 ### P2（质量与编辑，约 3–5 人日）
 
@@ -877,7 +1061,7 @@ PerPage 模式：
 
 ---
 
-## 16. 风险与待确认
+## 16. 风险与决策记录
 
 ### 16.1 风险
 
@@ -894,24 +1078,37 @@ PerPage 模式：
 | 预览与 A-B/循环冲突 | 播放行为混乱 | 预览期间暂存 A-B、`LoopMode=None`；结束/取消恢复 |
 | 预览写入阅读进度 | 打开书从“刚听的一句”开始 | 强制抑制 `SavePlaybackState`；走 `PdfAudioPlaybackService.Pause()` |
 | 100ms tick 造成句尾过冲 | 听到下一句开头 | 到点 Pause 后 `Seek(EndMs)` 对齐；必要时专用预览计时器 |
-| P0 范围膨胀 | 延期/质量下降 | 点句+预览+共享只读为不可砍核心；手动修正/页码层可按排期裁剪 |
+| P0 范围膨胀 | 延期/质量下降 | 点句+预览+共享只读为 **P0a 不可砍核心**；P0b（手动修正/页码层）可整段延期，不影响主闭环 |
+| P1 采样限位器与变速链 | 倍速切换后漏重武装 → 预览停不下来 / 最后一句跳下一曲 | 限位状态机（Armed/Disarmed）+ 在 `RebuildOutputChain` 显式重算剩余 + `OnPlaybackStopped` 区分句尾/曲终 + tick 兜底 |
 
-### 16.2 已确认决策（原 6 问）
+### 16.2 已确认决策（16 条）
 
 | 原问题 | 决策 | 文档落点 |
 | --- | --- | --- |
 | 点句默认行为 | 播完暂停；Shift 单击才继续 | §1.2 / §8.3 |
 | 无字幕文本 | 只显示「第 N 句 + 时间」，文本为可选增强 | §1.2 / §9.4 |
 | 断句粒度 | 精听短句 3–8 秒，`MaxSentenceMs=8000` | §7.2 / §7.4 |
-| P0 手动修边界 | **建议 P0 做最小修正**（拖一个边界/合并/拆分/撤销）；完整编辑器 P2 | §1.0 / §15 |
+| P0 手动修边界 | **P0 做最小修正**（拖一个边界/合并/拆分/撤销）；P1 加「插入边界」；完整编辑器 P2 | §1.0 / §9.7 / §15 |
 | 与跟读切片共用边界 | P0 只读复用；P1 人工确认后写回；P2 完整双向 | §7.3 / §11.1 |
 | 整本书页码层 | 叠一层页码起点；只画有切片/手动锚点的页，禁止均分 | §9.2 / §11.4 |
+| 共用边界写回范围 | P0 只读、P1 人工确认写回、P2 双向；P0 修正后提示一次“跟读切片仍是旧边界” | §7.3 / §9.7 |
+| 页码锚点缺失 | 默认不画；插值是显式开关（默认关）的灰色虚线层 | §11.4 / §16.1 |
+| 页码层来源 | 切片最早句 / 手动锚点；字幕不参与页码锚点（P1 再评估） | §4.1 / §11.4 |
+| 播放器区间接口 | `SetPlaybackRange(start,end)` / `ClearPlaybackRange()` + 结束原因；P1 只换内部实现 | §8.1 / §8.1.1 |
+| 整本无锚点渲染 | 句子层退化为「播放头前后各 50 句 + 淡刻度」，不做页数均分 | §4.3 |
+| 缓存键 | 音频指纹（大小\|mtime\|时长），跨书/跨目录复用 | §6.2 |
+| 分析范围 | 覆盖率 ≥90% 跳过 VAD；30–90% 只解空洞；<30% 整轨 | §11.1 / §13 |
+| 页码起点估算 | `max(0, earliest.StartMs - PaddingMs)`，标 `IsStartEstimated` | §6.1 / §11.4 |
+| 整本扫描 | 批量只读入口 + 页锚点索引缓存 | §11.4 / §13 |
+| 整本绘制 | 像素桶预聚合，命中仍用全量二分 | §9.2 |
 
-### 16.3 仍需你确认的 3 个点
+### 16.3 已拍板记录（原 3 个待确认点）
 
-1. **共用边界的写回范围**：P0 只读、P1 写回切片，这个保守解释是否符合你的“共用”预期？如果要求 P0 就双向同步，需要接受“改边界可能导致已有录音错位”，并增加失效提示/重录流程。
-2. **页码锚点缺失时的策略**：当前文档默认“不画”（诚实）；若你更看重导航，可把“用相邻页插值并标灰”做成显式开关（默认关），两种都能保留，代价是多一个设置项。
-3. **P0 手动修正的最低集**：拖一个边界 + 合并 + 拆分 + 撤销，是否够用？还是要加“插入新边界/删除整句”？
+1. **共用边界的写回范围** → 接受保守解释：P0 只读、P1 人工确认写回、P2 双向。若未来要求 P0 双向，必须另写“录音失效提示 + 重录流程”，不在本方案内。
+2. **页码锚点缺失** → 默认不画；插值只作为显式开关（默认关）的灰色虚线层，避免出现大面积的假页码。
+3. **P0 手动修正最低集** → 定为「拖一个边界 / 合并 / 拆分 / 撤销」；P1 加「在此处插入边界」；**不做删除整句**（删除属于跟读语义，不属于边界编辑）。
+
+> 以上 3 点已确认，方案可以进入任务拆分；不再作为评审阻塞项。
 
 ---
 
@@ -979,4 +1176,6 @@ public sealed class AudioTimelineBar : Control
 
 ---
 
-**下一步**：先确认 §16.3 的 3 个点；确认后按 §15 的 P0 拆分任务，并优先做「点句模式 + 预览 + 共享边界只读」这条最小闭环。
+**状态**：§16.3 的 3 个点已拍板，方案定稿（2026-11-04），可进入任务拆分。
+
+**下一步**：按 §15 的 P0a 顺序实现（实体/构建器 → 解码双阈值 → `SetPlaybackRange` → `AudioTimelineBar` → 播放条接线 → manager 预览 → 共享边界只读）；P0a 验收通过后再启动 P0b。实现前先跑 §14.1 的 Core 单测骨架。
