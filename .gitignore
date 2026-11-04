@@ -408,3 +408,4 @@ build_verify/
 **/AppData/**/*.db-wal
 **/AppData/**/*.db-shm
 **/AppData/**/*.db-journal
+/.buildverify/
