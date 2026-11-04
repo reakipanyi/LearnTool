@@ -172,4 +172,49 @@ public class AudioTimelineStoreTests : IDisposable
         fingerprint.Should().StartWith("10|");
         fingerprint.Should().EndWith("|5000");
     }
+
+    [Fact]
+    public void 清理过期缓存_删除旧文件并保留新文件()
+    {
+        _store.Save(CreateTimeline("old|1|60000", "old.mp3"));
+        _store.Save(CreateTimeline("new|1|60000", "new.mp3"));
+
+        string oldPath = _store.GetFilePath("old|1|60000");
+        string newPath = _store.GetFilePath("new|1|60000");
+        DateTime now = DateTime.UtcNow;
+        File.SetLastWriteTimeUtc(oldPath, now - TimeSpan.FromDays(45));
+
+        int removed = _store.PruneExpired(TimeSpan.FromDays(30), now);
+
+        removed.Should().Be(1);
+        File.Exists(oldPath).Should().BeFalse();
+        File.Exists(newPath).Should().BeTrue();
+    }
+
+    [Fact]
+    public void 清理过期缓存_同样清理过期失败标记()
+    {
+        _store.SaveFailure("fail|1|1000", TimeSpan.FromHours(1));
+        string failurePath = Path.Combine(_directory, "fail_1_1000.failed.json");
+        DateTime now = DateTime.UtcNow;
+        File.SetLastWriteTimeUtc(failurePath, now - TimeSpan.FromDays(60));
+
+        int removed = _store.PruneExpired(TimeSpan.FromDays(30), now);
+
+        removed.Should().Be(1);
+        File.Exists(failurePath).Should().BeFalse();
+    }
+
+    [Fact]
+    public void 命中读取会刷新最后使用时间()
+    {
+        _store.Save(CreateTimeline("touch|1|60000", "touch.mp3"));
+        string path = _store.GetFilePath("touch|1|60000");
+        DateTime old = DateTime.UtcNow - TimeSpan.FromDays(40);
+        File.SetLastWriteTimeUtc(path, old);
+
+        _store.Load("touch|1|60000", new AudioTimelineOptions()).Should().NotBeNull();
+
+        File.GetLastWriteTimeUtc(path).Should().BeAfter(old);
+    }
 }

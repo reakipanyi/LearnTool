@@ -36,6 +36,12 @@ public sealed class SentenceTimelineService : IDisposable
     private const string SubtitleSource = "subtitle";
     private const string ManualSource = "manual";
 
+    /// <summary>自动缓存保留期限；手动覆盖层不在清理范围内。</summary>
+    private static readonly TimeSpan CacheMaxAge = TimeSpan.FromDays(30);
+
+    /// <summary>每进程只触发一次清理，避免频繁扫盘。</summary>
+    private static int _pruneStarted;
+
     private readonly AudioTimelineStore _store;
     private readonly AudioDecodeAnalysisService _analysisService;
     private readonly AudioBoundaryLayerProvider? _layerProvider;
@@ -63,6 +69,25 @@ public sealed class SentenceTimelineService : IDisposable
         _textProvider = textProvider;
         _signatureProvider = signatureProvider;
         _uiContext = SynchronizationContext.Current;
+        StartCachePrune();
+    }
+
+    /// <summary>后台清理过期自动缓存，不阻塞 UI；仅每进程执行一次。</summary>
+    private void StartCachePrune()
+    {
+        if (Interlocked.Exchange(ref _pruneStarted, 1) != 0) return;
+
+        _ = Task.Run(() =>
+        {
+            try
+            {
+                _store.PruneExpired(CacheMaxAge);
+            }
+            catch (Exception)
+            {
+                // 清理失败不影响断句功能，下次启动再试
+            }
+        });
     }
 
     public AudioSentenceTimeline? Current { get; private set; }

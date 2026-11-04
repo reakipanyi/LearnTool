@@ -127,12 +127,88 @@ public sealed class AudioTimelineStore
             }
 
             AssignIndexes(timeline.Sentences);
+            TouchAccess(file);
             return timeline;
         }
         catch (Exception)
         {
             TryDelete(file);
             return null;
+        }
+    }
+
+    /// <summary>
+    /// 按“最后使用时间”清理自动缓存：命中读取时刷新文件写入时间，长期未用的条目在此删除。
+    /// 只处理本目录下的 *.timeline.json 与 *.failed.json，不触碰手动覆盖层。
+    /// </summary>
+    public int PruneExpired(TimeSpan maxAge, DateTime? nowUtc = null)
+    {
+        if (maxAge <= TimeSpan.Zero) return 0;
+
+        string directory;
+        try
+        {
+            directory = ResolveDirectory();
+        }
+        catch (Exception)
+        {
+            return 0;
+        }
+
+        if (!Directory.Exists(directory)) return 0;
+
+        DateTime now = (nowUtc ?? DateTime.UtcNow).ToUniversalTime();
+        DateTime cutoff = now - maxAge;
+        int removed = 0;
+
+        foreach (var pattern in new[] { "*.timeline.json", "*.failed.json" })
+        {
+            string[] files;
+            try
+            {
+                files = Directory.GetFiles(directory, pattern);
+            }
+            catch (Exception)
+            {
+                continue;
+            }
+
+            foreach (string file in files)
+            {
+                // 正在写入的 .part 不参与清理，避免与原子替换竞争
+                if (file.EndsWith(".part", StringComparison.OrdinalIgnoreCase)) continue;
+
+                try
+                {
+                    var info = new FileInfo(file);
+                    if (!info.Exists) continue;
+                    if (info.LastWriteTimeUtc >= cutoff) continue;
+                    if (File.Exists(file))
+                    {
+                        File.Delete(file);
+                        removed++;
+                    }
+                }
+                catch (Exception)
+                {
+                    // 单个文件被占用时跳过，下次再清
+                }
+            }
+        }
+
+        return removed;
+    }
+
+    /// <summary>刷新“最后使用时间”，用于 LRU 清理；失败不影响读取。</summary>
+    private static void TouchAccess(string file)
+    {
+        try
+        {
+            File.SetLastWriteTimeUtc(file, DateTime.UtcNow);
+        }
+        catch (Exception)
+        {
+            // 只读介质或权限不足时忽略
         }
     }
 
