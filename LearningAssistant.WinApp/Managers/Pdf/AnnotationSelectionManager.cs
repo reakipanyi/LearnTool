@@ -46,6 +46,8 @@ namespace LearningAssistant.Managers
         /// <summary>高亮被选中时触发，供外部回显该区域已缓存的识别文本与译文</summary>
         public event Action<PdfHighlight>? HighlightSelected;
         public event Action? SelectionCleared;
+        /// <summary>双击空白处取消高亮选中后触发，供宿主切回高亮绘制状态继续划词</summary>
+        public event Action? HighlightDeselectedByDoubleClick;
 
         // 回调委托（由主类设置）
         public Func<Point, PointF>? ClientToImage { get; set; }
@@ -194,6 +196,7 @@ namespace LearningAssistant.Managers
                     SelectionDragStart = imgPoint;
                     _lastClickTime = DateTime.Now;
                     _lastClickLocation = clientPoint;
+                    _highlightClearedByBlankClick = false;
 
                     _logger.LogInformation("Selected stroke at index {Index}, type={ShapeType}", i, stroke.ShapeType);
                     AnnotationSelected?.Invoke(stroke, i, false);
@@ -252,6 +255,7 @@ namespace LearningAssistant.Managers
                         SelectedHighlightInteractionStartBounds = SelectedHighlightOriginalBounds;
                         _logger.LogInformation("Selected highlight at index {Index}", i);
                     }
+                    _highlightClearedByBlankClick = false;
                     HighlightSelected?.Invoke(highlights[i]);
                     InvalidateView?.Invoke();
                     return;
@@ -310,6 +314,7 @@ namespace LearningAssistant.Managers
                         SelectedTextOriginalFontSize = texts[i].FontSize;
                         _lastClickTime = DateTime.Now;
                         _lastClickLocation = clientPoint;
+                        _highlightClearedByBlankClick = false;
                         _logger.LogInformation("Selected text annotation at index {Index}", i);
                     }
                     InvalidateView?.Invoke();
@@ -317,12 +322,28 @@ namespace LearningAssistant.Managers
                 }
             }
 
-            // 点击空白区域 -> 取消选中
+            // 点击空白区域 -> 取消选中；若第一次取消的是高亮，且随后快速再点一次空白（双击），
+            // 通知宿主切回高亮绘制，避免继续划词前还要重新点一次高亮工具
+            var blankNow = DateTime.Now;
+            var blankTimeDiff = (blankNow - _lastBlankClickTime).TotalMilliseconds;
+            var blankDistance = Math.Abs(clientPoint.X - _lastBlankClickLocation.X)
+                + Math.Abs(clientPoint.Y - _lastBlankClickLocation.Y);
+            var isBlankDoubleClick = blankTimeDiff > 0 && blankTimeDiff < DoubleClickTime_ms
+                && blankDistance < DoubleClickDistance;
+
             if (SelectedStroke != null || SelectedHighlight != null || SelectedText != null)
             {
+                _highlightClearedByBlankClick = SelectedHighlight != null;
                 ClearSelection();
                 InvalidateView?.Invoke();
             }
+            else if (isBlankDoubleClick && _highlightClearedByBlankClick)
+            {
+                _highlightClearedByBlankClick = false;
+                HighlightDeselectedByDoubleClick?.Invoke();
+            }
+            _lastBlankClickTime = blankNow;
+            _lastBlankClickLocation = clientPoint;
             _lastClickTime = DateTime.MinValue;
 
             _logger.LogInformation("No stroke, highlight or text hit - click at {X},{Y}", imgPoint.X, imgPoint.Y);
@@ -1052,6 +1073,12 @@ namespace LearningAssistant.Managers
         private Point _lastClickLocation = Point.Empty;
         private const int DoubleClickTime_ms = 400;
         private const int DoubleClickDistance = 5;
+
+        // 空白处点击独立计时：第一次点击清掉高亮选中，短时间内第二次点击视为双击，
+        // 通知宿主回到高亮绘制；与标注点击共用的 _lastClickTime 分开，避免误判
+        private DateTime _lastBlankClickTime = DateTime.MinValue;
+        private Point _lastBlankClickLocation = Point.Empty;
+        private bool _highlightClearedByBlankClick;
 
         public bool IsDoubleClick(Point clientPoint)
         {

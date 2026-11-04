@@ -146,6 +146,9 @@ namespace LearningAssistant.Managers
         /// </summary>
         public event Action<PdfHighlight>? HighlightSelected;
 
+        /// <summary>双击空白处取消高亮选中后触发，宿主可切回高亮绘制状态继续划词</summary>
+        public event Action? HighlightDeselectedByDoubleClick;
+
         /// <summary>当前选中的高亮（画布点击或列表选中）</summary>
         public PdfHighlight? SelectedHighlight => _selectionManager.SelectedHighlight;
 
@@ -259,6 +262,7 @@ namespace LearningAssistant.Managers
             _selectionManager.EditTextCallback = (text, idx) => EditTextCallback?.Invoke(text, idx);
             _selectionManager.UpdateHighlightCallback = (highlight) => _form.HighlightService?.UpdateHighlight(_form.CurrentPdfPath, highlight);
             _selectionManager.HighlightSelected += (highlight) => HighlightSelected?.Invoke(highlight);
+            _selectionManager.HighlightDeselectedByDoubleClick += () => HighlightDeselectedByDoubleClick?.Invoke();
         }
 
         private void InitializeToolHandlerDelegates()

@@ -414,7 +414,7 @@ namespace LearningAssistant.Forms.Pdf
         private readonly PdfReaderCommandRegistry _commandRegistry =
             new PdfReaderCommandRegistry(() => AppPaths.CurrentUserDir);
 
-        // 交互偏好：标注工具默认连续使用（画完保持当前工具）；开启“单次”后画完回到选择
+        // 交互偏好：标注工具默认连续使用（画完保持当前工具）；开启“单次”后画完回到高亮绘制
         private PdfReaderInteractionPreferenceStore? _interactionPreferenceStore;
         private bool _autoReturnToSelectAfterDraw;
         // 「更多 - 标注偏好」里的同一开关，需要和工具栏按钮保持同步
@@ -641,8 +641,15 @@ namespace LearningAssistant.Forms.Pdf
             _highlightManager.UndoActionRecorded += (s, e) => RecordUndoAction(UndoActionKind.Highlight);
             _navigationManager.UndoActionRecorded += (s, e) => RecordUndoAction(UndoActionKind.Stroke);
 
-            // 一次标注完成后按偏好自动回到选择模式（双击锁定的连续标注不打断）
-            _navigationManager.AnnotationCommitted += (s, e) => AutoReturnToSelectIfNeeded();
+            // 一次标注完成后按偏好自动回退（双击锁定的连续标注不打断）
+            _navigationManager.AnnotationCommitted += (s, e) => AutoReturnAfterAnnotationIfNeeded();
+
+            // 双击空白取消高亮选中后回到高亮绘制，便于继续划词而不用再点一次高亮工具
+            _navigationManager.HighlightDeselectedByDoubleClick += () =>
+            {
+                if (_navigationManager?.CurrentToolMode == AnnotationToolMode.Select)
+                    SetAnnotationToolMode(AnnotationToolMode.Highlight);
+            };
 
             _navigationManager.IsHighlightModeCallback = () => _highlightManager?.IsHighlightMode ?? true;
             _navigationManager.AddHighlightCallback = rect => _highlightManager?.AddHighlight(rect);
@@ -2557,7 +2564,7 @@ namespace LearningAssistant.Forms.Pdf
             var root = new ToolStripMenuItem("标注偏好");
             root.Image = CreateGlyphIcon("✏️");
 
-            var autoReturnItem = new ToolStripMenuItem("画完自动回到选择")
+            var autoReturnItem = new ToolStripMenuItem("画完自动回到高亮")
             {
                 Checked = _autoReturnToSelectAfterDraw
             };
@@ -7908,7 +7915,7 @@ namespace LearningAssistant.Forms.Pdf
             _buttonSelectMode ??= CreateToolbarGlyphButton(
                 "🖱", "选择/浏览 (S)：单击选中标注，双击文字可编辑", ButtonSelectMode_Click, 10F);
             _buttonContinuousUse ??= CreateToolbarGlyphButton(
-                "🔁", "连续使用：画完保持当前工具；再次点击当前工具可展开颜色/粗细选项（关闭后每画完一次回到选择）",
+                "🔁", "连续使用：画完保持当前工具；再次点击当前工具可展开颜色/粗细选项（关闭后切到高亮绘制，画完仍保持高亮）",
                 ButtonContinuousUse_Click, 10F);
             _buttonReadingGuide ??= CreateToolbarGlyphButton(
                 "📏", "阅读引导线：横向高亮带跟随鼠标（与聚光灯互斥）", ButtonReadingGuide_Click, 10F);
@@ -7921,7 +7928,7 @@ namespace LearningAssistant.Forms.Pdf
                     _toolbarGroupTools.Controls.Add(button);
             }
 
-            // 按钮开启态 = 连续使用（即“画完不回到选择”）
+            // 按钮开启态 = 连续使用（即“画完不切回高亮绘制开关”）
             UpdateToolButtonState(_buttonContinuousUse, !_autoReturnToSelectAfterDraw);
             UpdateRedoButtonState();
         }
@@ -7992,7 +7999,7 @@ namespace LearningAssistant.Forms.Pdf
 
             // 阅读辅助：护眼色层、阅读引导线与阅读时长统计（纯视图层）
             moreMenu.Items.Add(CreateReadingAidMenu());
-            // 标注偏好：画完是否自动回到选择等行为开关（默认开，可关闭）
+            // 标注偏好：画完是否自动回到高亮等行为开关（默认连续使用，可开启单次）
             moreMenu.Items.Add(CreateAnnotationBehaviorMenu());
             AddMoreMenuItem(moreMenu, "检查清单", _buttonChecklistMode, () => ButtonChecklistMode_Click(this, EventArgs.Empty));
             AddMoreMenuItem(moreMenu, "插入图片", _buttonImageEmbedMode, () => ButtonImageEmbedMode_Click(this, EventArgs.Empty));
@@ -8097,7 +8104,7 @@ namespace LearningAssistant.Forms.Pdf
         }
 
         /// <summary>
-        /// 按分组顺序重排一级图标条：选择 → 阅读标注 → 绘制 → 低频工具（宽屏时）→ 阅读辅助 → 智能 → 编辑 → 显示。
+        /// 按分组顺序重排一级图标条：阅读标注 → 选择 → 绘制 → 低频工具（宽屏时）→ 阅读辅助 → 智能 → 编辑 → 显示。
         /// 每组之间留出更宽的间距并绘制短竖线，用空间换清晰，避免 14 个图标连成一片。
         /// </summary>
         private void LayoutAnnotationToolStrip()
@@ -8111,13 +8118,13 @@ namespace LearningAssistant.Forms.Pdf
             // 分组竖线随重排结果动态计算，交给 ToolbarGroupTools_Paint 统一绘制
             _toolbarGroupSeparatorXs.Clear();
 
-            // 组1：选择/浏览（不产生标注，阅读时的默认态）与“连续使用/单次使用”开关
-            x = PlaceInToolStrip(_buttonSelectMode, x, y, size, gap);
+            // 组1：阅读标注（高亮是阅读时最高频的操作）与“连续使用/单次使用”开关
+            x = PlaceInToolStrip(_buttonHighlightMode, x, y, size, gap);
             x = PlaceInToolStrip(_buttonContinuousUse, x, y, size, groupGap);
             AddToolbarGroupSeparator(x);
 
-            // 组2：阅读标注（高亮/文字/马赛克是阅读时最高频的标注）
-            x = PlaceInToolStrip(_buttonHighlightMode, x, y, size, gap);
+            // 组2：选择/浏览（不产生标注，用于选中编辑已有标注）、文字、马赛克
+            x = PlaceInToolStrip(_buttonSelectMode, x, y, size, gap);
             x = PlaceInToolStrip(_buttonTextMode, x, y, size, gap);
             x = PlaceInToolStrip(_buttonMosaicMode, x, y, size, groupGap);
             AddToolbarGroupSeparator(x);
@@ -8590,15 +8597,16 @@ namespace LearningAssistant.Forms.Pdf
             SetAnnotationToolMode(AnnotationToolMode.Select);
         }
 
-        /// <summary>一级条「连续使用」：切换画完标注后保持当前工具，还是回到选择模式。</summary>
+        /// <summary>一级条「连续使用」：切换画完标注后保持当前工具，还是回到高亮绘制。</summary>
         private void ButtonContinuousUse_Click(object? sender, EventArgs e)
         {
             SetAutoReturnToSelectAfterDraw(!_autoReturnToSelectAfterDraw);
         }
 
         /// <summary>
-        /// 统一设置“画完是否回到选择”的行为开关：
+        /// 统一设置“画完是否回到高亮绘制”的行为开关：
         /// 同步工具栏按钮开启态、更多菜单勾选状态，并立即落盘供下次启动沿用。
+        /// 关闭连续使用（单次使用）时立即切到高亮绘制，避免用户还要再点一次高亮工具。
         /// </summary>
         private void SetAutoReturnToSelectAfterDraw(bool autoReturn)
         {
@@ -8616,8 +8624,15 @@ namespace LearningAssistant.Forms.Pdf
                 AutoReturnToSelectAfterDraw = autoReturn
             });
 
+            // 关闭连续使用后默认回到高亮绘制，便于直接继续划词
+            if (autoReturn && _navigationManager != null
+                && _navigationManager.CurrentToolMode != AnnotationToolMode.Highlight)
+            {
+                SetAnnotationToolMode(AnnotationToolMode.Highlight);
+            }
+
             ShowToast(autoReturn
-                ? "单次使用：每次画完标注后回到选择模式"
+                ? "单次使用：已切到高亮绘制，画完仍保持高亮工具"
                 : "连续使用：画完保持当前工具，颜色沿用上次选择");
         }
 
@@ -9039,26 +9054,33 @@ namespace LearningAssistant.Forms.Pdf
         }
 
         /// <summary>
-        /// 一次标注完成后按用户偏好自动回到选择模式。
-        /// 双击锁定连续标注、或本来就在选择模式时不打断；首次触发给一次可发现性提示。
+        /// 一次标注完成后按用户偏好自动回退：高亮画完回到高亮绘制（便于连续划词），
+        /// 其他标注工具仍回到选择模式。双击锁定连续标注、或已在目标模式时不打断；
+        /// 首次触发给一次可发现性提示。
         /// </summary>
-        private void AutoReturnToSelectIfNeeded()
+        private void AutoReturnAfterAnnotationIfNeeded()
         {
             if (!_autoReturnToSelectAfterDraw) return;
             if (_navigationManager == null || _navigationManager.IsToolSticky) return;
-            if (_navigationManager.CurrentToolMode == AnnotationToolMode.Select) return;
 
-            SetAnnotationToolMode(AnnotationToolMode.Select);
+            var targetMode = _navigationManager.CurrentToolMode == AnnotationToolMode.Highlight
+                ? AnnotationToolMode.Highlight
+                : AnnotationToolMode.Select;
+            if (_navigationManager.CurrentToolMode == targetMode) return;
+
+            SetAnnotationToolMode(targetMode);
 
             if (!_autoReturnHintShown)
             {
                 _autoReturnHintShown = true;
-                ShowToast("已回到选择模式；双击工具按钮可锁定连续标注");
+                ShowToast(targetMode == AnnotationToolMode.Highlight
+                    ? "已回到高亮绘制；双击工具按钮可锁定连续标注"
+                    : "已回到选择模式；双击工具按钮可锁定连续标注");
             }
         }
 
         /// <summary>
-        /// 标注工具按钮双击锁定：锁定的工具画完不再自动回到选择，便于连续标注；
+        /// 标注工具按钮双击锁定：锁定的工具画完不再自动回退，便于连续标注；
         /// 切换到其他工具或按 Esc 即解除。Button 的 DoubleClick 事件在不同主题/自绘样式下
         /// 触发并不可靠，这里改用同一按钮两次左键按下的间隔来识别双击，行为稳定。
         /// </summary>
@@ -9096,7 +9118,7 @@ namespace LearningAssistant.Forms.Pdf
                 if (_navigationManager.CurrentToolMode != AnnotationToolMode.Select)
                 {
                     _navigationManager.LockToolForContinuousDrawing();
-                    ShowToast("已锁定当前工具：画完不会自动回到选择（按 Esc 退出）");
+                    ShowToast("已锁定当前工具：画完不会自动回退（按 Esc 退出）");
                 }
                 return;
             }

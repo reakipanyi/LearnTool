@@ -335,7 +335,7 @@ namespace LearningAssistant.Managers
                     UpdateSecondHighlightLayer();
                     _form.PictureBoxPdf?.Invalidate();
 
-                    // 刚绘制的高亮默认进入可编辑状态；延后到本轮鼠标事件处理完（含工具自动回到选择模式）再选中，
+                    // 刚绘制的高亮默认进入可编辑状态；延后到本轮鼠标事件处理完（含工具自动回到高亮绘制）再选中，
                     // 避免刚选中就被随后的工具切换清掉。双页右页暂不支持选中编辑，这里只处理当前显示页
                     if (targetPageIndex == _form.CurrentPageIndex && !string.IsNullOrEmpty(highlight.Id))
                     {

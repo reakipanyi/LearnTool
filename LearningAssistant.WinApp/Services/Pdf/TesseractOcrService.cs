@@ -21,6 +21,8 @@ namespace LearningAssistant.Services.Pdf
         private string _tessDataPath = string.Empty;
         private bool _enablePreprocessing = true;
         private readonly IAppPaths _appPaths;
+        // 单词末尾常见的标点；仅在识别结果本身是单个单词时剔除，句子标点保持原样
+        private const string TrailingWordPunctuation = ".,;:!?\"'，。；：！？、”“‘’…";
 
 
         public TesseractOcrService(OcrConfig config, IAppPaths appPaths, ILogger<TesseractOcrService>? logger = null)
@@ -189,7 +191,7 @@ namespace LearningAssistant.Services.Pdf
                     var bytes = ms.ToArray();
                     using var pix = Pix.LoadFromMemory(bytes);
                     using var page = engine.Process(pix);
-                    return page.GetText() ?? string.Empty;
+                    return TrimTrailingPunctuationForSingleWord(page.GetText() ?? string.Empty);
                 }
                 catch (Exception ex)
                 {
@@ -229,7 +231,7 @@ namespace LearningAssistant.Services.Pdf
                     {
                         ImageWidth = bmp.Width,
                         ImageHeight = bmp.Height,
-                        Text = page.GetText()?.Trim() ?? string.Empty
+                        Text = TrimTrailingPunctuationForSingleWord(page.GetText()?.Trim() ?? string.Empty)
                     };
 
                     using var iterator = page.GetIterator();
@@ -250,7 +252,8 @@ namespace LearningAssistant.Services.Pdf
 
                         result.Lines.Add(new LearningAssistant.Models.Pdf.OcrTextLine
                         {
-                            Text = System.Text.RegularExpressions.Regex.Replace(lineText, @"\s+", " ").Trim(),
+                            Text = TrimTrailingPunctuationForSingleWord(
+                                System.Text.RegularExpressions.Regex.Replace(lineText, @"\s+", " ").Trim()),
                             Bounds = new RectInt(rect.X1, rect.Y1, width, height)
                         });
                     }
@@ -389,7 +392,34 @@ namespace LearningAssistant.Services.Pdf
 
             text = text.Trim();
 
-            return text;
+            return TrimTrailingPunctuationForSingleWord(text);
+        }
+
+        /// <summary>
+        /// OCR 识别结果只有一个单词时去掉词尾标点（如 "apple," → "apple"），
+        /// 避免单词被翻译/朗读时当成带标点的句子；多词文本或句子（含内部标点、
+        /// 含空白、中文整句等）保持原标点不变。
+        /// </summary>
+        private static string TrimTrailingPunctuationForSingleWord(string text)
+        {
+            var trimmed = text.Trim();
+            if (trimmed.Length == 0)
+                return string.Empty;
+
+            // 含空白说明是多个词或整句，保留原有标点
+            if (trimmed.Any(char.IsWhiteSpace))
+                return trimmed;
+
+            var end = trimmed.Length;
+            while (end > 0 && TrailingWordPunctuation.IndexOf(trimmed[end - 1]) >= 0)
+                end--;
+
+            // 去掉词尾标点后仍有标点，说明是短语/句子而非单词，保持原样
+            if (end > 0 && trimmed[..end].IndexOfAny(TrailingWordPunctuation.ToCharArray()) >= 0)
+                return trimmed;
+
+            // 避免把纯标点结果清空
+            return end > 0 ? trimmed[..end] : trimmed;
         }
 
         private Bitmap PreprocessImage(Bitmap image)
