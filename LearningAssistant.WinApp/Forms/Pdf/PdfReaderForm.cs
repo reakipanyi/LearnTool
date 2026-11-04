@@ -4210,6 +4210,13 @@ namespace LearningAssistant.Forms.Pdf
             _audioPanel?.RefreshData();
         }
 
+        /// <summary>打开音频抽屉并切到句子列表（播放条菜单入口）。</summary>
+        public void ShowSentenceList()
+        {
+            ShowAudioCompanion();
+            _audioPanel?.ShowSentenceView(true);
+        }
+
         private void OnAudioAvailabilityChanged(object? sender, EventArgs e)
             => UpdateAudioPlayerBarVisibility();
 

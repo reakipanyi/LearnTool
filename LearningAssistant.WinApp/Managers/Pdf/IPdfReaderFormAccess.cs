@@ -95,6 +95,9 @@ namespace LearningAssistant.Managers
         /// <summary>音频录制服务</summary>
         IAudioRecorderService? AudioRecorderService { get; }
 
+        /// <summary>打开音频抽屉并切到句子列表。</summary>
+        void ShowSentenceList();
+
         /// <summary>尝试读取选区翻译缓存；命中时返回本页该文本的译文。</summary>
         bool TryGetCachedSelectionTranslation(int pageIndex, string ocrText, out string translation);
         /// <summary>写入选区翻译缓存，供下次翻页回显。</summary>

@@ -1,5 +1,6 @@
 using LearningAssistant.Common.UI;
 using LearningAssistant.Managers;
+using LearningAssistant.Models.Audio;
 using LearningAssistant.Models.Pdf;
 using LearningAssistant.Services.Pdf;
 using System.Drawing.Drawing2D;
@@ -43,6 +44,16 @@ public partial class PdfAudioPanel : UserControl, ISidebarThemeAware
     private Font? _listFont;
     private Font? _listPlayingFont;
     private Font? _listMarkerFont;
+    private Font? _listTimeFont;
+
+    private readonly Panel _sentencePanel = new();
+    private readonly ListBox _listSentences = new();
+    private readonly ToggleSwitch _chkLoopSentence = new();
+    private readonly Label _labelLoopSentence = new();
+    private readonly System.Windows.Forms.Timer _sentenceTimer = new() { Interval = 250 };
+    private bool _showSentenceView;
+    private bool _suppressSentenceSelection;
+    private int _sentenceHighlightIndex = -2;
 
     /// <summary>供 Visual Studio 设计器实例化；运行时请使用带依赖的构造函数。</summary>
     public PdfAudioPanel()
@@ -189,6 +200,57 @@ public partial class PdfAudioPanel : UserControl, ISidebarThemeAware
 
         listCard.Body.Controls.Add(_emptyPanel);
         _emptyPanel.BringToFront();
+        BuildSentenceList();
+    }
+
+    /// <summary>曲目卡片内的「句子」抽屉：点句预览、当前句高亮滚动、单句循环。</summary>
+    private void BuildSentenceList()
+    {
+        _sentencePanel.Dock = DockStyle.Fill;
+        _sentencePanel.BackColor = PdfSidebarTheme.Surface;
+        _sentencePanel.Visible = false;
+
+        var loopRow = new TableLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            Height = 30,
+            ColumnCount = 2,
+            RowCount = 1,
+            Margin = Padding.Empty,
+            Padding = Padding.Empty
+        };
+        loopRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        loopRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 40));
+
+        _labelLoopSentence.Text = "单句循环";
+        _labelLoopSentence.Dock = DockStyle.Fill;
+        _labelLoopSentence.TextAlign = ContentAlignment.MiddleLeft;
+        _labelLoopSentence.ForeColor = PdfSidebarTheme.PaletteFor(this).Muted;
+        _chkLoopSentence.Dock = DockStyle.Fill;
+        _chkLoopSentence.Margin = new Padding(0, 5, 0, 5);
+        _chkLoopSentence.CheckedChanged += (_, _) =>
+        {
+            if (_manager != null) _manager.LoopSentence = _chkLoopSentence.Checked;
+        };
+        loopRow.Controls.Add(_labelLoopSentence, 0, 0);
+        loopRow.Controls.Add(_chkLoopSentence, 1, 0);
+
+        _listSentences.Dock = DockStyle.Fill;
+        _listSentences.BorderStyle = BorderStyle.None;
+        _listSentences.IntegralHeight = false;
+        _listSentences.DrawMode = DrawMode.OwnerDrawFixed;
+        _listSentences.ItemHeight = 36;
+        _listSentences.DrawItem += ListSentences_DrawItem;
+        _listSentences.SelectedIndexChanged += (_, _) => OnSentenceSelected();
+
+        _sentencePanel.Controls.Add(_listSentences);
+        _sentencePanel.Controls.Add(loopRow);
+
+        listCard.Body.Controls.Add(_sentencePanel);
+        listCard.ActionText = "句子";
+        listCard.ActionButton!.Click += (_, _) => ShowSentenceView(!_showSentenceView);
+
+        _sentenceTimer.Tick += (_, _) => UpdateSentenceHighlight(force: false);
     }
 
     /// <summary>按当前字体回填设计期占位尺寸，保持与动态布局一致的视觉效果。</summary>
@@ -273,7 +335,15 @@ public partial class PdfAudioPanel : UserControl, ISidebarThemeAware
         _manager.TrackChanged += OnTrackChanged;
         _manager.PageHintChanged += OnPageHintChanged;
         _manager.SettingsChanged += OnSettingsChanged;
+        _manager.TimelineChanged += OnTimelineChanged;
     }
+
+    private void OnTimelineChanged(object? sender, AudioSentenceTimeline? timeline)
+        => InvokeIfReady(() =>
+        {
+            if (!_showSentenceView) return;
+            RefreshSentenceList();
+        });
 
     /// <summary>直接选择另一本 PDF 打开，不再把侧栏强制切回文件页。</summary>
     private async void OpenAnotherBook()
@@ -374,6 +444,202 @@ public partial class PdfAudioPanel : UserControl, ISidebarThemeAware
             TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
     }
 
+    /// <summary>打开/收起句子抽屉；由播放条菜单或卡片右上角按钮调用。</summary>
+    public void ShowSentenceView(bool show)
+    {
+        if (_showSentenceView == show)
+        {
+            if (show) RefreshSentenceList();
+            return;
+        }
+
+        _showSentenceView = show;
+        if (show)
+        {
+            RefreshSentenceList();
+            _sentenceTimer.Start();
+            ApplySentenceViewVisibility();
+        }
+        else
+        {
+            _sentenceTimer.Stop();
+            ApplySentenceViewVisibility();
+            // 回到曲目列表：重算卡片标题与空状态
+            RefreshData();
+        }
+    }
+
+    private void ApplySentenceViewVisibility()
+    {
+        bool active = _showSentenceView && !_emptyPanel.Visible;
+        _sentencePanel.Visible = active;
+        _listTracks.Visible = !active && !_emptyPanel.Visible;
+        if (active)
+        {
+            listCard.Title = BuildSentenceTitle();
+            _sentencePanel.BringToFront();
+        }
+    }
+
+    private string BuildSentenceTitle()
+    {
+        var timeline = _manager?.Timeline;
+        if (timeline == null || timeline.Sentences.Count == 0) return "句子 · 分析中…";
+        return $"句子 {timeline.Sentences.Count}";
+    }
+
+    private void RefreshSentenceList()
+    {
+        if (_manager == null) return;
+
+        var sentences = _manager.Timeline?.Sentences;
+        _suppressSentenceSelection = true;
+        _listSentences.BeginUpdate();
+        try
+        {
+            _listSentences.Items.Clear();
+            if (sentences == null || sentences.Count == 0)
+            {
+                _listSentences.Items.Add("断句分析中…");
+            }
+            else
+            {
+                foreach (var span in sentences)
+                    _listSentences.Items.Add(span.Text ?? "");
+            }
+        }
+        finally
+        {
+            _listSentences.EndUpdate();
+            _suppressSentenceSelection = false;
+        }
+
+        _sentenceHighlightIndex = -2;
+        if (_showSentenceView)
+        {
+            listCard.Title = BuildSentenceTitle();
+            UpdateSentenceHighlight(force: true);
+        }
+        _listSentences.Invalidate();
+    }
+
+    private void OnSentenceSelected()
+    {
+        if (_suppressSentenceSelection || _manager == null) return;
+
+        int index = _listSentences.SelectedIndex;
+        var sentences = _manager.Timeline?.Sentences;
+        if (sentences == null || index < 0 || index >= sentences.Count) return;
+
+        var span = sentences[index];
+        _sentenceHighlightIndex = index;
+        // 点句 = 预览单句；与进度条点句一致，播完暂停且不写阅读进度
+        _manager.PreviewNearest(TimeSpan.FromMilliseconds(span.StartMs));
+        _listSentences.Invalidate();
+    }
+
+    /// <summary>按播放位置更新当前句高亮，并在句变化时滚动到可视区域。</summary>
+    private void UpdateSentenceHighlight(bool force)
+    {
+        if (_manager == null) return;
+        var sentences = _manager.Timeline?.Sentences;
+        if (sentences == null || sentences.Count == 0) return;
+
+        var current = _manager.CurrentSentence;
+        int index = current == null ? -1 : current.Index - 1;
+        if (index < 0 || index >= sentences.Count) index = -1;
+        if (!force && index == _sentenceHighlightIndex) return;
+
+        _sentenceHighlightIndex = index;
+        if (index >= 0)
+        {
+            _suppressSentenceSelection = true;
+            try
+            {
+                _listSentences.SelectedIndex = index;
+                // 高亮行保持在可视区域上下留 1–2 行，避免每 250ms 抖动
+                int top = _listSentences.TopIndex;
+                int visible = Math.Max(1, _listSentences.ClientSize.Height / Math.Max(1, _listSentences.ItemHeight));
+                if (index < top + 1 || index > top + visible - 2)
+                    _listSentences.TopIndex = Math.Max(0, index - 1);
+            }
+            finally
+            {
+                _suppressSentenceSelection = false;
+            }
+        }
+        else
+        {
+            _suppressSentenceSelection = true;
+            try { _listSentences.ClearSelected(); }
+            finally { _suppressSentenceSelection = false; }
+        }
+        _listSentences.Invalidate();
+    }
+
+    private void ListSentences_DrawItem(object? sender, DrawItemEventArgs e)
+    {
+        var palette = PdfSidebarTheme.PaletteFor(this);
+        bool selected = (e.State & DrawItemState.Selected) == DrawItemState.Selected;
+        int index = e.Index;
+
+        using (var background = new SolidBrush(selected ? palette.BrandSoft : palette.Surface))
+            e.Graphics.FillRectangle(background, e.Bounds);
+
+        if (index < 0 || index >= _listSentences.Items.Count) return;
+
+        var sentences = _manager?.Timeline?.Sentences;
+        if (sentences == null || index >= sentences.Count)
+        {
+            _listFont ??= new Font("Microsoft YaHei UI", 9.5F);
+            TextRenderer.DrawText(e.Graphics, _listSentences.Items[index]?.ToString() ?? "",
+                _listFont, e.Bounds, palette.Muted,
+                TextFormatFlags.VerticalCenter | TextFormatFlags.HorizontalCenter | TextFormatFlags.NoPrefix);
+            return;
+        }
+
+        var span = sentences[index];
+        bool current = index == _sentenceHighlightIndex;
+        if (current)
+        {
+            using var bar = new SolidBrush(PdfSidebarTheme.Brand);
+            e.Graphics.FillRectangle(bar, e.Bounds.Left, e.Bounds.Top + 4, 3, e.Bounds.Height - 8);
+        }
+
+        _listFont ??= new Font("Microsoft YaHei UI", 9.5F);
+        _listTimeFont ??= new Font("Microsoft YaHei UI", 8F);
+        _listPlayingFont ??= new Font(_listFont, FontStyle.Bold);
+
+        int left = e.Bounds.Left + (current ? 10 : 8);
+        int width = Math.Max(10, e.Bounds.Right - left - 6);
+        var headerRect = new Rectangle(left, e.Bounds.Top + 2, width, 16);
+        var textRect = new Rectangle(left, e.Bounds.Top + 17, width, Math.Max(12, e.Bounds.Height - 20));
+
+        Color headerColor = selected
+            ? (palette.IsDark ? Color.White : PdfSidebarTheme.Brand)
+            : current ? PdfSidebarTheme.Brand : palette.Text;
+
+        string header = $"第 {span.Index} 句 · {FormatTime(span.StartMs)} – {FormatTime(span.EndMs)}";
+        TextRenderer.DrawText(e.Graphics, header, _listPlayingFont!, headerRect, headerColor,
+            TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
+
+        string text = string.IsNullOrWhiteSpace(span.Text) ? $"（{span.BoundarySource}）" : span.Text;
+        TextRenderer.DrawText(e.Graphics, text, _listTimeFont!, textRect,
+            selected ? headerColor : palette.Muted,
+            TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
+
+        using (var pen = new Pen(palette.Border))
+            e.Graphics.DrawLine(pen, e.Bounds.Left + 4, e.Bounds.Bottom - 1, e.Bounds.Right - 4, e.Bounds.Bottom - 1);
+    }
+
+    private static string FormatTime(int milliseconds)
+    {
+        var time = TimeSpan.FromMilliseconds(Math.Max(0, milliseconds));
+        return time.TotalHours >= 1
+            ? $"{time.Hours:00}:{time.Minutes:00}:{time.Seconds:00}.{time.Milliseconds / 100}"
+            : $"{time.Minutes:00}:{time.Seconds:00}.{time.Milliseconds / 100}";
+    }
+
     public void ApplyTheme(bool isDark)
     {
         var palette = new PdfSidebarPalette(isDark);
@@ -408,6 +674,13 @@ public partial class PdfAudioPanel : UserControl, ISidebarThemeAware
         _listTracks.BackColor = palette.Surface;
         _listTracks.ForeColor = palette.Text;
         _listTracks.Invalidate();
+
+        _sentencePanel.BackColor = palette.Surface;
+        _listSentences.BackColor = palette.Surface;
+        _listSentences.ForeColor = palette.Text;
+        _listSentences.Invalidate();
+        _labelLoopSentence.ForeColor = palette.Muted;
+        _chkLoopSentence.Invalidate();
 
         advancedPanel.BackColor = palette.Background;
         advSource.BackColor = palette.Background;
@@ -590,6 +863,7 @@ public partial class PdfAudioPanel : UserControl, ISidebarThemeAware
         UpdateEmptyState(singleMode, count, matched);
         UpdatePageCard();
         SelectCurrentTrackInList();
+        if (_showSentenceView) RefreshSentenceList();
     }
 
     /// <summary>无音频/无匹配时用引导替代空列表；有内容时恢复列表。</summary>
@@ -642,12 +916,13 @@ public partial class PdfAudioPanel : UserControl, ISidebarThemeAware
         _emptyPanel.Visible = true;
         _listTracks.Visible = false;
         _emptyPanel.BringToFront();
+        ApplySentenceViewVisibility();
     }
 
     private void HideEmptyState()
     {
         _emptyPanel.Visible = false;
-        _listTracks.Visible = true;
+        ApplySentenceViewVisibility();
     }
 
     /// <summary>有书级补丁时规则入口应打开补丁编辑器，避免覆盖目录规则。</summary>
@@ -770,6 +1045,7 @@ public partial class PdfAudioPanel : UserControl, ISidebarThemeAware
             UpdatePageCard();
             SelectTrackInList(track);
             _listTracks.Invalidate();
+            if (_showSentenceView) RefreshSentenceList();
         });
 
     private void OnPageHintChanged(object? sender, string? hint)
@@ -1425,13 +1701,17 @@ public partial class PdfAudioPanel : UserControl, ISidebarThemeAware
                 _manager.TrackChanged -= OnTrackChanged;
                 _manager.PageHintChanged -= OnPageHintChanged;
                 _manager.SettingsChanged -= OnSettingsChanged;
+                _manager.TimelineChanged -= OnTimelineChanged;
             }
             _menuSource.Dispose();
             _menuMatch.Dispose();
             _menuBook.Dispose();
+            _sentenceTimer.Stop();
+            _sentenceTimer.Dispose();
             _listFont?.Dispose();
             _listPlayingFont?.Dispose();
             _listMarkerFont?.Dispose();
+            _listTimeFont?.Dispose();
             components?.Dispose();
         }
         base.Dispose(disposing);

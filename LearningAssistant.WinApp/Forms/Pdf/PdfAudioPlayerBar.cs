@@ -54,6 +54,7 @@ public sealed class PdfAudioPlayerBar : UserControl
     private readonly ToolStripMenuItem _menuClearAb = new("清除 A-B 复读");
     private readonly ToolStripMenuItem _menuAutoSegment = new("自动断句（建议切片）");
     private readonly ToolStripMenuItem _menuPointSentence = new("点句模式（点位置预览最近一句）");
+    private readonly ToolStripMenuItem _menuOpenSentenceList = new("句子列表…");
     private readonly ToolStripMenuItem _menuPageLayer = new("页码刻度");
     private readonly ToolStripMenuItem _menuSetPageStart = new("设为当前页起点");
     private readonly ToolStripMenuItem _menuCorrection = new("修正断句（拖动边界）");
@@ -304,6 +305,7 @@ public sealed class PdfAudioPlayerBar : UserControl
             _menuPointSentence.Click += (_, _) => TogglePointSentenceMode();
             _menuPageLayer.Click += (_, _) => TogglePageLayer();
             _menuSetPageStart.Click += (_, _) => SetCurrentPageStart();
+            _menuOpenSentenceList.Click += (_, _) => _form.ShowSentenceList();
             _menuPresetFine.Click += (_, _) => ApplySentencePreset(0);
             _menuPresetStandard.Click += (_, _) => ApplySentencePreset(1);
             _menuPresetLoose.Click += (_, _) => ApplySentencePreset(2);
@@ -317,6 +319,7 @@ public sealed class PdfAudioPlayerBar : UserControl
             _menuUndoSentence.Click += (_, _) => UndoBoundaryEdit();
             _menuClearSentence.Click += (_, _) => ClearBoundaryOverlay();
             _loopMenu.Items.Add(_menuPointSentence);
+            _loopMenu.Items.Add(_menuOpenSentenceList);
             _loopMenu.Items.Add(_menuPageLayer);
             _loopMenu.Items.Add(_menuSensitivity);
             _loopMenu.Items.Add(new ToolStripSeparator());

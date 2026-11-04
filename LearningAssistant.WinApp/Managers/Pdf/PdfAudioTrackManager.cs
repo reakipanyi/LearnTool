@@ -153,6 +153,9 @@ public class PdfAudioTrackManager : IDisposable
 
     public AudioSentenceSpan? PreviewSpan => _previewSpan;
 
+    /// <summary>单句循环：预览到句尾后自动重播同一句，直到取消或关闭。</summary>
+    public bool LoopSentence { get; set; }
+
     /// <summary>当前断句参数；切换灵敏度后按新参数重算当前曲目。</summary>
     public AudioTimelineOptions TimelineOptions => _timelineOptions;
 
@@ -783,6 +786,11 @@ public class PdfAudioTrackManager : IDisposable
             return false;
         }
 
+        return StartPreview(span, continueAfter);
+    }
+
+    private bool StartPreview(AudioSentenceSpan span, bool continueAfter)
+    {
         var start = TimeSpan.FromMilliseconds(span.StartMs);
         var end = TimeSpan.FromMilliseconds(Math.Max(span.StartMs + 1, span.EndMs));
         var player = _playback.Player;
@@ -1356,6 +1364,12 @@ public class PdfAudioTrackManager : IDisposable
                 return;
             case PlaybackRangeEndReason.Completed:
                 if (_previewSpan == null) return;
+                // 单句循环：到句尾立即重播同一句，位置与“不写进度”状态保持不变
+                if (LoopSentence)
+                {
+                    StartPreview(_previewSpan, continueAfter: false);
+                    return;
+                }
                 _previewSpan = null;
                 // 停在句尾属于“听一句”，仍不写阅读进度，直到用户做普通播放/定位
                 PreviewChanged?.Invoke(this, null);
