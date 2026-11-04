@@ -20,6 +20,7 @@ public class PdfAudioTrackManager : IDisposable
     private readonly SentenceTimelineService? _timelineService;
     private readonly AudioBoundaryOverlayStore? _overlayStore;
     private readonly ShadowingBoundaryApplyService? _shadowingApplyService;
+    private readonly ShadowingSliceAppendService? _sliceAppendService;
     private AudioMatchResult? _result;
     private AudioTrack? _loadedTrack;
     private PdfAudioProfile? _profile;
@@ -224,7 +225,8 @@ public class PdfAudioTrackManager : IDisposable
         IPdfAudioProfileStore store, ISubtitleParser subtitleParser,
         SentenceTimelineService? timelineService = null,
         AudioBoundaryOverlayStore? overlayStore = null,
-        ShadowingBoundaryApplyService? shadowingApplyService = null)
+        ShadowingBoundaryApplyService? shadowingApplyService = null,
+        ShadowingSliceAppendService? sliceAppendService = null)
     {
         _logger = logger;
         _matcher = matcher;
@@ -233,6 +235,7 @@ public class PdfAudioTrackManager : IDisposable
         _timelineService = timelineService;
         _overlayStore = overlayStore;
         _shadowingApplyService = shadowingApplyService;
+        _sliceAppendService = sliceAppendService;
         _playback = new PdfAudioPlaybackService(new NAudioMediaPlayer(subtitleParser));
         _playback.Player.PlaybackFinished += OnPlaybackFinished;
         _playback.Player.OutputDeviceChanged += OnOutputDeviceChanged;
@@ -863,6 +866,36 @@ public class PdfAudioTrackManager : IDisposable
             return Task.FromResult(0);
 
         return _shadowingApplyService.ApplyAsync(_currentPdfPath, plan.Changes, cancellationToken);
+    }
+
+    /// <summary>计算「把本页句子补充为跟读切片」的计划；无时间轴或无本页句子时返回空。</summary>
+    public ShadowingSliceAppendPlan PlanSliceAppend(int pageIndex)
+    {
+        if (_sliceAppendService == null || _loadedTrack == null || _currentPdfPath == null || _timeline == null)
+            return new ShadowingSliceAppendPlan();
+
+        return _sliceAppendService.Plan(_currentPdfPath, pageIndex, _timeline.Sentences, _timeline.DurationMs);
+    }
+
+    /// <summary>执行补充切片；返回新增条数。</summary>
+    public Task<int> ApplySliceAppendAsync(
+        int pageIndex,
+        ShadowingSliceAppendPlan plan,
+        CancellationToken cancellationToken = default)
+    {
+        if (_sliceAppendService == null || _loadedTrack == null || _currentPdfPath == null
+            || plan == null || !plan.HasChanges)
+        {
+            return Task.FromResult(0);
+        }
+
+        return _sliceAppendService.ApplyAsync(
+            _currentPdfPath,
+            _loadedTrack,
+            pageIndex,
+            _timeline?.DurationMs ?? 0,
+            plan,
+            cancellationToken);
     }
 
     /// <summary>当前播放位置所在（或最近）的句子，供修正菜单定位。</summary>

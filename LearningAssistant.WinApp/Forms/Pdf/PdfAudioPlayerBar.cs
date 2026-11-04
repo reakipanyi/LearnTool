@@ -72,6 +72,7 @@ public sealed class PdfAudioPlayerBar : UserControl
     private readonly ToolStripMenuItem _menuUndoSentence = new("撤销上一步修正");
     private readonly ToolStripMenuItem _menuClearSentence = new("清除本曲目手动修正");
     private readonly ToolStripMenuItem _menuApplySlices = new("应用边界到跟读切片…");
+    private readonly ToolStripMenuItem _menuAppendSlices = new("把本页句子补成切片…");
     private bool _boundaryHintShown;
     private readonly ToolStripMenuItem _menuReanalyze = new("重新断句");
     private readonly ToolStripMenuItem _menuSensitivity = new("断句灵敏度");
@@ -333,6 +334,7 @@ public sealed class PdfAudioPlayerBar : UserControl
             _menuUndoSentence.Click += (_, _) => UndoBoundaryEdit();
             _menuClearSentence.Click += (_, _) => ClearBoundaryOverlay();
             _menuApplySlices.Click += (_, _) => ApplyBoundariesToSlices();
+            _menuAppendSlices.Click += (_, _) => AppendSlicesForPage();
             _loopMenu.Items.Add(_menuPointSentence);
             _loopMenu.Items.Add(_menuOpenSentenceList);
             _loopMenu.Items.Add(_menuExportSrt);
@@ -347,6 +349,7 @@ public sealed class PdfAudioPlayerBar : UserControl
             _loopMenu.Items.Add(_menuUndoSentence);
             _loopMenu.Items.Add(_menuClearSentence);
             _loopMenu.Items.Add(_menuApplySlices);
+            _loopMenu.Items.Add(_menuAppendSlices);
             _loopMenu.Items.Add(_menuSetPageStart);
             _loopMenu.Items.Add(_menuReanalyze);
         }
@@ -796,6 +799,39 @@ public sealed class PdfAudioPlayerBar : UserControl
         }
     }
 
+    private async void AppendSlicesForPage()
+    {
+        int pageIndex = _form.CurrentPageIndex;
+        var plan = _manager.PlanSliceAppend(pageIndex);
+        if (!plan.HasChanges)
+        {
+            _form.ShowToast(plan.SkippedOverlap > 0
+                ? "本页句子都已有对应切片"
+                : "本页没有可补充的句子");
+            return;
+        }
+
+        string message =
+            $"将为第 {pageIndex + 1} 页新增 {plan.Changes.Count} 条跟读切片。\n" +
+            "已有切片与跟读录音保持不变，只补充没有重叠的句子。\n" +
+            (plan.SkippedOverlap > 0 ? $"其中 {plan.SkippedOverlap} 句与已有切片重叠，将跳过。\n" : "") +
+            "\n继续？";
+
+        if (MessageBox.Show(this, message, "补充跟读切片",
+                MessageBoxButtons.OKCancel, MessageBoxIcon.Question) != DialogResult.OK)
+            return;
+
+        try
+        {
+            int added = await _manager.ApplySliceAppendAsync(pageIndex, plan);
+            _form.ShowToast(added > 0 ? $"已新增 {added} 条切片" : "没有新增切片");
+        }
+        catch (Exception ex)
+        {
+            _form.ShowToast($"补充切片失败：{ex.Message}", 6000);
+        }
+    }
+
     private void OnBoundaryOverlayChanged(object? sender, EventArgs e)
     {
         if (_boundaryHintShown) return;
@@ -830,6 +866,9 @@ public sealed class PdfAudioPlayerBar : UserControl
         _menuUndoSentence.Enabled = hasTimeline && _manager.CurrentTrack != null;
         _menuClearSentence.Enabled = hasTimeline && _manager.CurrentTrack != null;
         _menuApplySlices.Enabled = hasTimeline && _manager.CurrentTrack != null;
+        _menuAppendSlices.Enabled = hasTimeline
+                                    && _manager.CurrentTrack != null
+                                    && _form.CurrentPageIndex >= 0;
         _menuExportSrt.Enabled = hasTimeline
                                  && _manager.Timeline?.Sentences.Count > 0;
 
