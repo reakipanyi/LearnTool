@@ -974,8 +974,11 @@ namespace LearningAssistant.Forms.Pdf
         public int ShowSelectionTranslationLoading(int pageIndex, string ocrText)
         {
             var requestId = ++_selectionTranslationRequestId;
+            // 译条显示/定位可能把焦点交给页码框，导致随后按键翻页失效；显示前后各收回一次
+            ReclaimKeyboardFocusFromPageBox();
             _topTranslationBar?.ShowTranslationLoading(pageIndex, ocrText);
             PositionTopTranslationBar();
+            ReclaimKeyboardFocusFromPageBox();
             return requestId;
         }
 
@@ -990,8 +993,11 @@ namespace LearningAssistant.Forms.Pdf
             if (requestId != _selectionTranslationRequestId)
                 return;
 
+            // 加载态被异步回包替换时，焦点可能又落回页码框，同样在显示前后各收回一次
+            ReclaimKeyboardFocusFromPageBox();
             _topTranslationBar?.ShowTranslationResult(pageIndex, ocrText, translation, fromCache);
             PositionTopTranslationBar();
+            ReclaimKeyboardFocusFromPageBox();
         }
 
         /// <summary>展示翻译失败；同样丢弃过期回包。</summary>
@@ -1000,8 +1006,10 @@ namespace LearningAssistant.Forms.Pdf
             if (requestId != _selectionTranslationRequestId)
                 return;
 
+            ReclaimKeyboardFocusFromPageBox();
             _topTranslationBar?.ShowTranslationFailure(pageIndex, ocrText, message);
             PositionTopTranslationBar();
+            ReclaimKeyboardFocusFromPageBox();
         }
 
         /// <summary>
@@ -1114,8 +1122,11 @@ namespace LearningAssistant.Forms.Pdf
             }
 
             ++_selectionTranslationRequestId;
+            // 从页码框按回车跳页后译条可能立即回显缓存，焦点留在页码框会吞掉后续翻页键
+            ReclaimKeyboardFocusFromPageBox();
             _topTranslationBar?.ShowTranslationResult(pageIndex, entry.OriginalText, entry.Translation, true);
             PositionTopTranslationBar();
+            ReclaimKeyboardFocusFromPageBox();
         }
 
         private async Task SpeakTopBarOriginalAsync()
@@ -2783,9 +2794,12 @@ namespace LearningAssistant.Forms.Pdf
             if (string.IsNullOrWhiteSpace(translation)) return;
 
             ++_selectionTranslationRequestId;
+            // 译条可能由点击高亮直接显示（无加载态），同样把焦点从页码框收回
+            ReclaimKeyboardFocusFromPageBox();
             _topTranslationBar?.ShowTranslationResult(
                 highlight.PageIndex, highlight.Text, translation, fromCache);
             PositionTopTranslationBar();
+            ReclaimKeyboardFocusFromPageBox();
         }
 
         private void OnAnnotationSelected(AnnotationStroke stroke, int index, bool isDoubleClick)
@@ -3241,9 +3255,11 @@ namespace LearningAssistant.Forms.Pdf
             }
 
             // 全屏下工具栏被隐藏，焦点可能落在页码输入框、侧栏控件等上面而吞掉翻页键；
-            // 这里在命令键阶段直接翻页，保证全屏阅读时 PgUp/PgDn 始终可用
+            // 这里在命令键阶段直接翻页，保证全屏阅读时 PgUp/PgDn 始终可用。
+            // 页码框本身不消费 PgUp/PgDn，非全屏时焦点若因译条显隐被它接走，也一并在此翻页
+            bool pageBoxFocused = _textBoxPage?.ContainsFocus == true;
             if ((keyData == Keys.PageUp || keyData == Keys.PageDown)
-                && !shortcutsSuspended && isFullscreenSurface)
+                && !shortcutsSuspended && (isFullscreenSurface || pageBoxFocused))
             {
                 if (keyData == Keys.PageDown)
                     _navigationManager?.NextPage();
@@ -3690,6 +3706,16 @@ namespace LearningAssistant.Forms.Pdf
             ActiveControl = null;
             if (!Focused)
                 Focus();
+        }
+
+        /// <summary>
+        /// 译条显示时若焦点仍停留在页码输入框上，PgUp/PgDn 会被文本框当成编辑而无法翻页；
+        /// 这里把焦点收回窗体。只处理页码框，避免打断翻译面板等正在输入的内容。
+        /// </summary>
+        private void ReclaimKeyboardFocusFromPageBox()
+        {
+            if (_textBoxPage != null && _textBoxPage.ContainsFocus)
+                ResetKeyboardFocusToForm();
         }
 
         private void PdfReaderFormV2_Resize(object? sender, EventArgs e)

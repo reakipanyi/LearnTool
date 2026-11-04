@@ -253,11 +253,31 @@ public sealed class PdfTopTranslationBar : Panel
     /// <summary>收起译条（不触发关闭事件）。</summary>
     public void HideBar()
     {
+        // 译条内的按钮持有焦点时直接隐藏，WinForms 会把焦点顺延给表单中下一个可 Tab 的控件
+        // （通常是页码输入框），之后 PgUp/PgDn 会被文本框当成编辑而无法翻页；先交还宿主窗体焦点再隐藏
+        ReleaseFocusToHost();
+
         _mode = BarMode.Hidden;
         PageIndex = -1;
         _isRecording = false;
         _audioLevel = 0F;
         Visible = false;
+    }
+
+    /// <summary>
+    /// 把译条内的键盘焦点交还宿主窗体，避免隐藏时焦点被自动转交给页码框。
+    /// </summary>
+    private void ReleaseFocusToHost()
+    {
+        if (IsDisposed || !ContainsFocus)
+            return;
+
+        if (FindForm() is not { } host)
+            return;
+
+        host.ActiveControl = null;
+        if (!host.Focused)
+            host.Focus();
     }
 
     private void BuildChildren()
