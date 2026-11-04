@@ -712,6 +712,7 @@ namespace LearningAssistant.Forms.Pdf
                 var timelineStore = Program.ServiceProvider?.GetService(typeof(AudioTimelineStore)) as AudioTimelineStore;
                 var analysisService = Program.ServiceProvider?.GetService(typeof(AudioDecodeAnalysisService)) as AudioDecodeAnalysisService;
                 var boundaryProvider = Program.ServiceProvider?.GetService(typeof(ShadowingBoundaryLayerProvider)) as ShadowingBoundaryLayerProvider;
+                var overlayStore = Program.ServiceProvider?.GetService(typeof(AudioBoundaryOverlayStore)) as AudioBoundaryOverlayStore;
                 if (matcher != null && scanner != null && store != null && subParser != null)
                 {
                     if (timelineStore != null && analysisService != null && boundaryProvider != null)
@@ -723,7 +724,9 @@ namespace LearningAssistant.Forms.Pdf
                                 boundaryProvider.GetLayersAsync(_currentPdfPath, track, durationMs, token));
                     }
                     _audioTrackManager = new PdfAudioTrackManager(
-                        _logger, matcher, scanner, store, subParser, _sentenceTimelineService);
+                        _logger, matcher, scanner, store, subParser, _sentenceTimelineService, overlayStore);
+                    _audioTrackManager.PageNavigationRequested += (_, page) =>
+                        _navigationManager?.NavigateToPage(page);
                     _audioTrackManager.PageSyncRequested += OnAudioPageSyncRequested;
                     // 音频档案加载/变更后按当前文档是否真的有音频来决定播放条显隐
                     _audioTrackManager.ProfileLoaded += OnAudioProfileLoaded;

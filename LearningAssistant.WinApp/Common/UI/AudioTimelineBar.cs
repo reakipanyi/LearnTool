@@ -13,6 +13,16 @@ namespace LearningAssistant.Common.UI
         public bool ContinueAfter { get; init; }
     }
 
+    /// <summary>拖动手动边界完成；IsStart 表示拖的是句首还是句尾。</summary>
+    public sealed class BoundaryDragCompletedEventArgs
+    {
+        public AudioSentenceSpan Span { get; init; } = new();
+
+        public bool IsStart { get; init; }
+
+        public int TimeMs { get; init; }
+    }
+
     /// <summary>
     /// 句子刻度时间轴：双层刻度（页码 + 句子）、点句命中、悬停/拖动与键盘。
     /// 绘制按像素桶预聚合，命中测试仍用全量二分，避免整本 12000 句时每帧扫描。
@@ -51,6 +61,12 @@ namespace LearningAssistant.Common.UI
         private bool _hover;
         private bool _dragging;
         private bool _dragCandidate;
+
+        private bool _correctionMode;
+        private bool _boundaryDragging;
+        private AudioSentenceSpan? _boundarySpan;
+        private bool _boundaryIsStart;
+        private int _boundaryTimeMs;
         private Point _mouseDownPoint;
         private Keys _modifiersAtDown;
         private TimeSpan _dragPosition;
@@ -96,6 +112,33 @@ namespace LearningAssistant.Common.UI
         public event EventHandler<AudioSentenceSpan?>? MarkerHovered;
 
         public event EventHandler<AudioPageAnchor?>? PageHovered;
+
+        /// <summary>修正模式下拖动边界完成（已吸附 10ms）。</summary>
+        public event EventHandler<BoundaryDragCompletedEventArgs>? BoundaryDragCompleted;
+
+        /// <summary>修正模式下 Ctrl+Z 请求撤销。</summary>
+        public event EventHandler? UndoRequested;
+
+        /// <summary>
+        /// 修正模式：显示边界手柄、禁用点句预览，拖动最近边界。
+        /// 会话态，不写档案。
+        /// </summary>
+        [Browsable(false)]
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        public bool CorrectionMode
+        {
+            get => _correctionMode;
+            set
+            {
+                if (_correctionMode == value) return;
+                _correctionMode = value;
+                _boundaryDragging = false;
+                _boundarySpan = null;
+                ClearHover();
+                Cursor = value ? Cursors.SizeWE : Cursors.Hand;
+                Invalidate();
+            }
+        }
 
         [Browsable(false)]
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
@@ -253,6 +296,7 @@ namespace LearningAssistant.Common.UI
             DrawCurrentSentenceOverlay(g, palette, trackRect, trackHeight);
             DrawPlayedFill(g, palette, trackRect, trackHeight);
             DrawSentenceTicks(g, palette, trackCenter);
+            DrawBoundaryHandles(g, palette, trackCenter);
             if (ShowPageLayer && _pageAnchors.Count > 0)
                 DrawPageTicks(g, palette);
             DrawAnalysisProgress(g, palette, trackTop);
@@ -368,6 +412,46 @@ namespace LearningAssistant.Common.UI
             g.DrawLine(pen, x, top, x, top + actualHeight);
         }
 
+        private void DrawBoundaryHandles(Graphics g, PdfSidebarPalette palette, int trackCenter)
+        {
+            if (!_correctionMode || _sentences.Count == 0 || _duration <= TimeSpan.Zero) return;
+
+            int width = TrackRight - TrackLeft;
+            bool dense = width > 0 && width / (double)_sentences.Count < 6;
+            var targets = dense
+                ? new[] { HoverOrCurrentSpan() }.Where(s => s != null).Select(s => s!).Distinct().ToList()
+                : (IEnumerable<AudioSentenceSpan>)_sentences;
+
+            using var startBrush = new SolidBrush(Color.FromArgb(180, PdfSidebarTheme.Brand));
+            using var endBrush = new SolidBrush(Color.FromArgb(150, palette.Border));
+            int handleWidth = Math.Max(2, S(2));
+            int handleHeight = S(9);
+
+            foreach (var span in targets)
+            {
+                int startX = TrackX(span.StartMs);
+                int endX = TrackX(span.EndMs);
+                g.FillRectangle(startBrush, startX - handleWidth / 2,
+                    trackCenter - handleHeight / 2, handleWidth, handleHeight);
+                g.FillRectangle(endBrush, endX - handleWidth / 2,
+                    trackCenter - handleHeight / 2, handleWidth, handleHeight);
+            }
+
+            if (_boundaryDragging && _boundarySpan != null)
+            {
+                int x = TrackX(_boundaryTimeMs);
+                using var pen = new Pen(PdfSidebarTheme.Brand, 2);
+                g.DrawLine(pen, x, trackCenter - S(10), x, trackCenter + S(10));
+            }
+        }
+
+        private AudioSentenceSpan? HoverOrCurrentSpan()
+        {
+            if (_hoverSentence != null) return _hoverSentence;
+            int index = CurrentSentenceIndex();
+            return index >= 0 && index < _sentences.Count ? _sentences[index] : null;
+        }
+
         private void DrawPageTicks(Graphics g, PdfSidebarPalette palette)
         {
             int currentIndex = CurrentPageAnchorIndex();
@@ -449,6 +533,21 @@ namespace LearningAssistant.Common.UI
                 && _pageAnchors.Count > 0
                 && e.Y < S(12)
                 && NearestPageAnchor(e.X) != null;
+
+            if (_correctionMode)
+            {
+                var hit = NearestBoundary(e.X);
+                if (hit != null)
+                {
+                    _boundaryDragging = true;
+                    _boundarySpan = hit.Value.Span;
+                    _boundaryIsStart = hit.Value.IsStart;
+                    _boundaryTimeMs = hit.Value.IsStart ? hit.Value.Span.StartMs : hit.Value.Span.EndMs;
+                    _dragCandidate = false;
+                    _pageClickCandidate = false;
+                    Invalidate();
+                }
+            }
         }
 
         protected override void OnMouseMove(MouseEventArgs e)
@@ -460,6 +559,16 @@ namespace LearningAssistant.Common.UI
             {
                 _hover = hover;
                 Invalidate();
+            }
+
+            if (_boundaryDragging && _boundarySpan != null)
+            {
+                int ms = (int)Math.Round(PositionFromX(e.X).TotalMilliseconds / 10d) * 10;
+                int minMs = _boundaryIsStart ? 0 : _boundarySpan.StartMs + 100;
+                int maxMs = _boundaryIsStart ? _boundarySpan.EndMs - 100 : DurationMsValue();
+                _boundaryTimeMs = Math.Clamp(ms, Math.Max(0, minMs), Math.Max(0, maxMs));
+                Invalidate();
+                return;
             }
 
             if (_dragCandidate && !_dragging)
@@ -494,9 +603,35 @@ namespace LearningAssistant.Common.UI
             bool wasAlt = (_modifiersAtDown & Keys.Alt) == Keys.Alt;
             bool shift = (_modifiersAtDown & Keys.Shift) == Keys.Shift;
 
+            bool wasBoundaryDragging = _boundaryDragging;
+            var boundarySpan = _boundarySpan;
+            bool boundaryIsStart = _boundaryIsStart;
+            int boundaryTimeMs = _boundaryTimeMs;
+
             _dragging = false;
             _dragCandidate = false;
+            _boundaryDragging = false;
+            _boundarySpan = null;
             Capture = false;
+
+            if (wasBoundaryDragging && boundarySpan != null)
+            {
+                BoundaryDragCompleted?.Invoke(this, new BoundaryDragCompletedEventArgs
+                {
+                    Span = boundarySpan,
+                    IsStart = boundaryIsStart,
+                    TimeMs = boundaryTimeMs
+                });
+                Invalidate();
+                return;
+            }
+
+            if (_correctionMode)
+            {
+                SeekRequested?.Invoke(this, PositionFromX(e.X));
+                Invalidate();
+                return;
+            }
 
             if (wasDragging)
             {
@@ -601,6 +736,13 @@ namespace LearningAssistant.Common.UI
             base.OnKeyDown(e);
             if (!Enabled || _duration <= TimeSpan.Zero) return;
 
+            if (_correctionMode && e.Control && e.KeyCode == Keys.Z)
+            {
+                UndoRequested?.Invoke(this, EventArgs.Empty);
+                e.Handled = true;
+                return;
+            }
+
             switch (e.KeyCode)
             {
                 case Keys.Left:
@@ -646,6 +788,13 @@ namespace LearningAssistant.Common.UI
                 index = Math.Clamp(index + direction, 0, _sentences.Count - 1);
 
             var span = _sentences[index];
+            if (_correctionMode)
+            {
+                // 修正模式下不预览，只把播放头定位到相邻句首
+                SeekRequested?.Invoke(this, TimeSpan.FromMilliseconds(span.StartMs));
+                return;
+            }
+
             PreviewRequested?.Invoke(this, new SentencePreviewRequestedEventArgs
             {
                 Span = span,
@@ -710,6 +859,25 @@ namespace LearningAssistant.Common.UI
                 if (notify) PageHovered?.Invoke(this, null);
             }
         }
+
+        private (AudioSentenceSpan Span, bool IsStart)? NearestBoundary(int x)
+        {
+            var span = NearestSentence(x);
+            if (span == null) return null;
+
+            int tolerance = S(TickHitToleranceDips);
+            int startX = TrackX(span.StartMs);
+            int endX = TrackX(span.EndMs);
+            bool startHit = Math.Abs(x - startX) <= tolerance;
+            bool endHit = Math.Abs(x - endX) <= tolerance;
+
+            if (!startHit && !endHit) return null;
+            if (startHit && endHit)
+                return (span, Math.Abs(x - startX) <= Math.Abs(x - endX));
+            return (span, startHit);
+        }
+
+        private int DurationMsValue() => (int)Math.Round(_duration.TotalMilliseconds);
 
         private AudioSentenceSpan? NearestSentence(int x)
         {

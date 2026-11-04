@@ -37,5 +37,13 @@ namespace LearningAssistant.Models.Pdf
         public double LastPositionSeconds { get; set; }
         /// <summary>上次播放的曲目标识（相对路径优先），用于恢复进度时确认是同一曲目</summary>
         public string? LastTrackPath { get; set; }
+        /// <summary>是否启用句子刻度与点句预览（灰度下线开关的书级记忆）</summary>
+        public bool SentenceTimelineEnabled { get; set; } = true;
+        /// <summary>点句模式：单击轨道取最近句预览；关闭后点空白为普通 seek</summary>
+        public bool PointSentenceMode { get; set; } = true;
+        /// <summary>整本单音频时是否显示页码刻度层</summary>
+        public bool ShowPageLayer { get; set; } = true;
+        /// <summary>断句灵敏度预设名：fine / standard / loose（不存阈值）</summary>
+        public string AudioTimelinePreset { get; set; } = "fine";
     }
 }

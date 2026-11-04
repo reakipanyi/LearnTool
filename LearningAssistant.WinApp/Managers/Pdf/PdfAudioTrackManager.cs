@@ -18,6 +18,7 @@ public class PdfAudioTrackManager : IDisposable
     private readonly IPdfAudioProfileStore _store;
     private readonly PdfAudioPlaybackService _playback;
     private readonly SentenceTimelineService? _timelineService;
+    private readonly AudioBoundaryOverlayStore? _overlayStore;
     private AudioMatchResult? _result;
     private AudioTrack? _loadedTrack;
     private PdfAudioProfile? _profile;
@@ -93,12 +94,43 @@ public class PdfAudioTrackManager : IDisposable
     private CancellationTokenSource? _pageChangeCts;
 
     private CancellationTokenSource? _timelineCts;
+    private AudioTimelineOptions _timelineOptions = new();
+    private AudioSentenceTimeline? _timeline;
+    private AudioBoundaryOverlay? _overlay;
+    private IReadOnlyList<AudioPageAnchor> _pageAnchors = Array.Empty<AudioPageAnchor>();
+    private bool _pointSentenceMode = true;
+    private bool _showPageLayer = true;
+    private bool _sentenceTimelineEnabled = true;
+    private string _timelinePreset = AudioTimelinePresets.Fine;
+    private readonly List<AudioBoundaryOverlay> _overlayHistory = new();
     private AudioSentenceSpan? _previewSpan;
     /// <summary>预览/单句循环期间禁止把“听一句”的位置写成阅读进度。</summary>
     private bool _suppressProgressSave;
 
-    /// <summary>当前曲目的句子时间轴；分析中为空。</summary>
-    public AudioSentenceTimeline? Timeline => _timelineService?.Current;
+    /// <summary>当前曲目的句子时间轴（已套用手动修正）；分析中为空。</summary>
+    public AudioSentenceTimeline? Timeline => _timeline;
+
+    /// <summary>当前曲目的页码锚点；整本单音频才有意义。</summary>
+    public IReadOnlyList<AudioPageAnchor> PageAnchors => _pageAnchors;
+
+    /// <summary>整本单音频模式（页码层只在此模式显示）。</summary>
+    public bool IsSingleAudio => _profile?.MatchMode == PdfAudioMatchMode.SingleAudio;
+
+    /// <summary>页码层覆盖率：已校准页数 / 总页数。</summary>
+    public double PageAnchorCoverage => _pageCount > 0
+        ? Math.Clamp(_pageAnchors.Count / (double)_pageCount, 0, 1)
+        : 0;
+
+    /// <summary>手动覆盖层与源音频指纹不一致（边界可能偏移）。</summary>
+    public bool IsOverlayStale { get; private set; }
+
+    public bool SentenceTimelineEnabled => _sentenceTimelineEnabled;
+
+    public bool PointSentenceMode => _pointSentenceMode;
+
+    public bool ShowPageLayer => _showPageLayer;
+
+    public string TimelinePreset => _timelinePreset;
 
     /// <summary>时间轴分析进度 0..1；-1 表示未在分析（完成或未开始）。</summary>
     public double TimelineProgress { get; private set; } = -1;
@@ -111,9 +143,59 @@ public class PdfAudioTrackManager : IDisposable
     /// <summary>单句预览开始/结束时触发；参数为当前预览句，结束后为 null。</summary>
     public event EventHandler<AudioSentenceSpan?>? PreviewChanged;
 
+    /// <summary>点击页码刻度后请求正文跳页。</summary>
+    public event EventHandler<int>? PageNavigationRequested;
+
+    /// <summary>手动修正已写入覆盖层（用于一次性的“跟读切片仍旧”提示）。</summary>
+    public event EventHandler? BoundaryOverlayChanged;
+
     public bool IsPreviewing => _previewSpan != null;
 
     public AudioSentenceSpan? PreviewSpan => _previewSpan;
+
+    /// <summary>当前断句参数；切换灵敏度后按新参数重算当前曲目。</summary>
+    public AudioTimelineOptions TimelineOptions => _timelineOptions;
+
+    /// <summary>切换断句灵敏度预设（只存预设名）并重新分析当前曲目。</summary>
+    public void SetTimelinePreset(string preset)
+    {
+        _timelinePreset = AudioTimelinePresets.Normalize(preset);
+        _timelineOptions = AudioTimelinePresets.Create(_timelinePreset);
+        if (_profile != null)
+        {
+            _profile.AudioTimelinePreset = _timelinePreset;
+            SaveProfile();
+        }
+        if (_loadedTrack != null) StartTimeline(_loadedTrack, forceReanalyze: true);
+    }
+
+    public void SetPointSentenceMode(bool enabled)
+    {
+        if (_pointSentenceMode == enabled) return;
+        _pointSentenceMode = enabled;
+        if (_profile != null)
+        {
+            _profile.PointSentenceMode = enabled;
+            SaveProfile();
+        }
+    }
+
+    public void SetShowPageLayer(bool enabled)
+    {
+        if (_showPageLayer == enabled) return;
+        _showPageLayer = enabled;
+        if (_profile != null)
+        {
+            _profile.ShowPageLayer = enabled;
+            SaveProfile();
+        }
+    }
+
+    /// <summary>忽略缓存重新断句。</summary>
+    public void ReanalyzeTimeline()
+    {
+        if (_loadedTrack != null) StartTimeline(_loadedTrack, forceReanalyze: true);
+    }
 
     /// <summary>用给定规则/匹配方式对当前已扫描曲目试算，不修改已生效的 profile</summary>
     public AudioMatchResult PreviewRules(IReadOnlyList<AudioMatchRule> rules,
@@ -136,13 +218,15 @@ public class PdfAudioTrackManager : IDisposable
     public PdfAudioTrackManager(ILogger logger,
         IPdfAudioMatcher matcher, IPdfAudioDirectoryScanner scanner,
         IPdfAudioProfileStore store, ISubtitleParser subtitleParser,
-        SentenceTimelineService? timelineService = null)
+        SentenceTimelineService? timelineService = null,
+        AudioBoundaryOverlayStore? overlayStore = null)
     {
         _logger = logger;
         _matcher = matcher;
         _scanner = scanner;
         _store = store;
         _timelineService = timelineService;
+        _overlayStore = overlayStore;
         _playback = new PdfAudioPlaybackService(new NAudioMediaPlayer(subtitleParser));
         _playback.Player.PlaybackFinished += OnPlaybackFinished;
         _playback.Player.OutputDeviceChanged += OnOutputDeviceChanged;
@@ -209,12 +293,17 @@ public class PdfAudioTrackManager : IDisposable
         SavePlaybackState();
         CancelPreview();
         ResetTimeline();
+        _overlay = null;
+        IsOverlayStale = false;
+        _timeline = null;
+        _pageAnchors = Array.Empty<AudioPageAnchor>();
         _playback.Stop();
         _loadedTrack = null;
         _result = null;
         _playlistIndex = -1;
         _currentPageIndex = -1;
         SetPageHint(null);
+        TimelineChanged?.Invoke(this, null);
     }
 
     private void ApplyLoadedProfile(string pdfPath, int pageCount, List<AudioTrack> tracks, string fingerprint)
@@ -222,6 +311,11 @@ public class PdfAudioTrackManager : IDisposable
         var profile = _profile!;
         FollowPage = profile.FollowPage;
         SyncPageOnTrackChange = profile.SyncPageOnTrackChange;
+        _sentenceTimelineEnabled = profile.SentenceTimelineEnabled;
+        _pointSentenceMode = profile.PointSentenceMode;
+        _showPageLayer = profile.ShowPageLayer;
+        _timelinePreset = AudioTimelinePresets.Normalize(profile.AudioTimelinePreset);
+        _timelineOptions = AudioTimelinePresets.Create(_timelinePreset);
         // 倍速按书记忆；打开书籍时先把目标值同步给播放器，后续 Load 按该倍速搭建输出链
         _playback.SetSpeed(profile.PlaybackSpeed);
         ScopeCorrectionMessage = null;
@@ -501,6 +595,7 @@ public class PdfAudioTrackManager : IDisposable
         }
 
         TrackChanged?.Invoke(this, track);
+        LoadOverlay(track);
         StartTimeline(track);
 
         if (!syncPage || !SyncPageOnTrackChange) return;
@@ -731,7 +826,176 @@ public class PdfAudioTrackManager : IDisposable
         _playback.Seek(position);
     }
 
-    private void CancelPreview()
+    /// <summary>点击页码刻度：跳到页起点并请求正文同步页码。</summary>
+    public void ActivatePageAnchor(AudioPageAnchor anchor)
+    {
+        if (anchor == null) return;
+        Seek(TimeSpan.FromMilliseconds(Math.Max(0, anchor.StartMs)));
+        PageNavigationRequested?.Invoke(this, anchor.PageIndex);
+    }
+
+    /// <summary>当前播放位置所在（或最近）的句子，供修正菜单定位。</summary>
+    public AudioSentenceSpan? CurrentSentence
+        => FindNearestSpan((int)Math.Round(_playback.Player.Position.TotalMilliseconds));
+
+    /// <summary>拖动一个句子边界并写入手动覆盖层。</summary>
+    public bool AdjustSentenceBoundary(AudioSentenceSpan span, bool isStart, int timeMs)
+    {
+        if (span == null || _timeline == null || _overlayStore == null) return false;
+        int durationMs = _timeline.DurationMs;
+        timeMs = Math.Clamp(timeMs, 0, durationMs);
+
+        int newStart = isStart ? timeMs : span.StartMs;
+        int newEnd = isStart ? span.EndMs : timeMs;
+        if (newEnd - newStart < 100) return false;
+
+        if (!BeginOverlayEdit()) return false;
+
+        string id = EnsureSpanId(span);
+        _overlay!.Edits.RemoveAll(e => string.Equals(e.Id, id, StringComparison.Ordinal));
+        _overlay.Edits.Add(new AudioSentenceEdit
+        {
+            Id = id,
+            StartMs = newStart,
+            EndMs = newEnd,
+            Kind = "adjust"
+        });
+        return CommitOverlay();
+    }
+
+    /// <summary>把当前句与下一句合并为一句。</summary>
+    public bool MergeWithNext(AudioSentenceSpan span)
+    {
+        var sentences = _timeline?.Sentences;
+        if (span == null || sentences == null || _overlayStore == null) return false;
+
+        int index = sentences.IndexOf(span);
+        if (index < 0)
+            index = sentences.ToList().FindIndex(s => string.Equals(s.SegmentId, span.SegmentId, StringComparison.Ordinal));
+        if (index < 0 || index >= sentences.Count - 1) return false;
+
+        var next = sentences[index + 1];
+        if (!BeginOverlayEdit()) return false;
+
+        string id = EnsureSpanId(span);
+        string nextId = EnsureSpanId(next);
+        _overlay!.Edits.RemoveAll(e => string.Equals(e.Id, id, StringComparison.Ordinal)
+                                       || string.Equals(e.Id, nextId, StringComparison.Ordinal));
+        _overlay.Edits.Add(new AudioSentenceEdit
+        {
+            Id = id,
+            StartMs = Math.Min(span.StartMs, next.StartMs),
+            EndMs = Math.Max(span.EndMs, next.EndMs),
+            Kind = "merge"
+        });
+        return CommitOverlay();
+    }
+
+    /// <summary>在播放位置把当前句拆成两句。</summary>
+    public bool SplitAt(TimeSpan position)
+    {
+        if (_timeline == null || _overlayStore == null) return false;
+        int ms = (int)Math.Round(position.TotalMilliseconds);
+        var span = FindNearestSpan(ms);
+        if (span == null || ms <= span.StartMs + 100 || ms >= span.EndMs - 100) return false;
+
+        if (!BeginOverlayEdit()) return false;
+
+        string id = EnsureSpanId(span);
+        _overlay!.Edits.RemoveAll(e => string.Equals(e.Id, id, StringComparison.Ordinal));
+        _overlay.Edits.Add(new AudioSentenceEdit { Id = id + ":a", StartMs = span.StartMs, EndMs = ms, Kind = "split" });
+        _overlay.Edits.Add(new AudioSentenceEdit { Id = id + ":b", StartMs = ms, EndMs = span.EndMs, Kind = "split" });
+        return CommitOverlay();
+    }
+
+    /// <summary>撤销最近一次手动修正（会话内最多 20 步）。</summary>
+    public bool UndoBoundaryEdit()
+    {
+        if (_overlayHistory.Count == 0 || _overlayStore == null || _timeline == null) return false;
+
+        var snapshot = _overlayHistory[^1];
+        _overlayHistory.RemoveAt(_overlayHistory.Count - 1);
+        _overlay = snapshot;
+        return CommitOverlay(pushHistory: false);
+    }
+
+    /// <summary>清除本曲目手动修正（不动自动断句缓存）。</summary>
+    public bool ClearBoundaryOverlay()
+    {
+        if (_overlayStore == null || _timeline == null || _overlay == null) return false;
+        if (!BeginOverlayEdit()) return false;
+
+        _overlay.Edits.Clear();
+        _overlay.PageAnchors.Clear();
+        return CommitOverlay();
+    }
+
+    private bool BeginOverlayEdit()
+    {
+        if (_overlayStore == null || _timeline == null || _overlay == null) return false;
+
+        _overlayHistory.Add(CloneOverlay(_overlay));
+        if (_overlayHistory.Count > 20)
+            _overlayHistory.RemoveAt(0);
+        return true;
+    }
+
+    private bool CommitOverlay(bool pushHistory = true)
+    {
+        if (_overlayStore == null || _overlay == null || _loadedTrack == null) return false;
+        string? pdfPath = _currentPdfPath ?? _profile?.PdfPath;
+        if (string.IsNullOrWhiteSpace(pdfPath)) return false;
+
+        _overlay.TrackKey = _loadedTrack.FileName;
+        _overlay.Fingerprint = AudioTimelineStore.ComputeFingerprint(
+            _loadedTrack.FilePath, _loadedTrack.DurationMs);
+
+        try
+        {
+            _overlayStore.Save(pdfPath, _loadedTrack.FilePath, _overlay);
+            IsOverlayStale = false;
+            PublishTimeline(_timelineService?.Current);
+            BoundaryOverlayChanged?.Invoke(this, EventArgs.Empty);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "保存手动断句修正失败：{Track}", _loadedTrack.FileName);
+            if (pushHistory && _overlayHistory.Count > 0)
+                _overlayHistory.RemoveAt(_overlayHistory.Count - 1);
+            return false;
+        }
+    }
+
+    private static AudioBoundaryOverlay CloneOverlay(AudioBoundaryOverlay overlay) => new()
+    {
+        SchemaVersion = overlay.SchemaVersion,
+        TrackKey = overlay.TrackKey,
+        Fingerprint = overlay.Fingerprint,
+        Edits = overlay.Edits.Select(e => new AudioSentenceEdit
+        {
+            Id = e.Id,
+            StartMs = e.StartMs,
+            EndMs = e.EndMs,
+            Kind = e.Kind
+        }).ToList(),
+        PageAnchors = overlay.PageAnchors.Select(a => new AudioPageAnchor
+        {
+            PageIndex = a.PageIndex,
+            StartMs = a.StartMs,
+            Source = a.Source,
+            IsStartEstimated = a.IsStartEstimated,
+            Confidence = a.Confidence
+        }).ToList()
+    };
+
+    private static string EnsureSpanId(AudioSentenceSpan span)
+        => string.IsNullOrEmpty(span.SegmentId)
+            ? $"p{span.PageIndex ?? -1}-{span.StartMs}-{span.EndMs}"
+            : span.SegmentId;
+
+    /// <summary>取消单句预览；播放位置保持不变，并恢复阅读进度记录。</summary>
+    public void CancelPreview()
     {
         bool had = _previewSpan != null;
         _previewSpan = null;
@@ -780,13 +1044,233 @@ public class PdfAudioTrackManager : IDisposable
     private void OnTimelineChanged(object? sender, AudioSentenceTimeline? timeline)
     {
         if (_disposed) return;
-        TimelineChanged?.Invoke(this, timeline);
+        PublishTimeline(timeline);
     }
 
-    private void StartTimeline(AudioTrack track)
+    private void PublishTimeline(AudioSentenceTimeline? baseTimeline)
+    {
+        _timeline = ApplyOverlay(baseTimeline);
+        RebuildPageAnchors();
+        TimelineChanged?.Invoke(this, _timeline);
+    }
+
+    /// <summary>
+    /// 把手动修正作为最高优先级层叠到自动时间轴上；只影响展示与预览，不写回 segments.json。
+    /// </summary>
+    private AudioSentenceTimeline? ApplyOverlay(AudioSentenceTimeline? baseTimeline)
+    {
+        if (baseTimeline == null) return null;
+        var edits = _overlay?.Edits;
+        if (edits == null || edits.Count == 0) return baseTimeline;
+
+        var spans = edits
+            .Where(e => e.EndMs > e.StartMs)
+            .Select(e =>
+            {
+                var sourceSpan = FindBestOverlap(baseTimeline.Sentences, e.StartMs, e.EndMs);
+                return new AudioSentenceSpan
+                {
+                    StartMs = e.StartMs,
+                    EndMs = e.EndMs,
+                    PageIndex = sourceSpan?.PageIndex,
+                    BoundarySource = "manual",
+                    Confidence = 1.0,
+                    SegmentId = string.IsNullOrEmpty(e.Id) ? sourceSpan?.SegmentId : e.Id,
+                    HighlightId = sourceSpan?.HighlightId,
+                    Text = sourceSpan?.Text,
+                    TextSource = sourceSpan?.TextSource
+                };
+            })
+            .ToList();
+        if (spans.Count == 0) return baseTimeline;
+
+        // 手动层内部只处理“真重叠”；相邻（拆分后的两半）必须保持独立
+        spans.Sort((a, b) => a.StartMs != b.StartMs
+            ? a.StartMs.CompareTo(b.StartMs)
+            : a.EndMs.CompareTo(b.EndMs));
+        var manual = new List<AudioSentenceSpan>(spans.Count);
+        foreach (var span in spans)
+        {
+            if (manual.Count > 0 && span.StartMs < manual[^1].EndMs)
+                span.StartMs = manual[^1].EndMs;
+            if (span.EndMs <= span.StartMs) continue;
+            manual.Add(span);
+        }
+
+        var merged = new List<AudioSentenceSpan>(manual);
+        foreach (var span in baseTimeline.Sentences)
+            AddRemainders(merged, span, manual);
+
+        merged.Sort((a, b) => a.StartMs != b.StartMs
+            ? a.StartMs.CompareTo(b.StartMs)
+            : a.EndMs.CompareTo(b.EndMs));
+        for (int i = 0; i < merged.Count; i++)
+            merged[i].Index = i + 1;
+
+        var clone = new AudioSentenceTimeline
+        {
+            SchemaVersion = baseTimeline.SchemaVersion,
+            TrackKey = baseTimeline.TrackKey,
+            Fingerprint = baseTimeline.Fingerprint,
+            DurationMs = baseTimeline.DurationMs,
+            Analysis = baseTimeline.Analysis,
+            Sentences = merged
+        };
+        return clone;
+    }
+
+    private static AudioSentenceSpan? FindBestOverlap(
+        IReadOnlyList<AudioSentenceSpan> spans, int startMs, int endMs)
+    {
+        AudioSentenceSpan? best = null;
+        int bestOverlap = 0;
+        foreach (var span in spans)
+        {
+            int overlap = Math.Min(endMs, span.EndMs) - Math.Max(startMs, span.StartMs);
+            if (overlap > bestOverlap)
+            {
+                bestOverlap = overlap;
+                best = span;
+            }
+        }
+        return best;
+    }
+
+    /// <summary>把手动区间从自动句上剔除；被完全覆盖的自动句直接消失，部分覆盖保留剩余片段。</summary>
+    private static void AddRemainders(
+        List<AudioSentenceSpan> output, AudioSentenceSpan span, List<AudioSentenceSpan> manual)
+    {
+        var pieces = new List<(int Start, int End)> { (span.StartMs, span.EndMs) };
+        foreach (var cut in manual)
+        {
+            if (cut.EndMs <= span.StartMs || cut.StartMs >= span.EndMs) continue;
+
+            var next = new List<(int Start, int End)>(pieces.Count + 1);
+            foreach (var piece in pieces)
+            {
+                if (cut.EndMs <= piece.Start || cut.StartMs >= piece.End)
+                {
+                    next.Add(piece);
+                    continue;
+                }
+                if (piece.Start < cut.StartMs) next.Add((piece.Start, cut.StartMs));
+                if (cut.EndMs < piece.End) next.Add((cut.EndMs, piece.End));
+            }
+            pieces = next;
+        }
+
+        foreach (var piece in pieces)
+        {
+            if (piece.End <= piece.Start) continue;
+            output.Add(new AudioSentenceSpan
+            {
+                StartMs = piece.Start,
+                EndMs = piece.End,
+                PageIndex = span.PageIndex,
+                BoundarySource = span.BoundarySource,
+                Confidence = span.Confidence,
+                SegmentId = span.SegmentId,
+                HighlightId = span.HighlightId,
+                Text = span.Text,
+                TextSource = span.TextSource
+            });
+        }
+    }
+
+    private void RebuildPageAnchors()
+    {
+        if (_timeline == null)
+        {
+            _pageAnchors = Array.Empty<AudioPageAnchor>();
+            return;
+        }
+
+        _pageAnchors = AudioPageAnchorBuilder.Build(
+            _timeline.DurationMs,
+            _timeline.Sentences,
+            _overlay?.PageAnchors,
+            _timelineOptions,
+            interpolateMissing: false);
+    }
+
+    private void LoadOverlay(AudioTrack track)
+    {
+        _overlay = null;
+        IsOverlayStale = false;
+        string? pdfPath = _currentPdfPath ?? _profile?.PdfPath;
+        if (_overlayStore == null || string.IsNullOrWhiteSpace(pdfPath)) return;
+
+        try
+        {
+            _overlay = _overlayStore.Load(pdfPath, track.FilePath);
+            if (_overlay == null)
+            {
+                _overlay = new AudioBoundaryOverlay
+                {
+                    TrackKey = track.FileName,
+                    Fingerprint = AudioTimelineStore.ComputeFingerprint(track.FilePath, track.DurationMs)
+                };
+                return;
+            }
+
+            string fingerprint = AudioTimelineStore.ComputeFingerprint(track.FilePath, track.DurationMs);
+            IsOverlayStale = AudioBoundaryOverlayStore.IsFingerprintStale(_overlay, fingerprint);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "读取手动断句覆盖层失败：{Track}", track.FileName);
+        }
+    }
+
+    /// <summary>把当前页起点设为给定播放位置（手动页码锚点），保存到覆盖层。</summary>
+    public bool SetPageStart(int pageIndex, TimeSpan position)
+    {
+        if (_overlayStore == null || _loadedTrack == null) return false;
+        string? pdfPath = _currentPdfPath ?? _profile?.PdfPath;
+        if (string.IsNullOrWhiteSpace(pdfPath)) return false;
+
+        int startMs = (int)Math.Round(position.TotalMilliseconds);
+        _overlay ??= new AudioBoundaryOverlay
+        {
+            TrackKey = _loadedTrack.FileName,
+            Fingerprint = AudioTimelineStore.ComputeFingerprint(_loadedTrack.FilePath, _loadedTrack.DurationMs)
+        };
+
+        _overlay.PageAnchors.RemoveAll(a => a.PageIndex == pageIndex);
+        _overlay.PageAnchors.Add(new AudioPageAnchor
+        {
+            PageIndex = pageIndex,
+            StartMs = Math.Max(0, startMs),
+            Source = AudioPageAnchorBuilder.ManualSource,
+            IsStartEstimated = false,
+            Confidence = 1.0
+        });
+
+        try
+        {
+            _overlayStore.Save(pdfPath, _loadedTrack.FilePath, _overlay);
+            IsOverlayStale = false;
+            RebuildPageAnchors();
+            TimelineChanged?.Invoke(this, _timeline);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "保存页码锚点失败：{Track}", _loadedTrack.FileName);
+            return false;
+        }
+    }
+
+    private void StartTimeline(AudioTrack track, bool forceReanalyze = false)
     {
         var service = _timelineService;
-        if (service == null) return;
+        if (service == null || !_sentenceTimelineEnabled)
+        {
+            _timeline = null;
+            _pageAnchors = Array.Empty<AudioPageAnchor>();
+            TimelineChanged?.Invoke(this, null);
+            return;
+        }
 
         ResetTimeline();
 
@@ -801,7 +1285,7 @@ public class PdfAudioTrackManager : IDisposable
 
         var cts = new CancellationTokenSource();
         _timelineCts = cts;
-        _ = RunTimelineAsync(track, durationMs, cts);
+        _ = RunTimelineAsync(track, durationMs, forceReanalyze, cts);
     }
 
     private void ResetTimeline()
@@ -817,7 +1301,7 @@ public class PdfAudioTrackManager : IDisposable
         _timelineService?.Reset();
     }
 
-    private async Task RunTimelineAsync(AudioTrack track, int durationMs, CancellationTokenSource cts)
+    private async Task RunTimelineAsync(AudioTrack track, int durationMs, bool forceReanalyze, CancellationTokenSource cts)
     {
         try
         {
@@ -828,7 +1312,8 @@ public class PdfAudioTrackManager : IDisposable
             });
 
             await _timelineService!
-                .EnsureTimelineAsync(track, durationMs, progress: progress, cancellationToken: cts.Token)
+                .EnsureTimelineAsync(track, durationMs, _timelineOptions, forceReanalyze,
+                    progress, cts.Token)
                 .ConfigureAwait(true);
 
             if (_disposed || _timelineCts != cts) return;

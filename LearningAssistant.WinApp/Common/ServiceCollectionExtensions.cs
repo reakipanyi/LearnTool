@@ -316,6 +316,8 @@ namespace LearningAssistant.Common
             // 句子时间轴：自动断句缓存 / 解码分析 / 跟读切片边界只读来源
             services.AddSingleton<AudioTimelineStore>(_ =>
                 new AudioTimelineStore(() => AppPaths.AudioTimelinesDir));
+            services.AddSingleton<AudioBoundaryOverlayStore>(_ =>
+                new AudioBoundaryOverlayStore(AppPaths.AudioBoundariesDir));
             services.AddSingleton<AudioDecodeAnalysisService>();
             services.AddSingleton<ShadowingSegmentStore>();
             services.AddSingleton<ShadowingBoundaryLayerProvider>();
