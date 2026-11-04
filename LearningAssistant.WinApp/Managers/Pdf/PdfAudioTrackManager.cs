@@ -958,6 +958,47 @@ public class PdfAudioTrackManager : IDisposable
         return CommitOverlay();
     }
 
+    /// <summary>恢复指定句子的自动边界：移除该句的手动覆盖记录，回落到切片/字幕/VAD。</summary>
+    public bool RestoreAutoBoundary(AudioSentenceSpan span)
+    {
+        if (span == null || _overlayStore == null || _overlay == null) return false;
+        if (string.IsNullOrWhiteSpace(span.SegmentId)) return false;
+
+        string baseId = StripSuffix(span.SegmentId);
+        var matches = _overlay.Edits
+            .Where(e => IsEditFamily(e.Id, span.SegmentId, baseId))
+            .ToList();
+        if (matches.Count == 0) return false;
+
+        if (!BeginOverlayEdit()) return false;
+
+        foreach (var edit in matches)
+            _overlay.Edits.Remove(edit);
+        return CommitOverlay();
+    }
+
+    /// <summary>该句是否有可恢复的手动覆盖（用于菜单启用态）。</summary>
+    public bool HasManualBoundary(AudioSentenceSpan? span)
+    {
+        if (span == null || _overlay == null) return false;
+        if (string.IsNullOrWhiteSpace(span.SegmentId)) return false;
+
+        string baseId = StripSuffix(span.SegmentId);
+        return _overlay.Edits.Any(e => IsEditFamily(e.Id, span.SegmentId, baseId));
+    }
+
+    private static bool IsEditFamily(string editId, string spanId, string baseId)
+        => string.Equals(editId, spanId, StringComparison.Ordinal)
+           || string.Equals(editId, baseId, StringComparison.Ordinal)
+           || string.Equals(editId, baseId + ":a", StringComparison.Ordinal)
+           || string.Equals(editId, baseId + ":b", StringComparison.Ordinal);
+
+    private static string StripSuffix(string id)
+    {
+        int colon = id.LastIndexOf(':');
+        return colon > 0 ? id[..colon] : id;
+    }
+
     /// <summary>撤销最近一次手动修正（会话内最多 20 步）。</summary>
     public bool UndoBoundaryEdit()
     {
