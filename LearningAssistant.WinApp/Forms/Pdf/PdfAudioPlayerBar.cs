@@ -65,6 +65,7 @@ public sealed class PdfAudioPlayerBar : UserControl
     private readonly ToolStripMenuItem _menuCorrection = new("修正断句（拖动边界）");
     private readonly ToolStripMenuItem _menuMergeSentence = new("合并当前句与下一句");
     private readonly ToolStripMenuItem _menuSplitSentence = new("在播放位置拆分当前句");
+    private readonly ToolStripMenuItem _menuInsertBoundary = new("在此处插入边界");
     private readonly ToolStripMenuItem _menuUndoSentence = new("撤销上一步修正");
     private readonly ToolStripMenuItem _menuClearSentence = new("清除本曲目手动修正");
     private readonly ToolStripMenuItem _menuApplySlices = new("应用边界到跟读切片…");
@@ -323,6 +324,7 @@ public sealed class PdfAudioPlayerBar : UserControl
             _menuCorrection.Click += (_, _) => ToggleCorrectionMode();
             _menuMergeSentence.Click += (_, _) => MergeCurrentSentence();
             _menuSplitSentence.Click += (_, _) => SplitCurrentSentence();
+            _menuInsertBoundary.Click += (_, _) => InsertBoundaryHere();
             _menuUndoSentence.Click += (_, _) => UndoBoundaryEdit();
             _menuClearSentence.Click += (_, _) => ClearBoundaryOverlay();
             _menuApplySlices.Click += (_, _) => ApplyBoundariesToSlices();
@@ -334,6 +336,7 @@ public sealed class PdfAudioPlayerBar : UserControl
             _loopMenu.Items.Add(_menuCorrection);
             _loopMenu.Items.Add(_menuMergeSentence);
             _loopMenu.Items.Add(_menuSplitSentence);
+            _loopMenu.Items.Add(_menuInsertBoundary);
             _loopMenu.Items.Add(_menuUndoSentence);
             _loopMenu.Items.Add(_menuClearSentence);
             _loopMenu.Items.Add(_menuApplySlices);
@@ -682,6 +685,14 @@ public sealed class PdfAudioPlayerBar : UserControl
         _form.ShowToast(_manager.SplitAt(position) ? "已在播放位置拆分当前句" : "播放位置离句首/句尾太近");
     }
 
+    private void InsertBoundaryHere()
+    {
+        var position = _manager.Playback.Player.Position;
+        _form.ShowToast(_manager.InsertBoundaryAt(position)
+            ? "已在此处插入边界"
+            : "播放位置离句首/句尾太近");
+    }
+
     private void UndoBoundaryEdit()
     {
         _form.ShowToast(_manager.UndoBoundaryEdit() ? "已撤销上一步修正" : "没有可撤销的修正");
@@ -755,6 +766,7 @@ public sealed class PdfAudioPlayerBar : UserControl
         _menuCorrection.Enabled = hasTimeline && _manager.CurrentTrack != null;
         _menuMergeSentence.Enabled = hasTimeline && _manager.CurrentTrack != null;
         _menuSplitSentence.Enabled = hasTimeline && _manager.CurrentTrack != null;
+        _menuInsertBoundary.Enabled = hasTimeline && _manager.CurrentTrack != null;
         _menuUndoSentence.Enabled = hasTimeline && _manager.CurrentTrack != null;
         _menuClearSentence.Enabled = hasTimeline && _manager.CurrentTrack != null;
         _menuApplySlices.Enabled = hasTimeline && _manager.CurrentTrack != null;

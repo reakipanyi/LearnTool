@@ -939,6 +939,25 @@ public class PdfAudioTrackManager : IDisposable
         return CommitOverlay();
     }
 
+    /// <summary>
+    /// 在当前句内部插入一个边界：只记录前半段，后半段由剩余句自动保留。
+    /// 用于「中间漏掉一小句」的长尾场景，比「拆分」少一条手动记录。
+    /// </summary>
+    public bool InsertBoundaryAt(TimeSpan position)
+    {
+        if (_timeline == null || _overlayStore == null) return false;
+        int ms = (int)Math.Round(position.TotalMilliseconds);
+        var span = FindNearestSpan(ms);
+        if (span == null || ms <= span.StartMs + 100 || ms >= span.EndMs - 100) return false;
+
+        if (!BeginOverlayEdit()) return false;
+
+        string id = EnsureSpanId(span);
+        _overlay!.Edits.RemoveAll(e => string.Equals(e.Id, id, StringComparison.Ordinal));
+        _overlay.Edits.Add(new AudioSentenceEdit { Id = id + ":a", StartMs = span.StartMs, EndMs = ms, Kind = "insert" });
+        return CommitOverlay();
+    }
+
     /// <summary>撤销最近一次手动修正（会话内最多 20 步）。</summary>
     public bool UndoBoundaryEdit()
     {
