@@ -200,6 +200,11 @@ namespace LearningAssistant.Common
         public static string PdfReadingPositionDir => Path.Combine(CurrentUserDir, "pdf_reading_positions");
 
         /// <summary>
+        /// 音频句子时间轴缓存目录（按音频指纹存放，可重建，不同步）
+        /// </summary>
+        public static string AudioTimelinesDir => Path.Combine(CurrentUserCacheDir, "audio_timelines");
+
+        /// <summary>
         /// PDF 阅读时长统计目录（按用户 + 文档 + 日期累计）
         /// </summary>
         public static string PdfReadingStatsDir => Path.Combine(CurrentUserDir, "pdf_reading_stats");
@@ -306,6 +311,7 @@ namespace LearningAssistant.Common
             EnsureDirectoryExists(PdfAutoLayoutDir);
             EnsureDirectoryExists(PdfReadingPositionDir);
             EnsureDirectoryExists(PdfReadingStatsDir);
+            EnsureDirectoryExists(AudioTimelinesDir);
             EnsureDirectoryExists(TTSCacheDir);
             EnsureDirectoryExists(TesseractDataDir);
         }

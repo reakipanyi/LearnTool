@@ -70,6 +70,12 @@ public sealed class AudioTimelineOptions
     public AudioTimelineOptions Clone() => (AudioTimelineOptions)MemberwiseClone();
 }
 
+/// <summary>一段源音频时间区间；[StartMs, EndMs) 左闭右开。</summary>
+public readonly record struct AudioTimeRange(int StartMs, int EndMs)
+{
+    public int DurationMs => EndMs - StartMs;
+}
+
 /// <summary>
 /// 一句的时间跨度；[StartMs, EndMs) 左闭右开，单位为源音频毫秒。
 /// Index 与 Text 只在运行期赋值，不落盘。
