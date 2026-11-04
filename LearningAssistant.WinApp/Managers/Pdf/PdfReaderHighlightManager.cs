@@ -334,6 +334,21 @@ namespace LearningAssistant.Managers
                     UpdateHighlightLayer();
                     UpdateSecondHighlightLayer();
                     _form.PictureBoxPdf?.Invalidate();
+
+                    // 刚绘制的高亮默认进入可编辑状态；延后到本轮鼠标事件处理完（含工具自动回到选择模式）再选中，
+                    // 避免刚选中就被随后的工具切换清掉。双页右页暂不支持选中编辑，这里只处理当前显示页
+                    if (targetPageIndex == _form.CurrentPageIndex && !string.IsNullOrEmpty(highlight.Id))
+                    {
+                        var hostForm = _form.Form;
+                        if (hostForm.IsHandleCreated && !hostForm.IsDisposed)
+                        {
+                            hostForm.BeginInvoke(new Action(() =>
+                            {
+                                if (IsTargetPageVisible(currentPdfPath, targetPageIndex))
+                                    _form.SelectHighlightById(highlight.Id);
+                            }));
+                        }
+                    }
                 }
 
                 // 先发布高亮事件，避免自动翻译（含 AI 润色）耗时或失败时吞掉学习积分等下游逻辑

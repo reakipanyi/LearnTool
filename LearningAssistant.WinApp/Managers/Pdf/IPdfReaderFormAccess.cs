@@ -84,6 +84,12 @@ namespace LearningAssistant.Managers
         /// <summary>高亮控制器，用于删除选中/刷新图层</summary>
         PdfReaderHighlightManager? HighlightManager { get; }
 
+        /// <summary>
+        /// 按 Id 选中当前页高亮；新建高亮后调用，使其直接进入可拖动/缩放的可编辑状态。
+        /// 未回到选择模式（如连续标注锁定）时返回 false，避免打断连续绘制。
+        /// </summary>
+        bool SelectHighlightById(string id);
+
         /// <summary>音频录制侧边栏标签页</summary>
         TabPage? TabPageAudio { get; }
         /// <summary>音频录制服务</summary>

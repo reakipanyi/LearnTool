@@ -3166,6 +3166,17 @@ namespace LearningAssistant.Forms.Pdf
         IHighlightService? IPdfReaderFormAccess.HighlightService => _highlightService;
         PdfReaderHighlightManager? IPdfReaderFormAccess.HighlightManager => _highlightManager;
 
+        /// <summary>
+        /// 按 Id 选中高亮，供新建高亮后立即进入可编辑状态。
+        /// 仅在已回到选择模式时选中；连续标注锁定或仍在框选模式下保持绘制流程不被切换。
+        /// </summary>
+        public bool SelectHighlightById(string id)
+        {
+            if (_navigationManager == null || _navigationManager.CurrentToolMode != AnnotationToolMode.Select)
+                return false;
+            return _navigationManager.SelectAnnotationById(id);
+        }
+
         public TabPage? TabPageAudio => _tabPageAudio;
         public IAudioRecorderService? AudioRecorderService => _audioRecorderService;
 
