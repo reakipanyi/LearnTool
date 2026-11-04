@@ -756,11 +756,13 @@ namespace LearningAssistant.Common.UI
                     break;
 
                 case Keys.Oemcomma:
+                case Keys.OemOpenBrackets:
                     PreviewAdjacent(-1);
                     e.Handled = true;
                     break;
 
                 case Keys.OemPeriod:
+                case Keys.OemCloseBrackets:
                     PreviewAdjacent(1);
                     e.Handled = true;
                     break;

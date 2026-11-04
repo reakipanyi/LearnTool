@@ -3545,6 +3545,12 @@ namespace LearningAssistant.Forms.Pdf
                             SetAnnotationToolMode(AnnotationToolMode.Select);
                             e.Handled = true;
                         }
+                        else if (_audioTrackManager?.IsPreviewing == true)
+                        {
+                            // 翻译条/全屏/标注工具优先；其余场景下 Esc 取消单句预览
+                            _audioTrackManager.CancelPreview();
+                            e.Handled = e.SuppressKeyPress = true;
+                        }
                         break;
                     case Keys.Menu:
                         // Alt（单独按下）→ 切换到选择模式
