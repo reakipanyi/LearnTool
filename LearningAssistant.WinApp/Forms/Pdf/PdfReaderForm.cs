@@ -714,6 +714,7 @@ namespace LearningAssistant.Forms.Pdf
                 var boundaryProvider = Program.ServiceProvider?.GetService(typeof(ShadowingBoundaryLayerProvider)) as ShadowingBoundaryLayerProvider;
                 var subtitleProvider = Program.ServiceProvider?.GetService(typeof(SubtitleBoundaryLayerProvider)) as SubtitleBoundaryLayerProvider;
                 var overlayStore = Program.ServiceProvider?.GetService(typeof(AudioBoundaryOverlayStore)) as AudioBoundaryOverlayStore;
+                var shadowingApply = Program.ServiceProvider?.GetService(typeof(ShadowingBoundaryApplyService)) as ShadowingBoundaryApplyService;
                 if (matcher != null && scanner != null && store != null && subParser != null)
                 {
                     if (timelineStore != null && analysisService != null && boundaryProvider != null)
@@ -736,7 +737,7 @@ namespace LearningAssistant.Forms.Pdf
                             subtitleProvider != null ? subtitleProvider.GetSignature : null);
                     }
                     _audioTrackManager = new PdfAudioTrackManager(
-                        _logger, matcher, scanner, store, subParser, _sentenceTimelineService, overlayStore);
+                        _logger, matcher, scanner, store, subParser, _sentenceTimelineService, overlayStore, shadowingApply);
                     _audioTrackManager.PageNavigationRequested += (_, page) =>
                         _navigationManager?.NavigateToPage(page);
                     _audioTrackManager.PageSyncRequested += OnAudioPageSyncRequested;

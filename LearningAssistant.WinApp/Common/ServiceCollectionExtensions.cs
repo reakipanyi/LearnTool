@@ -322,6 +322,7 @@ namespace LearningAssistant.Common
             services.AddSingleton<ShadowingSegmentStore>();
             services.AddSingleton<ShadowingBoundaryLayerProvider>();
             services.AddSingleton<SubtitleBoundaryLayerProvider>();
+            services.AddSingleton<ShadowingBoundaryApplyService>();
 
             // 句子跟读：发音参考评分（无 en-US 识别器时自动降级为不可用）
             services.AddSingleton<IPronunciationScorer, SystemSpeechPronunciationScorer>();

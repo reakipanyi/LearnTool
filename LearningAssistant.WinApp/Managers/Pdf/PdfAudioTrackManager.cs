@@ -19,6 +19,7 @@ public class PdfAudioTrackManager : IDisposable
     private readonly PdfAudioPlaybackService _playback;
     private readonly SentenceTimelineService? _timelineService;
     private readonly AudioBoundaryOverlayStore? _overlayStore;
+    private readonly ShadowingBoundaryApplyService? _shadowingApplyService;
     private AudioMatchResult? _result;
     private AudioTrack? _loadedTrack;
     private PdfAudioProfile? _profile;
@@ -222,7 +223,8 @@ public class PdfAudioTrackManager : IDisposable
         IPdfAudioMatcher matcher, IPdfAudioDirectoryScanner scanner,
         IPdfAudioProfileStore store, ISubtitleParser subtitleParser,
         SentenceTimelineService? timelineService = null,
-        AudioBoundaryOverlayStore? overlayStore = null)
+        AudioBoundaryOverlayStore? overlayStore = null,
+        ShadowingBoundaryApplyService? shadowingApplyService = null)
     {
         _logger = logger;
         _matcher = matcher;
@@ -230,6 +232,7 @@ public class PdfAudioTrackManager : IDisposable
         _store = store;
         _timelineService = timelineService;
         _overlayStore = overlayStore;
+        _shadowingApplyService = shadowingApplyService;
         _playback = new PdfAudioPlaybackService(new NAudioMediaPlayer(subtitleParser));
         _playback.Player.PlaybackFinished += OnPlaybackFinished;
         _playback.Player.OutputDeviceChanged += OnOutputDeviceChanged;
@@ -840,6 +843,26 @@ public class PdfAudioTrackManager : IDisposable
         if (anchor == null) return;
         Seek(TimeSpan.FromMilliseconds(Math.Max(0, anchor.StartMs)));
         PageNavigationRequested?.Invoke(this, anchor.PageIndex);
+    }
+
+    /// <summary>计算「把边界写回跟读切片」的变更清单，供 UI 确认；无时间轴时返回空计划。</summary>
+    public ShadowingBoundaryApplyPlan PlanShadowingBoundaryApply()
+    {
+        if (_shadowingApplyService == null || _loadedTrack == null || _currentPdfPath == null || _timeline == null)
+            return new ShadowingBoundaryApplyPlan();
+
+        return _shadowingApplyService.Plan(_currentPdfPath, _loadedTrack, _timeline);
+    }
+
+    /// <summary>执行边界写回；返回实际更新的切片数。</summary>
+    public Task<int> ApplyShadowingBoundaryAsync(
+        ShadowingBoundaryApplyPlan plan,
+        CancellationToken cancellationToken = default)
+    {
+        if (_shadowingApplyService == null || _currentPdfPath == null || plan.Changes.Count == 0)
+            return Task.FromResult(0);
+
+        return _shadowingApplyService.ApplyAsync(_currentPdfPath, plan.Changes, cancellationToken);
     }
 
     /// <summary>当前播放位置所在（或最近）的句子，供修正菜单定位。</summary>

@@ -67,6 +67,7 @@ public sealed class PdfAudioPlayerBar : UserControl
     private readonly ToolStripMenuItem _menuSplitSentence = new("在播放位置拆分当前句");
     private readonly ToolStripMenuItem _menuUndoSentence = new("撤销上一步修正");
     private readonly ToolStripMenuItem _menuClearSentence = new("清除本曲目手动修正");
+    private readonly ToolStripMenuItem _menuApplySlices = new("应用边界到跟读切片…");
     private bool _boundaryHintShown;
     private readonly ToolStripMenuItem _menuReanalyze = new("重新断句");
     private readonly ToolStripMenuItem _menuSensitivity = new("断句灵敏度");
@@ -324,6 +325,7 @@ public sealed class PdfAudioPlayerBar : UserControl
             _menuSplitSentence.Click += (_, _) => SplitCurrentSentence();
             _menuUndoSentence.Click += (_, _) => UndoBoundaryEdit();
             _menuClearSentence.Click += (_, _) => ClearBoundaryOverlay();
+            _menuApplySlices.Click += (_, _) => ApplyBoundariesToSlices();
             _loopMenu.Items.Add(_menuPointSentence);
             _loopMenu.Items.Add(_menuOpenSentenceList);
             _loopMenu.Items.Add(_menuPageLayer);
@@ -334,6 +336,7 @@ public sealed class PdfAudioPlayerBar : UserControl
             _loopMenu.Items.Add(_menuSplitSentence);
             _loopMenu.Items.Add(_menuUndoSentence);
             _loopMenu.Items.Add(_menuClearSentence);
+            _loopMenu.Items.Add(_menuApplySlices);
             _loopMenu.Items.Add(_menuSetPageStart);
             _loopMenu.Items.Add(_menuReanalyze);
         }
@@ -689,12 +692,48 @@ public sealed class PdfAudioPlayerBar : UserControl
         _form.ShowToast(_manager.ClearBoundaryOverlay() ? "已清除本曲目手动修正" : "没有手动修正");
     }
 
+    private async void ApplyBoundariesToSlices()
+    {
+        var plan = _manager.PlanShadowingBoundaryApply();
+        if (plan.Changes.Count == 0)
+        {
+            _form.ShowToast(plan.SkippedConflicts > 0
+                ? $"没有可更新的切片（{plan.SkippedConflicts} 段因同句冲突被跳过）"
+                : "没有需要更新的跟读切片边界");
+            return;
+        }
+
+        int takes = plan.Changes.Count(change => change.HasTakes);
+        int moved = plan.Changes.Count(change => change.ExceedsShift);
+        string message =
+            $"将更新 {plan.Changes.Count} 段跟读切片边界。\n" +
+            $"其中 {takes} 段已有跟读录音，边界移动可能影响录音对照；" +
+            $"{moved} 段移动超过 300ms。\n" +
+            "跟读录音与切片音频文件不会被删除。\n\n" +
+            (plan.SkippedConflicts > 0 ? $"另有 {plan.SkippedConflicts} 段因同句冲突被跳过。\n\n" : "") +
+            "继续？";
+
+        if (MessageBox.Show(this, message, "应用边界到跟读切片",
+                MessageBoxButtons.OKCancel, MessageBoxIcon.Warning) != DialogResult.OK)
+            return;
+
+        try
+        {
+            int updated = await _manager.ApplyShadowingBoundaryAsync(plan);
+            _form.ShowToast(updated > 0 ? $"已更新 {updated} 段切片边界" : "切片边界已是最新");
+        }
+        catch (Exception ex)
+        {
+            _form.ShowToast($"写回失败：{ex.Message}", 6000);
+        }
+    }
+
     private void OnBoundaryOverlayChanged(object? sender, EventArgs e)
     {
         if (_boundaryHintShown) return;
         _boundaryHintShown = true;
-        // P0 只读复用切片：修正不会回写跟读切片，提醒一次即可
-        _form.ShowToast("手动修正已保存；跟读切片仍使用旧边界（P1 才写回）", 4000);
+        // 手动修正默认只作用于时间轴；需要时由用户显式写回切片
+        _form.ShowToast("手动修正已保存；如需同步到跟读切片，请用 ⋯ 菜单「应用边界到跟读切片」", 4000);
     }
 
     private void UpdateSentenceMenu()
@@ -718,6 +757,7 @@ public sealed class PdfAudioPlayerBar : UserControl
         _menuSplitSentence.Enabled = hasTimeline && _manager.CurrentTrack != null;
         _menuUndoSentence.Enabled = hasTimeline && _manager.CurrentTrack != null;
         _menuClearSentence.Enabled = hasTimeline && _manager.CurrentTrack != null;
+        _menuApplySlices.Enabled = hasTimeline && _manager.CurrentTrack != null;
 
         bool analyzing = _manager.TimelineProgress >= 0;
         _menuSensitivity.Enabled = !analyzing && _manager.CurrentTrack != null;
