@@ -712,6 +712,7 @@ namespace LearningAssistant.Forms.Pdf
                 var timelineStore = Program.ServiceProvider?.GetService(typeof(AudioTimelineStore)) as AudioTimelineStore;
                 var analysisService = Program.ServiceProvider?.GetService(typeof(AudioDecodeAnalysisService)) as AudioDecodeAnalysisService;
                 var boundaryProvider = Program.ServiceProvider?.GetService(typeof(ShadowingBoundaryLayerProvider)) as ShadowingBoundaryLayerProvider;
+                var subtitleProvider = Program.ServiceProvider?.GetService(typeof(SubtitleBoundaryLayerProvider)) as SubtitleBoundaryLayerProvider;
                 var overlayStore = Program.ServiceProvider?.GetService(typeof(AudioBoundaryOverlayStore)) as AudioBoundaryOverlayStore;
                 if (matcher != null && scanner != null && store != null && subParser != null)
                 {
@@ -720,8 +721,19 @@ namespace LearningAssistant.Forms.Pdf
                         _sentenceTimelineService = new SentenceTimelineService(
                             timelineStore,
                             analysisService,
-                            (track, durationMs, token) =>
-                                boundaryProvider.GetLayersAsync(_currentPdfPath, track, durationMs, token));
+                            async (track, durationMs, token) =>
+                            {
+                                var layers = new List<SentenceBoundaryLayer>(
+                                    await boundaryProvider.GetLayersAsync(_currentPdfPath, track, durationMs, token));
+                                if (subtitleProvider != null)
+                                {
+                                    layers.AddRange(
+                                        await subtitleProvider.GetLayersAsync(track, durationMs, token));
+                                }
+                                return layers;
+                            },
+                            subtitleProvider != null ? subtitleProvider.EnrichAsync : null,
+                            subtitleProvider != null ? subtitleProvider.GetSignature : null);
                     }
                     _audioTrackManager = new PdfAudioTrackManager(
                         _logger, matcher, scanner, store, subParser, _sentenceTimelineService, overlayStore);

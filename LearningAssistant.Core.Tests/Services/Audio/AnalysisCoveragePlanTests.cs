@@ -99,4 +99,32 @@ public class AnalysisCoveragePlanTests
         plan.Coverage.Should().BeApproximately(0.8, 1e-9);
         plan.Holes.Should().Equal(new AudioTimeRange(40000, 50000));
     }
+
+    [Fact]
+    public void 字幕覆盖达标也跳过VAD()
+    {
+        var plan = AnalysisCoveragePlan.Plan(
+            null,
+            null,
+            60000,
+            new[] { Span(0, 58000) });
+
+        plan.Mode.Should().Be(AnalysisCoverageMode.Full);
+        plan.Coverage.Should().BeApproximately(58.0 / 60.0, 1e-9);
+        plan.Holes.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void 字幕与切片重叠_空洞按合并后的覆盖计算()
+    {
+        var plan = AnalysisCoveragePlan.Plan(
+            new[] { Span(0, 10000) },
+            null,
+            60000,
+            new[] { Span(8000, 40000) });
+
+        plan.Mode.Should().Be(AnalysisCoverageMode.Partial);
+        plan.Coverage.Should().BeApproximately(40.0 / 60.0, 1e-9);
+        plan.Holes.Should().Equal(new AudioTimeRange(40000, 60000));
+    }
 }

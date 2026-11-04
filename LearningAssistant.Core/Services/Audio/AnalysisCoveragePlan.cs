@@ -16,7 +16,7 @@ public enum AnalysisCoverageMode
 }
 
 /// <summary>
-/// 纯函数覆盖率计划：把切片与手动修正当作已覆盖区间，算出未覆盖空洞与决策模式。
+/// 纯函数覆盖率计划：把切片、手动修正与字幕当作已覆盖区间，算出未覆盖空洞与决策模式。
 /// 只影响分析范围，不修改任何已有边界。
 /// </summary>
 public sealed class AnalysisCoveragePlan
@@ -35,14 +35,18 @@ public sealed class AnalysisCoveragePlan
     public static AnalysisCoveragePlan Plan(
         IReadOnlyList<AudioSentenceSpan>? slices,
         IReadOnlyList<AudioSentenceSpan>? manual,
-        int durationMs)
+        int durationMs,
+        IReadOnlyList<AudioSentenceSpan>? subtitle = null)
     {
         if (durationMs <= 0)
             return new AnalysisCoveragePlan { Mode = AnalysisCoverageMode.None, Coverage = 0 };
 
         var coverageIntervals = MergeIntervals(CollectIntervals(slices, durationMs), durationMs);
         coverageIntervals = MergeIntervals(
-            coverageIntervals.Concat(CollectIntervals(manual, durationMs)).ToList(),
+            coverageIntervals
+                .Concat(CollectIntervals(manual, durationMs))
+                .Concat(CollectIntervals(subtitle, durationMs))
+                .ToList(),
             durationMs);
 
         long covered = 0;

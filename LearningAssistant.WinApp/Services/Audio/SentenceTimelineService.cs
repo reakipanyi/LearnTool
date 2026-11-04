@@ -12,19 +12,35 @@ public delegate Task<IReadOnlyList<SentenceBoundaryLayer>> AudioBoundaryLayerPro
     int durationMs,
     CancellationToken cancellationToken);
 
+/// <summary>把字幕等文本叠加到已解析句子上；不得修改句子时间。</summary>
+public delegate Task<IReadOnlyList<AudioSentenceSpan>> AudioSentenceTextProvider(
+    AudioTrack track,
+    int durationMs,
+    IReadOnlyList<AudioSentenceSpan> spans,
+    CancellationToken cancellationToken);
+
+/// <summary>
+/// 外部边界来源的签名（如字幕文件 mtime）；拼进去重键，来源变化即重新合成。
+/// </summary>
+public delegate string? AudioBoundarySignatureProvider(AudioTrack track);
+
 /// <summary>
 /// 句子时间轴编排：缓存命中 → 覆盖率决策 → VAD 分析 → 多层边界解析 → 发布。
-/// 负责取消、代际与同参数请求去重；缓存只保存 VAD 结果，切片/手动每次重新合并。
+/// 负责取消、代际与同参数请求去重；缓存只保存 VAD 结果，切片/字幕/手动每次重新合并。
+/// 字幕文件签名参与去重键：字幕被编辑后自动重新合成，但 VAD 缓存仍命中。
 /// </summary>
 public sealed class SentenceTimelineService : IDisposable
 {
     private const string VadSource = "vad";
     private const string ShadowingSource = "shadowing";
+    private const string SubtitleSource = "subtitle";
     private const string ManualSource = "manual";
 
     private readonly AudioTimelineStore _store;
     private readonly AudioDecodeAnalysisService _analysisService;
     private readonly AudioBoundaryLayerProvider? _layerProvider;
+    private readonly AudioSentenceTextProvider? _textProvider;
+    private readonly AudioBoundarySignatureProvider? _signatureProvider;
     private readonly SynchronizationContext? _uiContext;
     private readonly object _sync = new();
 
@@ -37,11 +53,15 @@ public sealed class SentenceTimelineService : IDisposable
     public SentenceTimelineService(
         AudioTimelineStore store,
         AudioDecodeAnalysisService analysisService,
-        AudioBoundaryLayerProvider? layerProvider = null)
+        AudioBoundaryLayerProvider? layerProvider = null,
+        AudioSentenceTextProvider? textProvider = null,
+        AudioBoundarySignatureProvider? signatureProvider = null)
     {
         _store = store ?? throw new ArgumentNullException(nameof(store));
         _analysisService = analysisService ?? throw new ArgumentNullException(nameof(analysisService));
         _layerProvider = layerProvider;
+        _textProvider = textProvider;
+        _signatureProvider = signatureProvider;
         _uiContext = SynchronizationContext.Current;
     }
 
@@ -70,7 +90,9 @@ public sealed class SentenceTimelineService : IDisposable
             ? AudioTimelineStore.ComputeFingerprint(track.FilePath, duration)
             : "";
         string trackKey = string.IsNullOrWhiteSpace(track.RelativePath) ? track.FilePath : track.RelativePath;
-        string key = fingerprint + "|" + AudioTimelineStore.ComputeOptionsSignature(options);
+        string signature = SafeSignature(track);
+        string key = fingerprint + "|" + AudioTimelineStore.ComputeOptionsSignature(options)
+                     + "|" + signature;
 
         lock (_sync)
         {
@@ -175,8 +197,9 @@ public sealed class SentenceTimelineService : IDisposable
             if (!IsCurrent(generation, cancellationToken)) return null;
 
             var sliceSpans = CollectSpans(layers, ShadowingSource);
+            var subtitleSpans = CollectSpans(layers, SubtitleSource);
             var manualSpans = CollectSpans(layers, ManualSource);
-            var plan = AnalysisCoveragePlan.Plan(sliceSpans, manualSpans, workingDuration);
+            var plan = AnalysisCoveragePlan.Plan(sliceSpans, manualSpans, workingDuration, subtitleSpans);
 
             IReadOnlyList<AudioSentenceSpan> vadSpans;
             string engine;
@@ -224,6 +247,9 @@ public sealed class SentenceTimelineService : IDisposable
                 mergedLayers.Add(new SentenceBoundaryLayer(VadSource, SentenceBoundaryResolver.VadPriority, vadSpans));
 
             var resolved = SentenceBoundaryResolver.Resolve(workingDuration, options, mergedLayers.ToArray());
+            if (!IsCurrent(generation, cancellationToken)) return null;
+
+            resolved = await ApplyTextAsync(track, workingDuration, resolved, cancellationToken).ConfigureAwait(false);
             if (!IsCurrent(generation, cancellationToken)) return null;
 
             var timeline = BuildTimeline(
@@ -282,6 +308,43 @@ public sealed class SentenceTimelineService : IDisposable
             result.AddRange(layer.Spans);
         }
         return result;
+    }
+
+    private async Task<IReadOnlyList<AudioSentenceSpan>> ApplyTextAsync(
+        AudioTrack track,
+        int durationMs,
+        IReadOnlyList<AudioSentenceSpan> spans,
+        CancellationToken cancellationToken)
+    {
+        if (_textProvider == null) return spans;
+
+        try
+        {
+            var enriched = await _textProvider(track, durationMs, spans, cancellationToken).ConfigureAwait(false);
+            return enriched != null && enriched.Count > 0 ? enriched : spans;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception)
+        {
+            // 文本叠加失败不应阻断时间轴发布
+            return spans;
+        }
+    }
+
+    private string SafeSignature(AudioTrack track)
+    {
+        if (_signatureProvider == null) return "";
+        try
+        {
+            return _signatureProvider(track) ?? "";
+        }
+        catch (Exception)
+        {
+            return "";
+        }
     }
 
     private void SaveVadCache(
