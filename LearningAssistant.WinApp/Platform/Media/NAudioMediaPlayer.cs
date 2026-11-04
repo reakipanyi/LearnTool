@@ -16,6 +16,8 @@ public class NAudioMediaPlayer : IMediaPlayer
     private AudioFileReader? _reader;
     private VarispeedSampleProvider? _varispeed;
     private NAudio.Wave.SampleProviders.SmbPitchShiftingSampleProvider? _pitchShift;
+    private RangeLimitSampleProvider? _rangeLimit;
+    private readonly SynchronizationContext? _uiContext;
     private System.Windows.Forms.Timer? _timer;
     private readonly AbLoopState _abLoop = new();
     private readonly PlaybackRangeState _playbackRange = new();
@@ -72,6 +74,7 @@ public class NAudioMediaPlayer : IMediaPlayer
     public NAudioMediaPlayer(ISubtitleParser subtitleParser)
     {
         _subtitleParser = subtitleParser;
+        _uiContext = SynchronizationContext.Current;
         StartDeviceWatch();
     }
 
@@ -139,6 +142,7 @@ public class NAudioMediaPlayer : IMediaPlayer
         _reader = null;
         _varispeed = null;
         _pitchShift = null;
+        _rangeLimit = null;
         SubtitleCues = null;
         // 换曲时清除上一曲的 A-B 循环与播放区间，避免沿用旧区间
         _abLoop.A = null;
@@ -185,6 +189,7 @@ public class NAudioMediaPlayer : IMediaPlayer
 
         _varispeed = null;
         _pitchShift = null;
+        _rangeLimit = null;
 
         ISampleProvider output;
         if (Math.Abs(_speed - 1.0) < 0.001)
@@ -201,7 +206,12 @@ public class NAudioMediaPlayer : IMediaPlayer
             output = _pitchShift;
         }
 
-        _waveOut.Init(output);
+        // 区间限制放在最终输出端：变速/变调后仍按输出帧精确停止
+        _rangeLimit = new RangeLimitSampleProvider(output) { Completed = OnRangeLimitCompleted };
+        _waveOut.Init(_rangeLimit);
+
+        if (_playbackRange.IsArmed && _playbackRange.End != null)
+            ArmRangeLimit(_reader.CurrentTime, _playbackRange.End.Value);
     }
 
     /// <summary>倍速变化时重建输出链，保持源位置、音量与播放/暂停状态。</summary>
@@ -242,7 +252,7 @@ public class NAudioMediaPlayer : IMediaPlayer
 
     public void Pause() { _waveOut?.Pause(); SetState(MediaPlaybackState.Paused); }
     public void Resume() { _ = PlayAsync(); }
-    public void Stop() { _manualStop = true; _playbackRange.Disarm(); _waveOut?.Stop(); _reader?.Seek(0, System.IO.SeekOrigin.Begin); _varispeed?.Reset(); SetState(MediaPlaybackState.Stopped); }
+    public void Stop() { _manualStop = true; _playbackRange.Disarm(); _rangeLimit?.Disarm(); _waveOut?.Stop(); _reader?.Seek(0, System.IO.SeekOrigin.Begin); _varispeed?.Reset(); SetState(MediaPlaybackState.Stopped); }
     public void Seek(TimeSpan position)
     {
         if (_reader == null || position < TimeSpan.Zero || position > _reader.TotalTime) return;
@@ -251,6 +261,7 @@ public class NAudioMediaPlayer : IMediaPlayer
         bool hadRange = _playbackRange.IsArmed;
         TimeSpan rangeEnd = _playbackRange.End ?? TimeSpan.Zero;
         if (hadRange) _playbackRange.Disarm();
+        _rangeLimit?.Disarm();
 
         SeekCore(position);
 
@@ -286,6 +297,7 @@ public class NAudioMediaPlayer : IMediaPlayer
         {
             var replacedEnd = _playbackRange.End ?? TimeSpan.Zero;
             _playbackRange.Disarm();
+            _rangeLimit?.Disarm();
             PlaybackRangeCompleted?.Invoke(this, new PlaybackRangeCompletedEventArgs
             {
                 Reason = PlaybackRangeEndReason.Replaced,
@@ -295,6 +307,7 @@ public class NAudioMediaPlayer : IMediaPlayer
 
         SeekCore(start);
         _playbackRange.Arm(end);
+        ArmRangeLimit(start, end);
         return true;
     }
 
@@ -304,9 +317,58 @@ public class NAudioMediaPlayer : IMediaPlayer
 
         var end = _playbackRange.End ?? TimeSpan.Zero;
         _playbackRange.Disarm();
+        _rangeLimit?.Disarm();
         PlaybackRangeCompleted?.Invoke(this, new PlaybackRangeCompletedEventArgs
         {
             Reason = PlaybackRangeEndReason.Cancelled,
+            End = end
+        });
+    }
+
+    /// <summary>
+    /// 按当前倍速把「剩余源时间」换算成输出帧数；变速重建后再次调用即以新倍速重新武装。
+    /// 淡出固定 30ms（按输出采样率计），保证不同倍速下听感一致。
+    /// </summary>
+    private void ArmRangeLimit(TimeSpan current, TimeSpan end)
+    {
+        if (_rangeLimit == null || _reader == null) return;
+
+        double remainingSeconds = (end - current).TotalSeconds;
+        if (remainingSeconds <= 0)
+        {
+            _rangeLimit.Arm(0, 0);
+            return;
+        }
+
+        int sampleRate = _rangeLimit.WaveFormat.SampleRate;
+        long remainingFrames = (long)Math.Round(
+            remainingSeconds / Math.Max(MinSpeed, _speed) * sampleRate);
+        long fadeFrames = (long)Math.Round(0.030 * sampleRate);
+        _rangeLimit.Arm(remainingFrames, fadeFrames);
+    }
+
+    /// <summary>音频线程回调：切回 UI 线程完成一次区间结束（与 tick 兜底同一收尾路径）。</summary>
+    private void OnRangeLimitCompleted()
+    {
+        if (_uiContext != null)
+            _uiContext.Post(_ => CompleteRangeFromSampleLimit(), null);
+        else
+            CompleteRangeFromSampleLimit();
+    }
+
+    private void CompleteRangeFromSampleLimit()
+    {
+        if (!_playbackRange.IsArmed) return;
+
+        var end = _playbackRange.End ?? TimeSpan.Zero;
+        _playbackRange.Disarm();
+        _rangeLimit?.Disarm();
+        _waveOut?.Pause();
+        SetState(MediaPlaybackState.Paused);
+        SeekCore(end);
+        PlaybackRangeCompleted?.Invoke(this, new PlaybackRangeCompletedEventArgs
+        {
+            Reason = PlaybackRangeEndReason.Completed,
             End = end
         });
     }
@@ -392,17 +454,25 @@ public class NAudioMediaPlayer : IMediaPlayer
         if (_abLoop.ShouldLoopBack(Position, out var target)) Seek(target);
 
         // 区间命中：先清区间，再暂停并对齐到 end，最后通知 UI（顺序见设计 §8.1）
-        if (_playbackRange.ShouldStop(Position, out var snapTo))
+        // 有采样限制器时它负责精确停止；tick 只在明显越过终点时兜底，
+        // 避免解码位置领先 WaveOut 缓冲导致提前 ~300ms 截断。
+        var rangeEnd = _playbackRange.End;
+        if (rangeEnd != null)
         {
-            _playbackRange.Disarm();
-            _waveOut?.Pause();
-            SetState(MediaPlaybackState.Paused);
-            SeekCore(snapTo);
-            PlaybackRangeCompleted?.Invoke(this, new PlaybackRangeCompletedEventArgs
+            TimeSpan late = _rangeLimit != null ? TimeSpan.FromMilliseconds(500) : TimeSpan.Zero;
+            if (Position >= rangeEnd.Value + late)
             {
-                Reason = PlaybackRangeEndReason.Completed,
-                End = snapTo
-            });
+                _playbackRange.Disarm();
+                _rangeLimit?.Disarm();
+                _waveOut?.Pause();
+                SetState(MediaPlaybackState.Paused);
+                SeekCore(rangeEnd.Value);
+                PlaybackRangeCompleted?.Invoke(this, new PlaybackRangeCompletedEventArgs
+                {
+                    Reason = PlaybackRangeEndReason.Completed,
+                    End = rangeEnd.Value
+                });
+            }
         }
 
         PositionChanged?.Invoke(this, Position);
