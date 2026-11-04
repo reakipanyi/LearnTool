@@ -41,6 +41,7 @@ namespace LearningAssistant.Common.UI
         private sealed class Bucket
         {
             public int FirstIndex = -1;
+            public int Count;
         }
 
         private IReadOnlyList<AudioSentenceSpan> _sentences = Array.Empty<AudioSentenceSpan>();
@@ -161,6 +162,27 @@ namespace LearningAssistant.Common.UI
                 ClearHover(notify: false);
                 Invalidate();
             }
+        }
+
+        /// <summary>
+        /// 该句所在像素桶里被抽稀合并的句数（0 表示没有合并）。
+        /// 只在刻度间距 &lt; 3px 时有意义，供悬停卡片显示「+N」。
+        /// </summary>
+        public int HiddenSentenceCountNear(AudioSentenceSpan span)
+        {
+            if (span == null || _sentences.Count <= 1 || DurationMs <= 0) return 0;
+
+            int width = TrackWidth;
+            if (width <= 0) return 0;
+
+            double gapPx = width / (double)(_sentences.Count - 1);
+            if (gapPx >= 3) return 0;
+
+            EnsureBuckets();
+            if (_buckets.Length == 0) return 0;
+
+            int x = Math.Clamp(TrackX(span.StartMs) - TrackLeft, 0, _buckets.Length - 1);
+            return Math.Max(0, _buckets[x].Count - 1);
         }
 
         [Browsable(false)]
@@ -1071,6 +1093,7 @@ namespace LearningAssistant.Common.UI
                 if (x < 0 || x >= width) continue;
                 if (buckets[x].FirstIndex < 0)
                     buckets[x].FirstIndex = i;
+                buckets[x].Count++;
             }
 
             _buckets = buckets;

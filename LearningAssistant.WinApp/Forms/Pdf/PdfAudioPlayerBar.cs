@@ -39,6 +39,11 @@ public sealed class PdfAudioPlayerBar : UserControl
     private readonly Label _labelMark = new();
     private readonly System.Windows.Forms.Timer _markTimer = new() { Interval = 500 };
     private readonly ToolTip _tooltip = new();
+    private readonly ToolStripDropDown _hoverCard = new();
+    private readonly TableLayoutPanel _hoverCardBody = new();
+    private readonly Label _hoverCardTitle = new();
+    private readonly Label _hoverCardText = new();
+    private ToolStripControlHost? _hoverCardHost;
     private readonly ContextMenuStrip _loopMenu = new();
     private readonly Panel _speedPanel = new();
     private readonly FlowLayoutPanel _speedChips = new();
@@ -113,6 +118,7 @@ public sealed class PdfAudioPlayerBar : UserControl
         root.Controls.Add(BuildRightSide(), 2, 0);
         Controls.Add(root);
         BuildSpeedMenu();
+        InitializeHoverCard();
 
         Paint += (_, e) =>
         {
@@ -729,21 +735,91 @@ public sealed class PdfAudioPlayerBar : UserControl
     {
         if (span == null)
         {
-            _tooltip.SetToolTip(_track, "单击预览最近一句 · 拖动或 Alt 单击定位 · , / . 上一句/下一句");
+            HideHoverCard();
+            UpdateTrackBaseTooltip();
             return;
         }
 
+        // 有句子层后改用悬停卡片，避免 ToolTip 与卡片双提示
+        if (_manager.Timeline is { Sentences.Count: > 0 })
+            _tooltip.SetToolTip(_track, string.Empty);
+
+        ShowHoverCard(span);
+    }
+
+    private void UpdateTrackBaseTooltip()
+    {
+        string help = _manager.PointSentenceMode
+            ? "单击预览最近一句 · 拖动或 Alt 单击定位 · , / . 上一句/下一句"
+            : "点刻度预览 · 点空白定位 · 拖动 seek";
+        _tooltip.SetToolTip(
+            _track,
+            _manager.Timeline is { Sentences.Count: > 0 } ? string.Empty : help);
+    }
+
+    private void InitializeHoverCard()
+    {
+        _hoverCardTitle.AutoSize = true;
+        _hoverCardTitle.MaximumSize = new Size(340, 0);
+        _hoverCardTitle.Font = new Font("Microsoft YaHei UI", 9F, FontStyle.Bold);
+        _hoverCardTitle.Margin = new Padding(0, 0, 0, 2);
+
+        _hoverCardText.AutoSize = true;
+        _hoverCardText.MaximumSize = new Size(340, 0);
+        _hoverCardText.Font = new Font("Microsoft YaHei UI", 9F);
+        _hoverCardText.Margin = Padding.Empty;
+
+        _hoverCardBody.AutoSize = true;
+        _hoverCardBody.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+        _hoverCardBody.ColumnCount = 1;
+        _hoverCardBody.RowCount = 2;
+        _hoverCardBody.Padding = new Padding(10, 7, 10, 8);
+        _hoverCardBody.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        _hoverCardBody.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        _hoverCardBody.Controls.Add(_hoverCardTitle, 0, 0);
+        _hoverCardBody.Controls.Add(_hoverCardText, 0, 1);
+
+        _hoverCardHost = new ToolStripControlHost(_hoverCardBody)
+        {
+            Margin = Padding.Empty,
+            Padding = Padding.Empty,
+            AutoSize = true
+        };
+        _hoverCard.Items.Add(_hoverCardHost);
+        _hoverCard.AutoSize = true;
+        _hoverCard.Padding = Padding.Empty;
+        _hoverCard.Margin = Padding.Empty;
+        _hoverCard.DropShadowEnabled = true;
+    }
+
+    /// <summary>悬停卡片：第 N 句 + 起止时间 + 文本；刻度过密时附加「+N」提示。</summary>
+    private void ShowHoverCard(AudioSentenceSpan span)
+    {
+        if (!IsHandleCreated || _track.Width <= 0) return;
+
+        int hidden = _track.HiddenSentenceCountNear(span);
         string range = $"{FormatPreciseTime(span.StartMs)} – {FormatPreciseTime(span.EndMs)}"
                        + $"（{Math.Max(0, span.EndMs - span.StartMs) / 1000.0:0.0}s）";
-        string text = $"第 {span.Index} 句 · {range}";
-        var content = span.Text?.Trim();
-        if (!string.IsNullOrEmpty(content))
-            text += Environment.NewLine + TruncateLine(content, 40)
-                    + Environment.NewLine + "单击预览 · Shift 单击从此处继续播放";
-        else
-            text += Environment.NewLine + "单击预览 · Shift 单击从此处继续播放";
+        _hoverCardTitle.Text = $"第 {span.Index} 句 · {range}" + (hidden > 0 ? $"  +{hidden}" : "");
 
-        _tooltip.SetToolTip(_track, text);
+        var content = span.Text?.Trim();
+        _hoverCardText.Text = content ?? string.Empty;
+        _hoverCardText.Visible = !string.IsNullOrEmpty(content);
+        _hoverCardBody.PerformLayout();
+
+        var cursor = _track.PointToClient(Cursor.Position);
+        if (!_hoverCard.Visible)
+            _hoverCard.Show(_track, new Point(Math.Max(0, cursor.X), Math.Max(0, cursor.Y)));
+
+        var size = _hoverCard.Size;
+        _hoverCard.Location = _track.PointToScreen(new Point(
+            cursor.X - size.Width / 2,
+            cursor.Y - size.Height - 10));
+    }
+
+    private void HideHoverCard()
+    {
+        if (_hoverCard.Visible) _hoverCard.Close();
     }
 
     private void UpdatePageTooltip(AudioPageAnchor? anchor)
@@ -759,9 +835,6 @@ public sealed class PdfAudioPlayerBar : UserControl
         text += Environment.NewLine + "单击跳到本页开头";
         _tooltip.SetToolTip(_track, text);
     }
-
-    private static string TruncateLine(string text, int maxLength)
-        => text.Length <= maxLength ? text : text[..maxLength] + "…";
 
     private static string FormatPreciseTime(int milliseconds)
     {
@@ -1312,6 +1385,12 @@ public sealed class PdfAudioPlayerBar : UserControl
         _speedSlider.BackColor = palette.Surface;
         _speedTitle.ForeColor = palette.Text;
         _speedValue.ForeColor = palette.Muted;
+
+        _hoverCard.BackColor = palette.Surface;
+        _hoverCardBody.BackColor = palette.Surface;
+        _hoverCardTitle.ForeColor = palette.Text;
+        _hoverCardText.ForeColor = palette.Muted;
+
         UpdateFollowButton();
         UpdateSpeedButton();
         UpdateLoopChecks();
@@ -1394,6 +1473,7 @@ public sealed class PdfAudioPlayerBar : UserControl
             _markTimer.Dispose();
             _markSession?.Dispose();
             _tooltip.Dispose();
+            _hoverCard.Dispose();
             _loopMenu.Dispose();
             _speedMenu.Dispose();
         }
