@@ -337,6 +337,9 @@ namespace LearningAssistant.Services.Shadowing
         public SemaphoreSlim GetLock(string pdfPath)
             => _locks.GetOrAdd($"{_rootDir}|{_userId}|{GetDocumentHash(pdfPath)}", _ => new SemaphoreSlim(1, 1));
 
+        /// <summary>PDF 路径对应的目录哈希；供按书存放的其他用户数据复用同一分桶规则。</summary>
+        public static string ComputeDocumentKey(string pdfPath) => GetDocumentHash(pdfPath);
+
         private static ShadowingSegmentManifest Merge(
             ShadowingSegmentManifest existing,
             ShadowingSegmentManifest incoming,
