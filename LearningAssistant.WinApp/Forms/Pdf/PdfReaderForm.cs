@@ -3168,12 +3168,15 @@ namespace LearningAssistant.Forms.Pdf
 
         /// <summary>
         /// 按 Id 选中高亮，供新建高亮后立即进入可编辑状态。
-        /// 仅在已回到选择模式时选中；连续标注锁定或仍在框选模式下保持绘制流程不被切换。
+        /// 先切到选择模式并同步工具栏状态，再选中目标高亮，保证手柄可立即拖动/缩放；
+        /// 连续标注偏好只影响下次是否沿用旧工具，新建的这一条始终可直接编辑。
         /// </summary>
         public bool SelectHighlightById(string id)
         {
-            if (_navigationManager == null || _navigationManager.CurrentToolMode != AnnotationToolMode.Select)
+            if (_navigationManager == null)
                 return false;
+
+            SetAnnotationToolMode(AnnotationToolMode.Select);
             return _navigationManager.SelectAnnotationById(id);
         }
 
@@ -3276,6 +3279,9 @@ namespace LearningAssistant.Forms.Pdf
                     _navigationManager?.NextPage();
                 else
                     _navigationManager?.PreviousPage();
+                // 焦点原本在页码框时，翻页后交还窗体，后续方向键等阅读快捷键继续生效
+                if (pageBoxFocused)
+                    ResetKeyboardFocusToForm();
                 return true;
             }
 
@@ -9336,7 +9342,43 @@ namespace LearningAssistant.Forms.Pdf
                 {
                     _presenter?.RenderPage(page - 1);
                 }
+                return;
             }
+
+            // Shift 组合键留给文本框自身的文本选择，不拦截
+            if (e.Shift)
+                return;
+
+            // 页码框获得焦点时仍保留翻页快捷键：PgUp/PgDn 翻页，Home/End 跳到首/末页。
+            // 否则这些键会被文本框当成编辑键吞掉，用户只能改用鼠标翻页
+            switch (e.KeyCode)
+            {
+                case Keys.PageUp:
+                    _navigationManager?.PreviousPage();
+                    break;
+                case Keys.PageDown:
+                    _navigationManager?.NextPage();
+                    break;
+                case Keys.Home:
+                    if (_presenter != null && _presenter.PageCount > 0)
+                    {
+                        _presenter.RenderPage(0);
+                    }
+                    break;
+                case Keys.End:
+                    if (_presenter != null && _presenter.PageCount > 0)
+                    {
+                        _presenter.RenderPage(_presenter.PageCount - 1);
+                    }
+                    break;
+                default:
+                    return;
+            }
+
+            e.Handled = true;
+            e.SuppressKeyPress = true;
+            // 翻页完成后把焦点交还窗体，后续方向键等阅读快捷键继续生效
+            ResetKeyboardFocusToForm();
         }
 
         private void ButtonNightMode_Click(object? sender, EventArgs e)

@@ -86,7 +86,7 @@ namespace LearningAssistant.Managers
 
         /// <summary>
         /// 按 Id 选中当前页高亮；新建高亮后调用，使其直接进入可拖动/缩放的可编辑状态。
-        /// 未回到选择模式（如连续标注锁定）时返回 false，避免打断连续绘制。
+        /// 会同步切回选择模式，保证工具栏状态与选择态一致。
         /// </summary>
         bool SelectHighlightById(string id);
 
