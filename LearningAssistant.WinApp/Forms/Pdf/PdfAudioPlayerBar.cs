@@ -3,6 +3,7 @@ using System.Globalization;
 using LearningAssistant.Abstractions.Media;
 using LearningAssistant.Common.UI;
 using LearningAssistant.Managers;
+using LearningAssistant.Models.Audio;
 using LearningAssistant.Models.Pdf;
 using LearningAssistant.Services.Shadowing;
 
@@ -24,7 +25,7 @@ public sealed class PdfAudioPlayerBar : UserControl
     private readonly Button _btnPrev = new();
     private readonly Button _btnPlay = new();
     private readonly Button _btnNext = new();
-    private readonly TrackBar _track = new();
+    private readonly AudioTimelineBar _track = new();
     private readonly Label _labelElapsed = new();
     private readonly Label _labelDuration = new();
     private readonly Button _btnSpeed = new();
@@ -51,8 +52,14 @@ public sealed class PdfAudioPlayerBar : UserControl
     private readonly ToolStripMenuItem _menuSetB = new("设复读终点 B");
     private readonly ToolStripMenuItem _menuClearAb = new("清除 A-B 复读");
     private readonly ToolStripMenuItem _menuAutoSegment = new("自动断句（建议切片）");
+    private readonly ToolStripMenuItem _menuPointSentence = new("点句模式（点位置预览最近一句）");
+    private readonly ToolStripMenuItem _menuReanalyze = new("重新断句");
+    private readonly ToolStripMenuItem _menuSensitivity = new("断句灵敏度");
+    private readonly ToolStripMenuItem _menuPresetFine = new("精听短句（3–8 秒）");
+    private readonly ToolStripMenuItem _menuPresetStandard = new("标准");
+    private readonly ToolStripMenuItem _menuPresetLoose = new("宽松");
+    private int _sentencePresetIndex;
 
-    private bool _dragging;
     private double _lastVolume = 1.0;
     /// <summary>进度条刷新时钟；按 10Hz 限频，避免高频 PositionChanged 造成无效重绘</summary>
     private readonly Stopwatch _progressClock = Stopwatch.StartNew();
@@ -60,8 +67,6 @@ public sealed class PdfAudioPlayerBar : UserControl
 
     private ShadowingMarkSession? _markSession;
     private DateTime _markHintUntil = DateTime.MinValue;
-
-    private const int SliderMax = 1000;
 
     public PdfAudioPlayerBar(PdfAudioTrackManager manager, IPdfReaderFormAccess form, Action onBindRequested)
     {
@@ -216,14 +221,10 @@ public sealed class PdfAudioPlayerBar : UserControl
         _labelElapsed.Text = "00:00";
         _labelDuration.Text = "00:00";
 
-        _track.Minimum = 0;
-        _track.Maximum = SliderMax;
-        _track.TickStyle = TickStyle.None;
-        _track.SmallChange = 10;
-        _track.LargeChange = 100;
         _track.Dock = DockStyle.Fill;
-        _track.Height = 22;
+        _track.Height = 24;
         _track.Margin = new Padding(6, 0, 6, 0);
+        _tooltip.SetToolTip(_track, "单击预览最近一句 · 拖动或 Alt 单击定位 · , / . 上一句/下一句");
 
         progress.Controls.Add(_labelElapsed, 0, 0);
         progress.Controls.Add(_track, 1, 0);
@@ -287,12 +288,30 @@ public sealed class PdfAudioPlayerBar : UserControl
         // 自动断句属于旧打点流程的入口，默认整体从菜单移除
         _menuAutoSegment.Available = PdfHiddenFeatures.EnableShadowingMark;
         _loopMenu.Items.Add(_menuAutoSegment);
+
+        if (PdfHiddenFeatures.EnableSentenceTimeline)
+        {
+            _loopMenu.Items.Add(new ToolStripSeparator());
+            _menuPointSentence.Click += (_, _) => TogglePointSentenceMode();
+            _menuPresetFine.Click += (_, _) => ApplySentencePreset(0);
+            _menuPresetStandard.Click += (_, _) => ApplySentencePreset(1);
+            _menuPresetLoose.Click += (_, _) => ApplySentencePreset(2);
+            _menuSensitivity.DropDownItems.Add(_menuPresetFine);
+            _menuSensitivity.DropDownItems.Add(_menuPresetStandard);
+            _menuSensitivity.DropDownItems.Add(_menuPresetLoose);
+            _menuReanalyze.Click += (_, _) => _manager.ReanalyzeTimeline();
+            _loopMenu.Items.Add(_menuPointSentence);
+            _loopMenu.Items.Add(_menuSensitivity);
+            _loopMenu.Items.Add(_menuReanalyze);
+        }
+
         _loopMenu.Opening += (_, _) =>
         {
             UpdateAbLoopMenu();
             _menuAutoSegment.Enabled = _form.CurrentPdfPath != null
                                       && _manager.CurrentTrack != null
                                       && !SessionActive;
+            UpdateSentenceMenu();
         };
         return right;
     }
@@ -439,17 +458,28 @@ public sealed class PdfAudioPlayerBar : UserControl
             UpdateAbLoopMenu();
         };
 
-        _track.MouseDown += (_, _) => _dragging = true;
-        _track.MouseUp += (_, _) => CommitSeek();
-        _track.Scroll += (_, _) =>
+        _track.SeekRequested += (_, position) => _manager.Seek(position);
+        _track.DragPositionChanged += (_, position) => _labelElapsed.Text = FormatTime(position);
+        _track.PreviewRequested += (_, e) =>
+            _manager.PreviewNearest(TimeSpan.FromMilliseconds(e.Span.StartMs), e.ContinueAfter);
+        _track.MarkerHovered += (_, span) => UpdateSentenceTooltip(span);
+        _track.KeyDown += (_, e) =>
         {
-            if (_dragging) _labelElapsed.Text = FormatTime(SliderToPosition(_track.Value));
+            // 只在播放条自己获得焦点时取消预览，不抢占全屏/翻译条的 Esc 语义
+            if (e.KeyCode == Keys.Escape && _manager.IsPreviewing)
+            {
+                _manager.CancelPreview();
+                e.Handled = true;
+            }
         };
 
         _manager.ProfileLoaded += OnProfileLoaded;
         _manager.TrackChanged += OnTrackChanged;
         _manager.PageHintChanged += OnPageHintChanged;
         _manager.SettingsChanged += OnSettingsChanged;
+        _manager.TimelineChanged += OnTimelineChanged;
+        _manager.TimelineProgressChanged += OnTimelineProgressChanged;
+        _manager.PreviewChanged += OnPreviewChanged;
         _manager.Playback.Player.PositionChanged += OnPositionChanged;
         _manager.Playback.Player.StateChanged += OnStateChanged;
         PdfSidebarTheme.ThemeChanged += OnThemeChanged;
@@ -500,37 +530,114 @@ public sealed class PdfAudioPlayerBar : UserControl
 
     private void OnThemeChanged(object? sender, EventArgs e) => ApplyTheme();
 
-    private void CommitSeek()
-    {
-        _dragging = false;
-        var player = _manager.Playback.Player;
-        if (player.Duration <= TimeSpan.Zero) return;
-        var target = SliderToPosition(_track.Value);
-        if (target > player.Duration) target = player.Duration;
-        _manager.Playback.Seek(target);
-        UpdateProgress(target);
-    }
-
-    private TimeSpan SliderToPosition(int value)
-    {
-        var duration = _manager.Playback.Player.Duration;
-        if (duration <= TimeSpan.Zero) return TimeSpan.Zero;
-        return TimeSpan.FromTicks((long)(duration.Ticks * (value / (double)SliderMax)));
-    }
-
     private void UpdateProgress(TimeSpan position)
     {
-        if (_dragging) return;
         var duration = _manager.Playback.Player.Duration;
         _labelElapsed.Text = FormatTime(position);
         _labelDuration.Text = FormatTime(duration);
-        if (duration <= TimeSpan.Zero)
+        _track.Duration = duration > TimeSpan.Zero ? duration : TimeSpan.Zero;
+        _track.Position = position;
+    }
+
+    private void OnTimelineChanged(object? sender, AudioSentenceTimeline? timeline)
+    {
+        _track.Sentences = (IReadOnlyList<AudioSentenceSpan>?)timeline?.Sentences
+                           ?? Array.Empty<AudioSentenceSpan>();
+        if (timeline is { DurationMs: > 0 })
+            _track.Duration = TimeSpan.FromMilliseconds(timeline.DurationMs);
+        else if (_manager.Playback.Player.Duration > TimeSpan.Zero)
+            _track.Duration = _manager.Playback.Player.Duration;
+        UpdateSentenceMenu();
+    }
+
+    private void OnTimelineProgressChanged(object? sender, double progress)
+    {
+        _track.AnalysisProgress = progress;
+        UpdateSentenceMenu();
+    }
+
+    private void OnPreviewChanged(object? sender, AudioSentenceSpan? span)
+    {
+        // 预览状态由管理器持有；暂停/结束时同步播放按钮与工具提示
+        UpdateTransport();
+        if (span == null) UpdateSentenceTooltip(null);
+    }
+
+    private void TogglePointSentenceMode()
+    {
+        _track.PointSentenceMode = !_track.PointSentenceMode;
+        UpdateSentenceMenu();
+    }
+
+    private void ApplySentencePreset(int index)
+    {
+        _sentencePresetIndex = index;
+        _manager.SetTimelineOptions(CreateSentenceOptions(index));
+        UpdateSentenceMenu();
+    }
+
+    /// <summary>三档断句灵敏度：精听短句优先切短，标准/宽松逐级放宽时长上限。</summary>
+    private static AudioTimelineOptions CreateSentenceOptions(int index) => index switch
+    {
+        1 => new AudioTimelineOptions
         {
-            _track.Value = 0;
+            SentenceGapMs = 450,
+            FineGapMs = 200,
+            MinSentenceMs = 1000,
+            MaxSentenceMs = 12000,
+            PaddingMs = 120
+        },
+        2 => new AudioTimelineOptions
+        {
+            SentenceGapMs = 600,
+            FineGapMs = 250,
+            MinSentenceMs = 1500,
+            MaxSentenceMs = 20000,
+            PaddingMs = 150
+        },
+        _ => new AudioTimelineOptions()
+    };
+
+    private void UpdateSentenceMenu()
+    {
+        _menuPointSentence.Checked = _track.PointSentenceMode;
+        _menuPresetFine.Checked = _sentencePresetIndex == 0;
+        _menuPresetStandard.Checked = _sentencePresetIndex == 1;
+        _menuPresetLoose.Checked = _sentencePresetIndex == 2;
+
+        bool analyzing = _manager.TimelineProgress >= 0;
+        _menuSensitivity.Enabled = !analyzing && _manager.CurrentTrack != null;
+        _menuReanalyze.Enabled = !analyzing && _manager.CurrentTrack != null;
+        _menuReanalyze.Text = analyzing
+            ? $"断句中… {_manager.TimelineProgress:P0}"
+            : "重新断句";
+    }
+
+    private void UpdateSentenceTooltip(AudioSentenceSpan? span)
+    {
+        if (span == null)
+        {
+            _tooltip.SetToolTip(_track, "单击预览最近一句 · 拖动或 Alt 单击定位 · , / . 上一句/下一句");
             return;
         }
-        double ratio = Math.Clamp(position.TotalMilliseconds / duration.TotalMilliseconds, 0, 1);
-        _track.Value = (int)Math.Round(ratio * SliderMax);
+
+        string range = $"{FormatPreciseTime(span.StartMs)} – {FormatPreciseTime(span.EndMs)}"
+                       + $"（{Math.Max(0, span.EndMs - span.StartMs) / 1000.0:0.0}s）";
+        string text = $"第 {span.Index} 句 · {range}";
+        var content = span.Text?.Trim();
+        if (!string.IsNullOrEmpty(content))
+            text += Environment.NewLine + content;
+
+        _tooltip.SetToolTip(_track, text);
+    }
+
+    private static string FormatPreciseTime(int milliseconds)
+    {
+        if (milliseconds < 0) milliseconds = 0;
+        var time = TimeSpan.FromMilliseconds(milliseconds);
+        return time.TotalHours >= 1
+            ? $"{time.Hours:00}:{time.Minutes:00}:{time.Seconds:00}.{time.Milliseconds / 100}"
+            : $"{(int)time.TotalMinutes:00}:{time.Seconds:00}.{time.Milliseconds / 100}";
     }
 
     private void RefreshAll()
@@ -547,7 +654,9 @@ public sealed class PdfAudioPlayerBar : UserControl
             _labelPage.Text = "P—";
             _labelElapsed.Text = "00:00";
             _labelDuration.Text = "00:00";
-            _track.Value = 0;
+            _track.Duration = TimeSpan.Zero;
+            _track.Position = TimeSpan.Zero;
+            _track.Sentences = Array.Empty<AudioSentenceSpan>();
         }
         else
         {
@@ -594,7 +703,9 @@ public sealed class PdfAudioPlayerBar : UserControl
             UpdateProgress(_manager.Playback.Player.Position);
         else if (_manager.Playback.Player.Duration <= TimeSpan.Zero)
         {
-            _track.Value = 0;
+            _track.Duration = TimeSpan.Zero;
+            _track.Position = TimeSpan.Zero;
+            _track.Sentences = Array.Empty<AudioSentenceSpan>();
             _labelElapsed.Text = "00:00";
             _labelDuration.Text = "00:00";
         }
@@ -1140,6 +1251,9 @@ public sealed class PdfAudioPlayerBar : UserControl
             _manager.TrackChanged -= OnTrackChanged;
             _manager.PageHintChanged -= OnPageHintChanged;
             _manager.SettingsChanged -= OnSettingsChanged;
+            _manager.TimelineChanged -= OnTimelineChanged;
+            _manager.TimelineProgressChanged -= OnTimelineProgressChanged;
+            _manager.PreviewChanged -= OnPreviewChanged;
             _manager.Playback.Player.PositionChanged -= OnPositionChanged;
             _manager.Playback.Player.StateChanged -= OnStateChanged;
             PdfSidebarTheme.ThemeChanged -= OnThemeChanged;

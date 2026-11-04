@@ -10,5 +10,8 @@ namespace LearningAssistant.Forms.Pdf
 
         /// <summary>整页录音（音频抽屉、学习页与命令面板入口）。</summary>
         public const bool EnablePageRecording = false;
+
+        /// <summary>音频进度条句子刻度与点句预览（灰度开关）。</summary>
+        public const bool EnableSentenceTimeline = true;
     }
 }
