@@ -163,6 +163,36 @@ namespace LearningAssistant.Services.Shadowing
         }
 
         /// <summary>
+        /// 整本只读入口：一次性读出文档目录下全部页切片清单，供句子边界复用。
+        /// 只读取目录中真实存在的文件，不按页数探测，页数很大时也只有一个目录枚举。
+        /// </summary>
+        public IReadOnlyList<ShadowingSegmentManifest> LoadDocumentSegments(string pdfPath)
+        {
+            var directory = GetDocumentDirectory(pdfPath);
+            if (!Directory.Exists(directory))
+                return Array.Empty<ShadowingSegmentManifest>();
+
+            var gate = GetLock(pdfPath);
+            gate.Wait();
+            try
+            {
+                var manifests = new List<ShadowingSegmentManifest>();
+                foreach (string file in Directory
+                             .EnumerateFiles(directory, "p*.segments.json")
+                             .OrderBy(name => name, StringComparer.Ordinal))
+                {
+                    var manifest = JsonHelper.LoadFromFile<ShadowingSegmentManifest>(file);
+                    if (manifest != null) manifests.Add(manifest);
+                }
+                return manifests;
+            }
+            finally
+            {
+                gate.Release();
+            }
+        }
+
+        /// <summary>
         /// 保存本页切片清单：与磁盘上的旧清单按 segment.id 合并（后写覆盖同 id），
         /// 未出现在本次保存里的旧段与旧成品保留，避免多窗口互删。
         /// </summary>

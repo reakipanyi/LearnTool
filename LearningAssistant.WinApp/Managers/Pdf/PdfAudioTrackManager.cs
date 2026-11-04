@@ -1,6 +1,8 @@
 using LearningAssistant.Abstractions.Media;
+using LearningAssistant.Models.Audio;
 using LearningAssistant.Models.Pdf;
 using LearningAssistant.Platform.Media;
+using LearningAssistant.Services.Audio;
 using LearningAssistant.Services.Media;
 using LearningAssistant.Services.Pdf;
 using LearningAssistant.Services.Pdf.Audio;
@@ -15,6 +17,7 @@ public class PdfAudioTrackManager : IDisposable
     private readonly IPdfAudioDirectoryScanner _scanner;
     private readonly IPdfAudioProfileStore _store;
     private readonly PdfAudioPlaybackService _playback;
+    private readonly SentenceTimelineService? _timelineService;
     private AudioMatchResult? _result;
     private AudioTrack? _loadedTrack;
     private PdfAudioProfile? _profile;
@@ -89,6 +92,29 @@ public class PdfAudioTrackManager : IDisposable
     private readonly SynchronizationContext? _syncContext = SynchronizationContext.Current;
     private CancellationTokenSource? _pageChangeCts;
 
+    private CancellationTokenSource? _timelineCts;
+    private AudioSentenceSpan? _previewSpan;
+    /// <summary>预览/单句循环期间禁止把“听一句”的位置写成阅读进度。</summary>
+    private bool _suppressProgressSave;
+
+    /// <summary>当前曲目的句子时间轴；分析中为空。</summary>
+    public AudioSentenceTimeline? Timeline => _timelineService?.Current;
+
+    /// <summary>时间轴分析进度 0..1；-1 表示未在分析（完成或未开始）。</summary>
+    public double TimelineProgress { get; private set; } = -1;
+
+    /// <summary>时间轴发布（含清空）后触发，供播放条刷新刻度。</summary>
+    public event EventHandler<AudioSentenceTimeline?>? TimelineChanged;
+
+    public event EventHandler<double>? TimelineProgressChanged;
+
+    /// <summary>单句预览开始/结束时触发；参数为当前预览句，结束后为 null。</summary>
+    public event EventHandler<AudioSentenceSpan?>? PreviewChanged;
+
+    public bool IsPreviewing => _previewSpan != null;
+
+    public AudioSentenceSpan? PreviewSpan => _previewSpan;
+
     /// <summary>用给定规则/匹配方式对当前已扫描曲目试算，不修改已生效的 profile</summary>
     public AudioMatchResult PreviewRules(IReadOnlyList<AudioMatchRule> rules,
         PdfAudioMatchMode matchMode = PdfAudioMatchMode.PerPage, string? singleAudioFile = null)
@@ -109,15 +135,20 @@ public class PdfAudioTrackManager : IDisposable
 
     public PdfAudioTrackManager(ILogger logger,
         IPdfAudioMatcher matcher, IPdfAudioDirectoryScanner scanner,
-        IPdfAudioProfileStore store, ISubtitleParser subtitleParser)
+        IPdfAudioProfileStore store, ISubtitleParser subtitleParser,
+        SentenceTimelineService? timelineService = null)
     {
         _logger = logger;
         _matcher = matcher;
         _scanner = scanner;
         _store = store;
+        _timelineService = timelineService;
         _playback = new PdfAudioPlaybackService(new NAudioMediaPlayer(subtitleParser));
         _playback.Player.PlaybackFinished += OnPlaybackFinished;
         _playback.Player.OutputDeviceChanged += OnOutputDeviceChanged;
+        _playback.Player.PlaybackRangeCompleted += OnPlaybackRangeCompleted;
+        if (_timelineService != null)
+            _timelineService.TimelineChanged += OnTimelineChanged;
     }
 
     private int _loadGeneration;
@@ -176,6 +207,8 @@ public class PdfAudioTrackManager : IDisposable
     private void ResetPlaybackForDocumentSwitch()
     {
         SavePlaybackState();
+        CancelPreview();
+        ResetTimeline();
         _playback.Stop();
         _loadedTrack = null;
         _result = null;
@@ -396,6 +429,8 @@ public class PdfAudioTrackManager : IDisposable
                 break;
             case PlaybackAction.StopWithHint:
                 SavePlaybackState();
+                CancelPreview();
+                ResetTimeline();
                 _playback.Stop();
                 _loadedTrack = null;
                 _playlistIndex = -1;
@@ -442,6 +477,8 @@ public class PdfAudioTrackManager : IDisposable
 
     private void LoadCore(AudioTrack track, bool syncPage)
     {
+        // 换曲/切范围时旧预览必须作废，否则旧区间会在新曲目上继续生效
+        CancelPreview();
         // 先取出上次记录再换曲，换曲后该字段会覆盖为当前曲目
         var savedTrack = _profile?.LastTrackPath;
         double savedSeconds = _profile?.LastPositionSeconds ?? 0;
@@ -464,6 +501,7 @@ public class PdfAudioTrackManager : IDisposable
         }
 
         TrackChanged?.Invoke(this, track);
+        StartTimeline(track);
 
         if (!syncPage || !SyncPageOnTrackChange) return;
         int page = FindFirstPageForTrack(track);
@@ -635,9 +673,223 @@ public class PdfAudioTrackManager : IDisposable
         return position >= duration ? duration - TimeSpan.FromSeconds(1) : position;
     }
 
+    #region 句子时间轴与单句预览
+
+    /// <summary>
+    /// 预览离给定位置最近的一句：跳到句首播到句尾自动暂停，不写阅读进度。
+    /// continueAfter 为 true 时只跳句首并继续正常播放；无时间轴时退化为普通 seek。
+    /// </summary>
+    public bool PreviewNearest(TimeSpan position, bool continueAfter = false)
+    {
+        var span = FindNearestSpan((int)Math.Round(position.TotalMilliseconds));
+        if (span == null)
+        {
+            Seek(position);
+            return false;
+        }
+
+        var start = TimeSpan.FromMilliseconds(span.StartMs);
+        var end = TimeSpan.FromMilliseconds(Math.Max(span.StartMs + 1, span.EndMs));
+        var player = _playback.Player;
+
+        if (continueAfter)
+        {
+            CancelPreview();
+            _playback.Seek(start);
+            if (player.State != MediaPlaybackState.Playing) Play();
+            return true;
+        }
+
+        if (!player.SetPlaybackRange(start, end))
+        {
+            _logger.LogWarning("播放器不支持单句区间，预览退化为普通定位：{Track}", _loadedTrack?.FileName);
+            _playback.Seek(start);
+        }
+
+        _previewSpan = span;
+        _suppressProgressSave = true;
+        PreviewChanged?.Invoke(this, span);
+
+        switch (player.State)
+        {
+            case MediaPlaybackState.Paused:
+                _playback.Resume();
+                break;
+            case MediaPlaybackState.Playing:
+                break;
+            default:
+                FireAndForget(_playback.PlayAsync(), "Preview");
+                break;
+        }
+        return true;
+    }
+
+    /// <summary>普通定位：同时结束预览并恢复阅读进度记录。</summary>
+    public void Seek(TimeSpan position)
+    {
+        CancelPreview();
+        _playback.Seek(position);
+    }
+
+    private void CancelPreview()
+    {
+        bool had = _previewSpan != null;
+        _previewSpan = null;
+        _suppressProgressSave = false;
+        _playback.Player.ClearPlaybackRange();
+        if (had) PreviewChanged?.Invoke(this, null);
+    }
+
+    private AudioSentenceSpan? FindNearestSpan(int positionMs)
+    {
+        var sentences = Timeline?.Sentences;
+        if (sentences == null || sentences.Count == 0) return null;
+
+        int low = 0, high = sentences.Count - 1, firstAfter = sentences.Count;
+        while (low <= high)
+        {
+            int mid = (low + high) / 2;
+            if (sentences[mid].StartMs >= positionMs)
+            {
+                firstAfter = mid;
+                high = mid - 1;
+            }
+            else
+            {
+                low = mid + 1;
+            }
+        }
+
+        AudioSentenceSpan? best = null;
+        int bestDistance = int.MaxValue;
+        for (int i = Math.Max(0, firstAfter - 1); i <= Math.Min(sentences.Count - 1, firstAfter); i++)
+        {
+            var span = sentences[i];
+            int distance = positionMs < span.StartMs
+                ? span.StartMs - positionMs
+                : positionMs >= span.EndMs ? positionMs - span.EndMs + 1 : 0;
+            if (distance < bestDistance)
+            {
+                bestDistance = distance;
+                best = span;
+            }
+        }
+        return best;
+    }
+
+    private void OnTimelineChanged(object? sender, AudioSentenceTimeline? timeline)
+    {
+        if (_disposed) return;
+        TimelineChanged?.Invoke(this, timeline);
+    }
+
+    private void StartTimeline(AudioTrack track)
+    {
+        var service = _timelineService;
+        if (service == null) return;
+
+        ResetTimeline();
+
+        int durationMs = (int)Math.Round(_playback.Player.Duration.TotalMilliseconds);
+        if (durationMs <= 0) durationMs = track.DurationMs;
+        SetTimelineProgress(0);
+        if (durationMs <= 0)
+        {
+            SetTimelineProgress(-1);
+            return;
+        }
+
+        var cts = new CancellationTokenSource();
+        _timelineCts = cts;
+        _ = RunTimelineAsync(track, durationMs, cts);
+    }
+
+    private void ResetTimeline()
+    {
+        var cts = _timelineCts;
+        _timelineCts = null;
+        if (cts != null)
+        {
+            cts.Cancel();
+            cts.Dispose();
+        }
+        SetTimelineProgress(-1);
+        _timelineService?.Reset();
+    }
+
+    private async Task RunTimelineAsync(AudioTrack track, int durationMs, CancellationTokenSource cts)
+    {
+        try
+        {
+            var progress = new Progress<double>(value =>
+            {
+                if (_disposed || _timelineCts != cts) return;
+                SetTimelineProgress(value);
+            });
+
+            await _timelineService!
+                .EnsureTimelineAsync(track, durationMs, progress: progress, cancellationToken: cts.Token)
+                .ConfigureAwait(true);
+
+            if (_disposed || _timelineCts != cts) return;
+            SetTimelineProgress(-1);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "句子时间轴加载失败：{Track}", track.FileName);
+            if (_disposed || _timelineCts != cts) return;
+            SetTimelineProgress(-1);
+        }
+    }
+
+    private void SetTimelineProgress(double value)
+    {
+        TimelineProgress = value;
+        TimelineProgressChanged?.Invoke(this, value);
+    }
+
+    /// <summary>播放区间结束事件可能来自音频线程，统一回到 UI 线程处理。</summary>
+    private void OnPlaybackRangeCompleted(object? sender, PlaybackRangeCompletedEventArgs e)
+    {
+        if (_syncContext != null)
+            _syncContext.Post(_ => HandlePlaybackRangeCompleted(e), null);
+        else
+            HandlePlaybackRangeCompleted(e);
+    }
+
+    private void HandlePlaybackRangeCompleted(PlaybackRangeCompletedEventArgs e)
+    {
+        if (_disposed) return;
+
+        switch (e.Reason)
+        {
+            case PlaybackRangeEndReason.Replaced:
+                // 新预览会自行接管状态，不在这里清空
+                return;
+            case PlaybackRangeEndReason.Completed:
+                if (_previewSpan == null) return;
+                _previewSpan = null;
+                // 停在句尾属于“听一句”，仍不写阅读进度，直到用户做普通播放/定位
+                PreviewChanged?.Invoke(this, null);
+                break;
+            default:
+                bool had = _previewSpan != null;
+                _previewSpan = null;
+                _suppressProgressSave = false;
+                if (had) PreviewChanged?.Invoke(this, null);
+                break;
+        }
+    }
+
+    #endregion
+
     /// <summary>把当前曲目与播放位置按书写回档案；暂停、播完、切曲与关闭时调用。</summary>
     public void SavePlaybackState()
     {
+        if (_suppressProgressSave) return;
         if (_profile == null || _loadedTrack == null) return;
         var player = _playback.Player;
         double seconds = Math.Max(0, player.Position.TotalSeconds);
@@ -748,6 +1000,8 @@ public class PdfAudioTrackManager : IDisposable
     public bool Play()
     {
         if (IsPlaying) return true;
+        // 预览结束后的继续播放属于正常播放，恢复阅读进度记录
+        if (_previewSpan == null) _suppressProgressSave = false;
 
         switch (_playback.Player.State)
         {
@@ -818,6 +1072,7 @@ public class PdfAudioTrackManager : IDisposable
     {
         if (!IsPlaying) return false;
         _playback.Pause();
+        // SavePlaybackState 内部会在预览期间跳过写入
         SavePlaybackState();
         return true;
     }
@@ -1000,8 +1255,21 @@ public class PdfAudioTrackManager : IDisposable
         _pageChangeCts?.Cancel();
         _pageChangeCts?.Dispose();
         _pageChangeCts = null;
+        var timelineCts = _timelineCts;
+        _timelineCts = null;
+        if (timelineCts != null)
+        {
+            timelineCts.Cancel();
+            timelineCts.Dispose();
+        }
+        if (_timelineService != null)
+        {
+            _timelineService.TimelineChanged -= OnTimelineChanged;
+            _timelineService.Reset();
+        }
         _playback.Player.PlaybackFinished -= OnPlaybackFinished;
         _playback.Player.OutputDeviceChanged -= OnOutputDeviceChanged;
+        _playback.Player.PlaybackRangeCompleted -= OnPlaybackRangeCompleted;
         _playback.Stop();
         _playback.Player.Dispose();
     }

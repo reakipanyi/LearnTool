@@ -11,6 +11,7 @@ using LearningAssistant.Models.Config;
 using LearningAssistant.Presenters;
 using LearningAssistant.Services;
 using LearningAssistant.Services.AI;
+using LearningAssistant.Services.Audio;
 using LearningAssistant.Services.Backup;
 using LearningAssistant.Services.Backup.Providers;
 using LearningAssistant.Services.Cache;
@@ -311,6 +312,13 @@ namespace LearningAssistant.Common
             services.AddSingleton<IPdfAudioDirectoryScanner, PdfAudioDirectoryScanner>();
             services.AddSingleton<IPdfAudioMatcher, PdfAudioMatcher>();
             services.AddSingleton<IPdfAudioProfileStore, PdfAudioProfileStore>();
+
+            // 句子时间轴：自动断句缓存 / 解码分析 / 跟读切片边界只读来源
+            services.AddSingleton<AudioTimelineStore>(_ =>
+                new AudioTimelineStore(() => AppPaths.AudioTimelinesDir));
+            services.AddSingleton<AudioDecodeAnalysisService>();
+            services.AddSingleton<ShadowingSegmentStore>();
+            services.AddSingleton<ShadowingBoundaryLayerProvider>();
 
             // 句子跟读：发音参考评分（无 en-US 识别器时自动降级为不可用）
             services.AddSingleton<IPronunciationScorer, SystemSpeechPronunciationScorer>();

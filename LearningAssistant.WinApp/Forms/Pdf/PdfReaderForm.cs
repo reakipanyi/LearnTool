@@ -21,6 +21,7 @@ using LearningAssistant.Services.Pdf;
 using LearningAssistant.Services.Practice;
 using LearningAssistant.Services.Quiz;
 using LearningAssistant.Models.Shadowing;
+using LearningAssistant.Services.Audio;
 using LearningAssistant.Services.Shadowing;
 using LearningAssistant.Views;
 using Microsoft.Extensions.Logging;
@@ -69,6 +70,7 @@ namespace LearningAssistant.Forms.Pdf
         private PdfReaderNavigationManager? _navigationManager;
         private PdfReaderAudioManager? _audioManager;
         private PdfAudioTrackManager? _audioTrackManager;
+        private SentenceTimelineService? _sentenceTimelineService;
         private PdfAudioPanel? _audioPanel;
         private PdfAudioPlayerBar? _audioPlayerBar;
         // 音频档案异步加载完成后待自动播放的文档；双击目录 PDF 时即使开关关闭也会设置
@@ -707,9 +709,21 @@ namespace LearningAssistant.Forms.Pdf
                 var scanner = Program.ServiceProvider?.GetService(typeof(IPdfAudioDirectoryScanner)) as IPdfAudioDirectoryScanner;
                 var store = Program.ServiceProvider?.GetService(typeof(IPdfAudioProfileStore)) as IPdfAudioProfileStore;
                 var subParser = Program.ServiceProvider?.GetService(typeof(ISubtitleParser)) as ISubtitleParser;
+                var timelineStore = Program.ServiceProvider?.GetService(typeof(AudioTimelineStore)) as AudioTimelineStore;
+                var analysisService = Program.ServiceProvider?.GetService(typeof(AudioDecodeAnalysisService)) as AudioDecodeAnalysisService;
+                var boundaryProvider = Program.ServiceProvider?.GetService(typeof(ShadowingBoundaryLayerProvider)) as ShadowingBoundaryLayerProvider;
                 if (matcher != null && scanner != null && store != null && subParser != null)
                 {
-                    _audioTrackManager = new PdfAudioTrackManager(_logger, matcher, scanner, store, subParser);
+                    if (timelineStore != null && analysisService != null && boundaryProvider != null)
+                    {
+                        _sentenceTimelineService = new SentenceTimelineService(
+                            timelineStore,
+                            analysisService,
+                            (track, durationMs, token) =>
+                                boundaryProvider.GetLayersAsync(_currentPdfPath, track, durationMs, token));
+                    }
+                    _audioTrackManager = new PdfAudioTrackManager(
+                        _logger, matcher, scanner, store, subParser, _sentenceTimelineService);
                     _audioTrackManager.PageSyncRequested += OnAudioPageSyncRequested;
                     // 音频档案加载/变更后按当前文档是否真的有音频来决定播放条显隐
                     _audioTrackManager.ProfileLoaded += OnAudioProfileLoaded;
@@ -12270,6 +12284,8 @@ namespace LearningAssistant.Forms.Pdf
                 _navigationManager?.Dispose();
                 _audioManager?.Dispose();
                 _audioTrackManager?.Dispose();
+                _sentenceTimelineService?.Dispose();
+                _sentenceTimelineService = null;
 
                 // 停止连续朗读与点读，避免窗口关闭后音频仍在播放
                 _readingPlaybackManager?.Dispose();
