@@ -481,6 +481,9 @@ public class NAudioMediaPlayer : IMediaPlayer
     private void OnPlaybackStopped(object? sender, StoppedEventArgs e)
     {
         if (_manualStop) return;
+        // 采样限位器到点后 Read 返回 0，设备会当作 EOF 触发 PlaybackStopped；
+        // 此时区间仍 armed，交给区间完成路径收尾，不能当曲终。
+        if (_playbackRange.IsArmed) return;
         if (LoopMode == MediaLoopMode.RepeatOne || LoopMode == MediaLoopMode.RepeatAll)
         { _reader?.Seek(0, System.IO.SeekOrigin.Begin); _varispeed?.Reset(); _waveOut?.Play(); SetState(MediaPlaybackState.Playing); return; }
         SetState(MediaPlaybackState.Stopped);

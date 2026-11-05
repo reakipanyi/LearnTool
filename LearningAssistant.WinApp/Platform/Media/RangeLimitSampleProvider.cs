@@ -4,7 +4,7 @@ namespace LearningAssistant.Platform.Media;
 
 /// <summary>
 /// 采样级区间结束限制：在输出链末端精确数到区间终点，最后 30ms 线性淡出，
-/// 之后输出静音并只回调一次结束事件。放在最终输出端，保证变速/变调后依然精确。
+/// 到达限位后直接返回 0（不再读源），并只回调一次结束事件。放在最终输出端，保证变速/变调后依然精确。
 /// </summary>
 public sealed class RangeLimitSampleProvider : ISampleProvider
 {
@@ -44,23 +44,33 @@ public sealed class RangeLimitSampleProvider : ISampleProvider
 
     public int Read(float[] buffer, int offset, int count)
     {
-        int read = _source.Read(buffer, offset, count);
-        if (!_armed || read <= 0) return read;
+        if (!_armed) return _source.Read(buffer, offset, count);
+
+        if (_framesRemaining <= 0)
+        {
+            // 到达限位后不再读源，避免把下一句的声音解码送出
+            RaiseCompletedOnce();
+            return 0;
+        }
+
+        int requestedFrames = count / _channels;
+        if (requestedFrames <= 0) return 0;
+
+        int framesToRead = (int)Math.Min(requestedFrames, _framesRemaining);
+        int read = _source.Read(buffer, offset, framesToRead * _channels);
+        if (read <= 0)
+        {
+            // 源提前 EOF（最后一句终点落在文件末尾）：按区间结束处理，事件只触发一次
+            _framesRemaining = 0;
+            RaiseCompletedOnce();
+            return 0;
+        }
 
         int frames = read / _channels;
         int index = offset;
 
         for (int frame = 0; frame < frames; frame++)
         {
-            if (_framesRemaining <= 0)
-            {
-                // 到达终点后整段输出静音，直到上层暂停
-                for (int ch = 0; ch < _channels; ch++)
-                    buffer[index + ch] = 0f;
-                index += _channels;
-                continue;
-            }
-
             float gain = 1f;
             if (_fadeFrames > 0 && _framesRemaining <= _fadeFrames)
                 gain = (float)(_framesRemaining / (double)_fadeFrames);
@@ -72,11 +82,16 @@ public sealed class RangeLimitSampleProvider : ISampleProvider
             _framesRemaining--;
         }
 
-        if (_framesRemaining <= 0 && !_completedRaised)
-        {
-            _completedRaised = true;
-            Completed?.Invoke();
-        }
+        if (_framesRemaining <= 0)
+            RaiseCompletedOnce();
+
         return read;
+    }
+
+    private void RaiseCompletedOnce()
+    {
+        if (_completedRaised) return;
+        _completedRaised = true;
+        Completed?.Invoke();
     }
 }
