@@ -140,7 +140,7 @@ namespace LearningAssistant.Tests
             {
                 speakStateChangedCount++;
                 lastSpeakKey = args.SpeakKey;
-                lastIsSpeaking = args.IsSpeaking;
+                lastIsSpeaking = args.IsPlaying;
             };
 
             await _coordinator.SpeakAsync("test text", "zh", CancellationToken.None, "event-test-key");

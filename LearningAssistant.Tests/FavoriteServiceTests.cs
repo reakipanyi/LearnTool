@@ -1,6 +1,7 @@
 using Moq;
 using Xunit;
 using FluentAssertions;
+using LearningAssistant.Abstractions;
 using LearningAssistant.Services.Learning;
 using LearningAssistant.Common;
 using Microsoft.Extensions.Logging;
@@ -34,13 +35,13 @@ namespace LearningAssistant.Tests
 
         private FavoriteService CreateService()
         {
-            return new FavoriteService(_mockLogger.Object);
+            return new FavoriteService(_mockLogger.Object, new Mock<IAppPaths>().Object);
         }
 
         [Fact]
         public void Constructor_WithNullLogger_ShouldThrow()
         {
-            Action action = () => new FavoriteService(null!);
+            Action action = () => new FavoriteService(null!, new Mock<IAppPaths>().Object);
 
             action.Should().Throw<ArgumentNullException>();
         }

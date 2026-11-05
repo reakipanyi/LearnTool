@@ -3,6 +3,7 @@ using Xunit;
 using FluentAssertions;
 using LearningAssistant.Services.Learning;
 using LearningAssistant.Models.User;
+using LearningAssistant.Abstractions;
 using LearningAssistant.Common;
 using LearningAssistant.Services.Persistence;
 using Microsoft.Extensions.Logging;
@@ -24,7 +25,7 @@ namespace LearningAssistant.Tests
 
         private UserSessionService CreateService()
         {
-            return new UserSessionService(_mockLogger.Object, _mockPersistence.Object);
+            return new UserSessionService(_mockLogger.Object, _mockPersistence.Object, new Mock<IAppPaths>().Object);
         }
 
         [Fact]

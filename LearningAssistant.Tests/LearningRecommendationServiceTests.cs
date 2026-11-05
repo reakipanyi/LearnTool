@@ -1,6 +1,7 @@
 using Moq;
 using Xunit;
 using FluentAssertions;
+using LearningAssistant.Abstractions;
 using LearningAssistant.Services.Learning;
 using LearningAssistant.Models.Learning;
 using Microsoft.Extensions.Logging;
@@ -32,7 +33,8 @@ namespace LearningAssistant.Tests
                 _mockWrongAnswer.Object,
                 _mockAnalytics.Object,
                 _mockLearningPath.Object,
-                _mockLogger.Object);
+                _mockLogger.Object,
+                new Mock<IAppPaths>().Object);
         }
 
         [Fact]

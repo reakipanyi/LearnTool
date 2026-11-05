@@ -27,9 +27,8 @@ namespace LearningAssistant.Tests
                 .Returns(() => new AppDbContext());
 
             _service = new LearningAnalyticsService(
-                _mockLogger.Object,
-                _mockPersistence.Object,
-                _mockDbContextFactory.Object);
+                _mockDbContextFactory.Object,
+                _mockLogger.Object);
         }
 
         [Fact]
@@ -237,7 +236,7 @@ namespace LearningAssistant.Tests
         [Fact]
         public void CalculateRetentionRate_WithNullDbContext_ShouldReturnDefault()
         {
-            var service = new LearningAnalyticsService(_mockLogger.Object, null, null);
+            var service = new LearningAnalyticsService(null!, _mockLogger.Object);
 
             var rate = service.CalculateRetentionRate("test_user");
 
@@ -247,7 +246,7 @@ namespace LearningAssistant.Tests
         [Fact]
         public void GenerateForgettingCurve_WithNullDbContext_ShouldReturnDefaultCurve()
         {
-            var service = new LearningAnalyticsService(_mockLogger.Object, null, null);
+            var service = new LearningAnalyticsService(null!, _mockLogger.Object);
 
             var curve = service.GenerateForgettingCurve("test_user", 7);
 
@@ -257,7 +256,7 @@ namespace LearningAssistant.Tests
         [Fact]
         public void PredictFutureWorkload_WithNullDbContext_ShouldReturnEmptyWorkload()
         {
-            var service = new LearningAnalyticsService(_mockLogger.Object, null, null);
+            var service = new LearningAnalyticsService(null!, _mockLogger.Object);
 
             var workload = service.PredictFutureWorkload("test_user", 7);
 
@@ -267,7 +266,7 @@ namespace LearningAssistant.Tests
         [Fact]
         public void GetReviewEfficiencyStats_WithNullDbContext_ShouldReturnEmptyStats()
         {
-            var service = new LearningAnalyticsService(_mockLogger.Object, null, null);
+            var service = new LearningAnalyticsService(null!, _mockLogger.Object);
 
             var stats = service.GetReviewEfficiencyStats("test_user");
 
@@ -278,7 +277,7 @@ namespace LearningAssistant.Tests
         [Fact]
         public void GetWeeklyHeatmap_WithNullDbContext_ShouldReturnEmpty()
         {
-            var service = new LearningAnalyticsService(_mockLogger.Object, null, null);
+            var service = new LearningAnalyticsService(null!, _mockLogger.Object);
 
             var heatmap = service.GetWeeklyHeatmap("test_user", 4);
 
