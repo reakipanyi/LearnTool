@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Drawing.Drawing2D;
 using System.Drawing.Text;
 using LearningAssistant.Models.Audio;
+using LearningAssistant.Services.Audio;
 
 namespace LearningAssistant.Common.UI
 {
@@ -949,22 +950,7 @@ namespace LearningAssistant.Common.UI
             if (_sentences.Count == 0 || _duration <= TimeSpan.Zero) return null;
 
             int ms = (int)Math.Round(PositionFromX(x).TotalMilliseconds);
-            int started = CountStartedAt(ms);
-
-            // 落在某句内部直接命中，避免“长句中间点到下一句”
-            if (started >= 0)
-            {
-                var current = _sentences[started];
-                if (ms < current.EndMs) return current;
-            }
-
-            int next = started + 1;
-            if (started < 0) return _sentences[0];
-            if (next >= _sentences.Count) return _sentences[started];
-
-            int prevGap = ms - _sentences[started].EndMs;
-            int nextGap = _sentences[next].StartMs - ms;
-            return prevGap <= nextGap ? _sentences[started] : _sentences[next];
+            return MarkerHitTester.Nearest(_sentences, ms);
         }
 
         private AudioPageAnchor? NearestPageAnchor(int x)
