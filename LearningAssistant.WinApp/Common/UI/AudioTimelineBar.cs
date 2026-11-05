@@ -39,12 +39,6 @@ namespace LearningAssistant.Common.UI
         private const int PageHitToleranceDips = 6;
         private const int HoverDelayMs = 150;
 
-        private sealed class Bucket
-        {
-            public int FirstIndex = -1;
-            public int Count;
-        }
-
         private IReadOnlyList<AudioSentenceSpan> _sentences = Array.Empty<AudioSentenceSpan>();
         private IReadOnlyList<AudioPageAnchor> _pageAnchors = Array.Empty<AudioPageAnchor>();
         private IReadOnlyList<float>? _waveform;
@@ -56,7 +50,7 @@ namespace LearningAssistant.Common.UI
         private bool _showMarkers = true;
 
         private int _sentenceVersion;
-        private Bucket[] _buckets = Array.Empty<Bucket>();
+        private MarkerBucket[] _buckets = Array.Empty<MarkerBucket>();
         private int _bucketWidth;
         private int _bucketDurationMs;
         private int _bucketVersion;
@@ -431,13 +425,11 @@ namespace LearningAssistant.Common.UI
                 }
 
                 // 抽稀只影响绘制：当前句、悬停句、首末句始终保留
-                if (currentIndex >= 0)
-                    DrawSentenceTick(g, palette, _sentences[currentIndex], currentIndex, true, false, tickTop, tickHeight, drawn);
-                if (hoverIndex >= 0)
-                    DrawSentenceTick(g, palette, _sentences[hoverIndex], hoverIndex, false, true, tickTop, tickHeight, drawn);
-                DrawSentenceTick(g, palette, _sentences[0], 0, 0 == currentIndex, 0 == hoverIndex, tickTop, tickHeight, drawn);
-                int last = _sentences.Count - 1;
-                DrawSentenceTick(g, palette, _sentences[last], last, last == currentIndex, last == hoverIndex, tickTop, tickHeight, drawn);
+                foreach (int index in MarkerBinner.ForcedIndices(_sentences.Count, currentIndex, hoverIndex))
+                {
+                    DrawSentenceTick(g, palette, _sentences[index], index, index == currentIndex, index == hoverIndex,
+                        tickTop, tickHeight, drawn);
+                }
             }
 
             // 悬停圆点只在刻度不再拥挤时出现
@@ -1103,27 +1095,14 @@ namespace LearningAssistant.Common.UI
             int width = TrackWidth;
             if (width <= 0)
             {
-                _buckets = Array.Empty<Bucket>();
+                _buckets = Array.Empty<MarkerBucket>();
                 _bucketWidth = width;
                 _bucketDurationMs = DurationMs;
                 _bucketVersion = _sentenceVersion;
                 return;
             }
 
-            var buckets = new Bucket[width];
-            for (int i = 0; i < width; i++)
-                buckets[i] = new Bucket();
-
-            for (int i = 0; i < _sentences.Count; i++)
-            {
-                int x = TrackX(_sentences[i].StartMs) - TrackLeft;
-                if (x < 0 || x >= width) continue;
-                if (buckets[x].FirstIndex < 0)
-                    buckets[x].FirstIndex = i;
-                buckets[x].Count++;
-            }
-
-            _buckets = buckets;
+            _buckets = MarkerBinner.Build(_sentences, width, DurationMs);
             _bucketWidth = width;
             _bucketDurationMs = DurationMs;
             _bucketVersion = _sentenceVersion;
