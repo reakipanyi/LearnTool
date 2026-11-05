@@ -406,8 +406,8 @@ namespace LearningAssistant.Services.Pdf
             if (trimmed.Length == 0)
                 return string.Empty;
 
-            // 含空白说明是多个词或整句，保留原有标点
-            if (trimmed.Any(char.IsWhiteSpace))
+            // 含空白说明是多个词或整句；含非 ASCII 字符则可能是无空格的中文等整句，均保留原有标点
+            if (trimmed.Any(char.IsWhiteSpace) || trimmed.Any(c => c > 0x7F))
                 return trimmed;
 
             var end = trimmed.Length;

@@ -1386,12 +1386,14 @@ namespace LearningAssistant.Managers
         }
 
         /// <summary>
-        /// 按 Id 选中当前页的标注/高亮，供列表点击调用。
+        /// 按 Id 选中当前页的标注/高亮，供列表点击与新建高亮自动选中调用。
+        /// <param name="switchToSelectMode">为 true 时切到选择模式；连续标注自动选中时传 false，保持当前绘制工具。</param>
         /// </summary>
-        public bool SelectAnnotationById(string id)
+        public bool SelectAnnotationById(string id, bool switchToSelectMode = true)
         {
-            // 切换到选择模式
-            SetToolMode(AnnotationToolMode.Select);
+            // 列表点击等场景需要切到选择模式；连续标注自动选中时保持当前绘制工具
+            if (switchToSelectMode)
+                SetToolMode(AnnotationToolMode.Select);
 
             _selectionManager.ClearSelection();
 
@@ -1599,6 +1601,11 @@ namespace LearningAssistant.Managers
 
             var (_, pageRect, pageImage) = _form.GetPageAtPoint(pt);
             if (pageImage == null || pageRect.Width <= 0 || pageRect.Height <= 0)
+                return;
+
+            // 双页模式下 totalRect 包含两页之间的间隙，GetPageAtPoint 对间隙点会回退返回左页；
+            // 这里再校验光标是否真的落在该页矩形内，避免在间隙里画出越界的窄条
+            if (!pageRect.Contains(pt))
                 return;
 
             var lensRect = new Rectangle(

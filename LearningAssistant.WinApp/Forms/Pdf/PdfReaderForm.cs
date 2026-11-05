@@ -446,6 +446,8 @@ namespace LearningAssistant.Forms.Pdf
 
         private int CurrentZoomLevel => _navigationManager?.ZoomLevel ?? _zoomLevel;
         private Point CurrentImageOffset => _navigationManager?.ImageOffset ?? _imageOffset;
+        // 双页模式多两个跨页按钮，页码组需要更宽；布局与显隐阈值共用该宽度
+        private int ToolbarCompactPageWidth => _isDualPage ? 262 : 207;
 
         private bool _isLongPressPending = false;
         private Point _longPressStartLocation = Point.Empty;
@@ -455,6 +457,11 @@ namespace LearningAssistant.Forms.Pdf
         private Point _lastClickLocation = Point.Empty;
         private const int DoubleClickTimeMs = 200;
         private const int DoubleClickDistance = 5;
+        // 工具栏布局共用尺寸：左侧图标条与右侧视图/页码组必须使用同一组常量，避免显隐阈值漂移
+        private const int ToolbarEdge = 6;
+        private const int ToolbarGroupGap = 12;
+        private const int ToolbarLoadingGap = 6;
+        private const int ToolbarCompactViewWidth = 230;
         private const string AppTitle = "PDF阅读工具";
         private const string WarningTitle = "警告";
         private const string ErrorTitle = "错误";
@@ -1013,11 +1020,13 @@ namespace LearningAssistant.Forms.Pdf
         public int ShowSelectionTranslationLoading(int pageIndex, string ocrText)
         {
             var requestId = ++_selectionTranslationRequestId;
-            // 译条显示/定位可能把焦点交给页码框，导致随后按键翻页失效；显示前后各收回一次
-            ReclaimKeyboardFocusFromPageBox();
+            // 只有焦点原本在译条内时，译条的显示/定位才可能把焦点交给页码框；
+            // 此时才收回焦点，避免用户正在页码框输入时被异步回包打断
+            bool translationBarHadFocus = _topTranslationBar?.ContainsFocus == true;
             _topTranslationBar?.ShowTranslationLoading(pageIndex, ocrText);
             PositionTopTranslationBar();
-            ReclaimKeyboardFocusFromPageBox();
+            if (translationBarHadFocus)
+                ReclaimKeyboardFocusFromPageBox();
             return requestId;
         }
 
@@ -1032,11 +1041,13 @@ namespace LearningAssistant.Forms.Pdf
             if (requestId != _selectionTranslationRequestId)
                 return;
 
-            // 加载态被异步回包替换时，焦点可能又落回页码框，同样在显示前后各收回一次
-            ReclaimKeyboardFocusFromPageBox();
+            // 加载态被异步回包替换时，只有焦点原本在译条内才可能落回页码框；
+            // 此时才收回焦点，避免用户正在页码框输入时被打断
+            bool translationBarHadFocus = _topTranslationBar?.ContainsFocus == true;
             _topTranslationBar?.ShowTranslationResult(pageIndex, ocrText, translation, fromCache);
             PositionTopTranslationBar();
-            ReclaimKeyboardFocusFromPageBox();
+            if (translationBarHadFocus)
+                ReclaimKeyboardFocusFromPageBox();
         }
 
         /// <summary>展示翻译失败；同样丢弃过期回包。</summary>
@@ -1045,10 +1056,11 @@ namespace LearningAssistant.Forms.Pdf
             if (requestId != _selectionTranslationRequestId)
                 return;
 
-            ReclaimKeyboardFocusFromPageBox();
+            bool translationBarHadFocus = _topTranslationBar?.ContainsFocus == true;
             _topTranslationBar?.ShowTranslationFailure(pageIndex, ocrText, message);
             PositionTopTranslationBar();
-            ReclaimKeyboardFocusFromPageBox();
+            if (translationBarHadFocus)
+                ReclaimKeyboardFocusFromPageBox();
         }
 
         /// <summary>
@@ -3207,16 +3219,20 @@ namespace LearningAssistant.Forms.Pdf
 
         /// <summary>
         /// 按 Id 选中高亮，供新建高亮后立即进入可编辑状态。
-        /// 先切到选择模式并同步工具栏状态，再选中目标高亮，保证手柄可立即拖动/缩放；
-        /// 连续标注偏好只影响下次是否沿用旧工具，新建的这一条始终可直接编辑。
+        /// 单次使用偏好下切到选择模式，保证手柄可立即拖动/缩放；
+        /// 连续标注偏好下只选中、不切换工具，避免打断连续划词。
+        /// 用户正在绘制或拖拽/缩放时跳过本次选中，避免覆盖正在进行的操作。
         /// </summary>
         public bool SelectHighlightById(string id)
         {
-            if (_navigationManager == null)
+            if (_navigationManager == null || _navigationManager.IsUserInteractionActive)
                 return false;
 
-            SetAnnotationToolMode(AnnotationToolMode.Select);
-            return _navigationManager.SelectAnnotationById(id);
+            bool switchToSelectMode = _autoReturnToSelectAfterDraw;
+            if (switchToSelectMode)
+                SetAnnotationToolMode(AnnotationToolMode.Select);
+
+            return _navigationManager.SelectAnnotationById(id, switchToSelectMode);
         }
 
         public TabPage? TabPageAudio => _tabPageAudio;
@@ -3295,8 +3311,9 @@ namespace LearningAssistant.Forms.Pdf
             }
 
             // 译条可见时 Esc 优先关闭译条（跟读模式仍走原有取消逻辑），
-            // 否则全屏阶段的 Esc 会先退出全屏，用户按一次看不到译条消失
-            if (keyData == Keys.Escape && !shortcutsSuspended && TryCloseTopTranslationBar())
+            // 否则全屏阶段的 Esc 会先退出全屏，用户按一次看不到译条消失。
+            // 焦点在文本输入框时不响应，与 KeyDown 路径保持一致，避免打断输入。
+            if (keyData == Keys.Escape && !shortcutsSuspended && !IsTextEditingFocused() && TryCloseTopTranslationBar())
                 return true;
 
             if (keyData == Keys.Escape && !shortcutsSuspended && isFullscreenSurface)
@@ -8157,7 +8174,7 @@ namespace LearningAssistant.Forms.Pdf
             const int y = 2;
             const int size = 28;
             const int gap = 4;
-            const int groupGap = 12;
+            const int groupGap = ToolbarGroupGap;
             int x = 5;
 
             // 分组竖线随重排结果动态计算，交给 ToolbarGroupTools_Paint 统一绘制
@@ -8190,7 +8207,9 @@ namespace LearningAssistant.Forms.Pdf
             // 满足这三点才显示，保证补出入口的同时不会把视图/页码按钮挤掉。
             int optionalWidth = 4 * size + 3 * gap + groupGap;
             const int subsequentGroupsWidth = 280;
-            int rightCompactWidth = 2 + 38 + 6 + 230 + 12 + (_isDualPage ? 262 : 207) + 6;
+            // 右侧最低要求：加载指示(2+宽+间距) + 视图组（紧凑）+ 组间距 + 页码组（紧凑）+ 右边缘
+            int rightCompactWidth = 2 + (_loadingIndicator?.Width ?? 0) + ToolbarLoadingGap
+                + ToolbarCompactViewWidth + ToolbarGroupGap + ToolbarCompactPageWidth + ToolbarEdge;
             bool showOptionalTools = _toolbarGroupTools.ClientSize.Width
                 >= x + optionalWidth + subsequentGroupsWidth + rightCompactWidth;
             SetOptionalToolbarToolsVisible(showOptionalTools);
@@ -8255,19 +8274,19 @@ namespace LearningAssistant.Forms.Pdf
             int available = _toolbarGroupTools.ClientSize.Width;
             if (available <= 0) return;
 
-            const int edge = 6;
-            const int gap = 12;
+            const int edge = ToolbarEdge;
+            const int gap = ToolbarGroupGap;
             // 双页模式多两个跨页按钮，页码组需要更宽
             int fullPageWidth = _isDualPage ? 396 : 343;
-            int compactPageWidth = _isDualPage ? 262 : 207;
+            int compactPageWidth = ToolbarCompactPageWidth;
             const int fullViewWidth = 376;
-            const int compactViewWidth = 230;
+            const int compactViewWidth = ToolbarCompactViewWidth;
 
             int loadingLeft = toolsEndX + 2;
             if (_loadingIndicator != null)
                 _loadingIndicator.Location = new Point(loadingLeft, 1);
 
-            int viewX = loadingLeft + (_loadingIndicator?.Width ?? 0) + 6;
+            int viewX = loadingLeft + (_loadingIndicator?.Width ?? 0) + ToolbarLoadingGap;
 
             // 逐级降级：完整体 → 收起页码进度条 → 收起缩放滑块 → 隐藏视图组，任何宽度下都不重叠
             bool showProgress = available >= viewX + fullViewWidth + gap + fullPageWidth + edge;
